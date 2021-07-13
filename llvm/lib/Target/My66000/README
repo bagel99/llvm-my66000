@@ -1,0 +1,48 @@
+This is a very experimental backend for the My66000 architecture designed by Mitch Alsup.
+Some things work for simple programs. Lots of things do not work yet, see the ToDo list below.
+
+Use the normal LLVM build process with the added cmake flag
+  -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="My66000"
+
+
+Usage Restrictions
+==================
+Must use --frame-pointer=none.
+
+Command Line Options
+====================
+--enable-predication        bool default=false
+--enable-predication2       bool default=false
+--enable-carry-generation   bool default=false
+--early-carry-coalesce      bool default=false
+--enable-remove-range-check bool default=false
+--enable-vvm                bool default=false
+
+********
+* ToDo *
+********
+
+* Enable removal of jump table range check.
+
+* Enable multiword add using carry.
+
+* Implement 32-bit floating point.
+
+* Implement frame pointer.
+
+* Optimize carry sequences.
+
+* Implement bundled carry sequences.
+
+* Implement vec/loop sequences for more cases.
+
+* Compute correct instruction sizes for variable length instructions.
+
+* Implement code models:
+  small - all code fits in 28 bits
+  large - all external jumps must be 64 bits.
+
+* Implement ELF output.  This could be a lot of work.
+
+* Enable lld support.  (Need ELF machine code assignment.)
+
