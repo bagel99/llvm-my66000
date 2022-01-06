@@ -276,7 +276,7 @@ def FSUBF : Pat<(fsub (f32 FSRegs:$rs1), (f32 FSRegs:$rs2)),
 		(FADDFrn FSRegs:$rs1, FSRegs:$rs2)>;
 def NFADDF: Pat<(fsub (fneg (f32 FSRegs:$rs1)), (f32 FSRegs:$rs2)),
 		(FADDFnn FSRegs:$rs1, FSRegs:$rs2)>;
-def       : Pat<(fneg (fmul (f32 FSRegs:$rs1), (f32 FSRegs:$rs2))),
+def       : Pat<(fmul (f32 FSRegs:$rs1), (fneg (f32 FSRegs:$rs2))),
 		(FMULFrn FSRegs:$rs1, FSRegs:$rs2)>;
 def       : Pat<(fdiv (f32 FSRegs:$rs1), (fneg (f32 FSRegs:$rs2))),
 		(FDIVFrn FSRegs:$rs1, FSRegs:$rs2)>;

@@ -54,6 +54,7 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::CALL: return "My66000ISD::CALL";
   case My66000ISD::CALLI: return "My66000ISD::CALLI";
   case My66000ISD::TAIL: return "My66000ISD::TAIL";
+  case My66000ISD::TAILI: return "My66000ISD::TAILI";
   case My66000ISD::CMP: return "My66000ISD::CMP";
   case My66000ISD::FCMP: return "My66000ISD::FCMP";
   case My66000ISD::EXT: return "My66000ISD::EXT";
@@ -649,7 +650,8 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerCall\n");
 
   if (IsTailCall) {
     MF.getFrameInfo().setHasTailCall();
-    return DAG.getNode(My66000ISD::TAIL, dl, NodeTys, Ops);
+    return DAG.getNode(IsDirect ? My66000ISD::TAIL : My66000ISD::TAILI, dl,
+		       NodeTys, Ops);
   }
 
   Chain = DAG.getNode(IsDirect ? My66000ISD::CALL : My66000ISD::CALLI, dl,
@@ -1001,6 +1003,12 @@ bool My66000TargetLowering::isLegalAddressingMode(const DataLayout &DL,
     return false;
 
   // FIXME - for now, anything else goes
+  return true;
+}
+
+bool My66000TargetLowering::isOffsetFoldingLegal(
+				    const GlobalAddressSDNode *GA) const {
+  // For now
   return true;
 }
 

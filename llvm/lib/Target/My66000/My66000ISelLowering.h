@@ -33,6 +33,7 @@ enum NodeType : unsigned {
   CALL,		// Branch and link (direct call)
   CALLI,	// Branch and link thru register (indirect call)
   TAIL,		// Tail call
+  TAILI,	// Tail call (indirect)
   CMP,		// CMP
   FCMP,		// Floating CMP
   EXT,		// Extract zero extended
@@ -70,6 +71,7 @@ class My66000TargetLowering : public TargetLowering {
   bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
 			Type *Ty, unsigned AS,
 			Instruction *I = nullptr) const override;
+  bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
   ConstraintType getConstraintType(StringRef Constraint) const override;
 

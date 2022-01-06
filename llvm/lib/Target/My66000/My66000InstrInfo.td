@@ -92,6 +92,8 @@ def myTAIL:	    SDNode<"My66000ISD::TAIL",
 			[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def myCALLI :	    SDNode<"My66000ISD::CALLI", SDT_CALL,
 			[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+def myTAILI :	    SDNode<"My66000ISD::TAILI", SDT_CALL,
+			[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def myCMP :	    SDNode<"My66000ISD::CMP", SDTIntBinOp, []>;
 def myEXT :	    SDNode<"My66000ISD::EXT",
 			SDTypeProfile<1, 3,
@@ -686,6 +688,7 @@ def TAIL :  BR<0b011110,
 }
 def : Pat<(myCALL texternalsym:$adr), (CALL texternalsym:$adr)>;
 def : Pat<(myTAIL texternalsym:$adr), (TAIL texternalsym:$adr)>;
+def : Pat<(myTAILI GRegs:$rs), (BRI GRegs:$rs)>;
 
 //
 // Experimental CARRY instruction and related stuff
