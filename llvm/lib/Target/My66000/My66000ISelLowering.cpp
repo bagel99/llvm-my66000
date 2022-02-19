@@ -344,16 +344,22 @@ static MYCC::CondCodes ISDCCtoMy66000CC(ISD:: CondCode CC, EVT VT) {
     default: llvm_unreachable("Unknown f64 condition code!");
     // float unordered
     case ISD::SETUEQ: return MYCC::FEQ;
+    case ISD::SETNE:		// is this correct?
     case ISD::SETUNE: return MYCC::FNE;
     case ISD::SETUGE: return MYCC::FGE;
+    case ISD::SETLT:
     case ISD::SETULT: return MYCC::FLT;
     case ISD::SETUGT: return MYCC::FGT;
+    case ISD::SETLE:
     case ISD::SETULE: return MYCC::FLE;
     // float ordered
+    case ISD::SETEQ:		// is this correct?
     case ISD::SETOEQ: return MYCC::FEQ;
     case ISD::SETONE: return MYCC::FNE;
+    case ISD::SETGE:
     case ISD::SETOGE: return MYCC::FGE;
     case ISD::SETOLT: return MYCC::FLT;
+    case ISD::SETGT:
     case ISD::SETOGT: return MYCC::FGT;
     case ISD::SETOLE: return MYCC::FLE;
     // float check order
