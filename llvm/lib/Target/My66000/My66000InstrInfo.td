@@ -11,6 +11,7 @@ include "My66000InstrFormats.td"
 //
 // Operand definitions for DAG matching
 //
+def imm_su : PatLeaf<(imm), [{ return !shouldAvoidImmediate(N); }]>;
 def uimm16 : Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 0 && Imm <= 65535; }]>;
 def uimm32 : Operand<i64>, ImmLeaf<i64,
@@ -576,11 +577,11 @@ multiclass StImm<string OpName, bits<6>Op, SDPatternOperator OpNode> {
   def ii : LDST_RX<Op, 0b00000,
 	(outs), (ins i64imm:$imm, MEMri:$addr),
 	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode imm:$imm, ADDRri:$addr)]>;
+	[(OpNode imm_su:$imm, ADDRri:$addr)]>;
   def ir : LDST_RX<Op, 0b00000,
 	(outs), (ins i64imm:$imm, MEMrr:$addr),
 	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode imm:$imm, ADDRrr:$addr)]>;
+	[(OpNode imm_su:$imm, ADDRrr:$addr)]>;
 }
 let mayStore = 1 in {
   defm STD : StImm<"std", 0b011011, store>;
