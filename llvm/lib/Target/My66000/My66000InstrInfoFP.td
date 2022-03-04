@@ -90,12 +90,33 @@ def FNEG : ALU_DR<0b110001, 0b10101,
 	"fadd\t$rd,#0,-$rs2",
 	[(set GRegs:$rd, (fneg (f64 GRegs:$rs2)))]>;
 
-// FMA 64-bit FMA - not used. but what the hardware really does
+// FMA 64-bit FMA - sometimes we get fma and sometime fmad
 def FMArr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, GRegs:$rs3),
 	"fmac\t$rd,$rs1,$rs2,$rs3",
 	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (f64 GRegs:$rs2), (f64 GRegs:$rs3)))]>;
-// FMA 64-bit FMAD - preferred by DAGCombiner
+def FMArn : ALU_RRR<0b000, 0b001,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, GRegs:$rs3),
+	"fmac\t$rd,$rs1,$rs2,-$rs3",
+	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (f64 GRegs:$rs2), (fneg (f64 GRegs:$rs3))))]>;
+def FMAnr : ALU_RRR<0b000, 0b010,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, GRegs:$rs3),
+	"fmac\t$rd,$rs2,-$rs1,$rs3",	// must swap rs1 and rs2
+	[(set GRegs:$rd, (fma (fneg GRegs:$rs1), (f64 GRegs:$rs2), (f64 GRegs:$rs3)))]>;
+def FMAnn : ALU_RRR<0b000, 0b010,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, GRegs:$rs3),
+	"fmac\t$rd,$rs2,-$rs1,-$rs3",	// must swap rs1 and rs2
+	[(set GRegs:$rd, (fma (fneg GRegs:$rs1), (f64 GRegs:$rs2), (fneg (f64 GRegs:$rs3))))]>;
+def FMArd : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, fpimm64:$imm),
+	"fmac\t$rd,$rs1,$rs2,#$imm",
+	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (f64 GRegs:$rs2), fpimm64:$imm))]>;
+def FMAdr : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm64:$imm, GRegs:$rs3),
+	"fmac\t$rd,$rs1,#$imm,$rs3",
+	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), fpimm64:$imm, (f64 GRegs:$rs3)))]>;
+
+// FMA 64-bit FMAD - preferred by DAGCombiner?
 def FMADrr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, GRegs:$rs3),
 	"fmac\t$rd,$rs1,$rs2,$rs3",
