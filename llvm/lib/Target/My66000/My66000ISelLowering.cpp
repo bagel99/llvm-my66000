@@ -424,6 +424,11 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSETCC\n");
 		Shf, DAG.getConstant(1, dl, MVT::i64));
       }
     }
+    if ((CC == ISD::SETLT) && isOneConstant(RHS)) {
+LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
+	RHS = DAG.getConstant(0, dl, MVT::i64);
+	CC = ISD::SETLE;
+    }
   } else {
     inst = My66000ISD::FCMP;
   }
@@ -450,6 +455,11 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSELECT_CC\n");
       return DAG.getNode(My66000ISD::CMOV, dl, TVal.getValueType(), TVal, FVal, LHS);
     }
     inst = My66000ISD::CMP;
+    if ((CC == ISD::SETLT) && isOneConstant(RHS)) {
+LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
+	RHS = DAG.getConstant(0, dl, MVT::i64);
+	CC = ISD::SETLE;
+    }
   } else {
     inst = My66000ISD::FCMP;
   }
@@ -471,6 +481,11 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBR_CC\n");
   SDLoc dl(Op);
   EVT VT = LHS.getValueType();
   if (VT.isInteger()) {
+    if ((CC == ISD::SETLT) && isOneConstant(RHS)) {
+LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
+	RHS = DAG.getConstant(0, dl, MVT::i64);
+	CC = ISD::SETLE;
+    }
     if (isNullConstant(RHS)) {
       if (CC == ISD::SETNE &&
           LHS.getOpcode() == ISD::AND &&
@@ -1139,15 +1154,14 @@ static bool adjustFirstCarry(MachineInstr &MI, MachineBasicBlock *BB,
   while (I->getOpcode() != My66000::CARRYo) {
     n += 1;
     if (I == BB->begin()) {
-dbgs() << "did not find FirstCarry n=" << n << '\n';
+LLVM_DEBUG(dbgs() << "did not find FirstCarry n=" << n << '\n');
 	return false;
     }
     I--;
   }
   unsigned old = I->getOperand(1).getImm();
   unsigned chg = (imm << n*2) | old;
-dbgs() << "found FirstCarry n=" << n << " old=" << old << '\n';
-dbgs() << *I;
+LLVM_DEBUG(dbgs() << "found FirstCarry n=" << n << " old=" << old << '\n');
   if (n > 8) return false;
   reg = I->getOperand(0).getReg();
   // Replace the immediate operand(1). Is there a better way to do this?
@@ -1167,7 +1181,7 @@ static MachineBasicBlock *emitADDCARRY(MachineInstr &MI,
   unsigned RHS = MI.getOperand(3).getReg();
   unsigned CI = MI.getOperand(4).getReg();
   unsigned Reg;
-dbgs() << "emitADDCARRY\n" << MI << '\n';
+LLVM_DEBUG(dbgs() << "emitADDCARRY\n" << MI << '\n');
   if (!adjustFirstCarry(MI, BB, 3, Reg)) {
     MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
     unsigned CA = MRI.createVirtualRegister(&My66000::GRegsRegClass);
@@ -1192,7 +1206,7 @@ static MachineBasicBlock *emitUADDO(MachineInstr &MI,
   unsigned Sum = MI.getOperand(0).getReg();
   unsigned CO = MI.getOperand(1).getReg();
   unsigned LHS = MI.getOperand(2).getReg();
-dbgs() << "emitUADD0\n" << MI << '\n';
+LLVM_DEBUG(dbgs() << "emitUADD0\n" << MI << '\n');
 
   BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CO)
       .addImm(2);	// Out
