@@ -145,6 +145,11 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
       if (invert)
         cc = TII->reverseBRIB(static_cast<MYCB::CondBits>(cc));
       break;
+    case My66000::BBIT:
+      op = My66000::PRIB;
+      break;
+    default:
+      llvm_unreachable("Predicate conversion: unknown conditional branch");
   }
 }
 
@@ -174,8 +179,10 @@ LLVM_DEBUG(dbgs() << "\tFBB=" << printMBBReference(*FBB) << '\n');
     ninstrsF = checkBlock(FBB);
 LLVM_DEBUG(dbgs() << "\tninstr=" << ninstrsT << ',' << ninstrsF << '\n');
   if (ninstrsT < 0 || ninstrsF < 0 ||	// unpredicatable instructions
-     (ninstrsT == 0 && ninstrsF == 0) || ninstrsT+ninstrsF > 8)
+     (ninstrsT == 0 && ninstrsF == 0) || ninstrsT+ninstrsF > 8) {
+LLVM_DEBUG(dbgs() << "\tCannot convert\n");
     return false;
+  }
 
   MachineBasicBlock::iterator IP = Head->getFirstTerminator();
   DebugLoc dl = IP->getDebugLoc();
