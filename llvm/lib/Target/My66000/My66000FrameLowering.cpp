@@ -145,8 +145,8 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
   // directives.
   const std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
   unsigned NSave = 0;
-  unsigned HiReg = My66000::R0;
-  unsigned LoReg = 100;
+  Register HiReg = My66000::R0;
+  Register LoReg = 100;
   int64_t Offset;;
   for (const auto &Entry : CSI) {
     Offset = MFI.getObjectOffset(Entry.getFrameIdx());
@@ -166,10 +166,19 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
   if (NSave) {
     bool isLive = MBB.isLiveIn(LoReg);
     Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
+    Register LoReg1 = LoReg;
+    unsigned SaveSP = 0;	// default to don't save SP
+    // hack when just saving R0 because ENTER R0,R0 saves all 32 regs
+    if (LoReg == My66000::R0) {
+	LoReg1 = My66000::SP;
+    } else if (MFI.hasTailCall()) {
+	SaveSP = 1;	// tail call saving multiple registers, save SP also
+    }
+    Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
     BuildMI(MBB, MBBI, DL, TII->get(My66000::ENTER))
-	      .addReg(LoReg, getKillRegState(!isLive))
+	      .addReg(LoReg1, getKillRegState(!isLive))
 	      .addReg(HiReg, getKillRegState(!isLive))
-	      .addImm(0)
+	      .addImm(SaveSP)
 	      .addImm(Offset);
     if (!isLive)
       MBB.addLiveIn(LoReg);
@@ -240,8 +249,8 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
   }
 
   My66000FunctionInfo *XFI = MF.getInfo<My66000FunctionInfo>();
-  unsigned HiReg = XFI->getHiSavedReg();
-  unsigned LoReg = XFI->getLoSavedReg();
+  Register HiReg = XFI->getHiSavedReg();
+  Register LoReg = XFI->getLoSavedReg();
   if (NSave) {
     int64_t Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
     if (MFI.hasTailCall()) {
@@ -263,8 +272,10 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
 	      .addImm(8);
       }
     } else {	// normal exit
+      // hack when just saving R0
+      Register LoReg1 = (LoReg == My66000::R0)? My66000::SP: LoReg;
       BuildMI(MBB, MBBI, DL, TII->get(My66000::EXIT))
-	      .addReg(LoReg, RegState::Define)
+	      .addReg(LoReg1, RegState::Define)
 	      .addReg(HiReg, RegState::Define)
 	      .addImm(0)
 	      .addImm(Offset);
