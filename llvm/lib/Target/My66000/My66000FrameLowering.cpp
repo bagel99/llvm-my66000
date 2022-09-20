@@ -167,18 +167,15 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
     bool isLive = MBB.isLiveIn(LoReg);
     Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
     Register LoReg1 = LoReg;
-    unsigned SaveSP = 0;	// default to don't save SP
-    // hack when just saving R0 because ENTER R0,R0 saves all 32 regs
-    if (LoReg == My66000::R0) {
-	LoReg1 = My66000::SP;
-    } else if (MFI.hasTailCall()) {
-	SaveSP = 1;	// tail call saving multiple registers, save SP also
+    unsigned flags = 0;	// default to don't save SP
+    if (MFI.hasTailCall()) {
+	flags |= 1;	// tail call saving multiple registers, save SP also
     }
     Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
     BuildMI(MBB, MBBI, DL, TII->get(My66000::ENTER))
 	      .addReg(LoReg1, getKillRegState(!isLive))
 	      .addReg(HiReg, getKillRegState(!isLive))
-	      .addImm(SaveSP)
+	      .addImm(flags)
 	      .addImm(Offset);
     if (!isLive)
       MBB.addLiveIn(LoReg);
@@ -253,34 +250,15 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
   Register LoReg = XFI->getLoSavedReg();
   if (NSave) {
     int64_t Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
-    if (MFI.hasTailCall()) {
-      if (NSave > 1) {
-	BuildMI(MBB, MBBI, DL, TII->get(My66000::LDM))
+    unsigned flags = 0;
+    if (MFI.hasTailCall()) flags |= 5;	// restore to LR not IP, SP saved
+    BuildMI(MBB, MBBI, DL, TII->get(My66000::EXIT))
 	      .addReg(LoReg, RegState::Define)
- 	      .addReg(HiReg, RegState::Define)
-	      .addReg(SPReg)		// base register
-	      .addReg(My66000::R0)	// index register (none)
-	      .addImm(0)		// shift amount
-	      .addImm(Offset);
-	// if we saved more than 1, then SP was saved and will be restored
-      } else {
-	BuildMI(MBB, MBBI, DL, TII->get(My66000::LDDri))
 	      .addReg(HiReg, RegState::Define)
-	      .addReg(SPReg).addImm(Offset);
-        BuildMI(MBB, MBBI, DL, TII->get(My66000::ADDri), SPReg)
-	      .addReg(SPReg)
-	      .addImm(8);
-      }
-    } else {	// normal exit
-      // hack when just saving R0
-      Register LoReg1 = (LoReg == My66000::R0)? My66000::SP: LoReg;
-      BuildMI(MBB, MBBI, DL, TII->get(My66000::EXIT))
-	      .addReg(LoReg1, RegState::Define)
-	      .addReg(HiReg, RegState::Define)
-	      .addImm(0)
+	      .addImm(flags)
 	      .addImm(Offset);
-      MBB.erase(MBBI); 	// remove the return
-    }
+    if (!MFI.hasTailCall())
+	MBB.erase(MBBI); 	// remove the return
   }
   // Deallocate stack
 //  adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackSize, MachineInstr::FrameDestroy);
