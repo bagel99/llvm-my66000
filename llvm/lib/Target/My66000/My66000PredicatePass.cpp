@@ -145,6 +145,11 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
       if (invert)
         cc = TII->reverseBRIB(static_cast<MYCB::CondBits>(cc));
       break;
+    case My66000::BRFB:
+      op = My66000::PRIB;
+      if (invert)
+        cc = TII->reverseBRFB(static_cast<MYCB::CondBits>(cc));
+      break;
     case My66000::BBIT:
       op = My66000::PRIB;
       break;

@@ -296,12 +296,23 @@ unsigned My66000InstrInfo::reverseBRC(MYCC::CondCodes cc) const {
 unsigned My66000InstrInfo::reverseBRIB(MYCB::CondBits cb) const {
   switch (cb) {
   default:
-    llvm_unreachable("Unrecognized condition bit");
+    llvm_unreachable("Unrecognized integer condition bit");
   case MYCB::NE: return MYCB::EQ;  case MYCB::EQ: return MYCB::NE;
   case MYCB::GT: return MYCB::LE;  case MYCB::LE: return MYCB::GT;
   case MYCB::GE: return MYCB::LT;  case MYCB::LT: return MYCB::GE;
   case MYCB::HI: return MYCB::LS;  case MYCB::LS: return MYCB::HI;
   case MYCB::LO: return MYCB::HS;  case MYCB::HS: return MYCB::LO;
+  }
+}
+
+unsigned My66000InstrInfo::reverseBRFB(MYCB::CondBits cb) const {
+  // FIXME - should use floating condition bits
+  switch (cb) {
+  default:
+    llvm_unreachable("Unrecognized floating condition bit");
+  case MYCB::NE: return MYCB::EQ;  case MYCB::EQ: return MYCB::NE;
+  case MYCB::GT: return MYCB::LE;  case MYCB::LE: return MYCB::GT;
+  case MYCB::GE: return MYCB::LT;  case MYCB::LT: return MYCB::GE;
   }
 }
 

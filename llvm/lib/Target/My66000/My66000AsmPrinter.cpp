@@ -249,12 +249,13 @@ void My66000AsmPrinter::printInlineJT(const MachineInstr *MI,
   O << ",#";
   printOperand(MI, 2, O);
   O << "\n\t" << table << "\t";
+  MachineBasicBlock *MBB;
   for (unsigned i = 0, e = JTBBs.size(); i != e; ++i) {
-    MachineBasicBlock *MBB = JTBBs[i];
-    if (i > 0)
-      O << ",";
+    MBB = JTBBs[i];
     MBB->getSymbol()->print(O, MAI);
+    O << ",";
   }
+  printOperand(MI, 3, O);	// default branch target
   O << "\n\t.p2align 2";
 }
 

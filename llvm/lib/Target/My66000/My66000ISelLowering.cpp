@@ -487,17 +487,26 @@ LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
 	CC = ISD::SETLE;
     }
     if (isNullConstant(RHS)) {
-      if (CC == ISD::SETNE &&
-          LHS.getOpcode() == ISD::AND &&
-          isa<ConstantSDNode>(LHS.getOperand(1)) &&
-          isPowerOf2_64(LHS.getConstantOperandVal(1))) {
-	// Can change BNE(AND x,#<single bit> into BB
-	uint64_t Mask = LHS.getConstantOperandVal(1);
-	return DAG.getNode(My66000ISD::BRbit, dl, MVT::Other, Chain, Dest,
-			   LHS.getOperand(0),
-			   DAG.getConstant(Log2_64(Mask), dl, MVT::i64));
-      }
       MYCC::CondCodes cc = ISDCCtoMy66000CC(CC, VT);
+      if ((CC == ISD::SETNE || CC == ISD::SETEQ) &&
+	  LHS.getOpcode() == ISD::AND &&
+          isa<ConstantSDNode>(LHS.getOperand(1)) &&
+          isPowerOf2_64(LHS.getConstantOperandVal(1))) { // testing a single bit
+	uint64_t Mask = LHS.getConstantOperandVal(1);
+	SDValue Test = LHS.getOperand(0);
+	unsigned Bit = Log2_64(Mask);
+	if (CC == ISD::SETNE) {
+	  // Can change BNE(AND x,#<single bit> into BBIT
+	  return DAG.getNode(My66000ISD::BRbit, dl, MVT::Other, Chain, Dest,
+			     Test,
+			     DAG.getConstant(Bit, dl, MVT::i64));
+	}
+	// Can change BEQ(AND x,#<single bit> into BEQ after extraction
+	LHS = DAG.getNode(My66000ISD::EXT, dl, MVT::i64, Test,
+			   DAG.getConstant(1, dl, MVT::i64),
+			   DAG.getConstant(Bit, dl, MVT::i64));
+	cc = MYCC::EQ0;
+      }
       return DAG.getNode(My66000ISD::BRcond, dl, MVT::Other, Chain, Dest,
 		         LHS, DAG.getConstant(cc, dl, MVT::i64));
     }
@@ -1101,7 +1110,10 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBR_JT\n");
   // For now, 8-bit entries aren't very useful.
   unsigned OpCode = (NumEntries <= 1024) ? My66000ISD::JT16 :
 		    My66000ISD::JT32;
-  return DAG.getNode(OpCode, DL, MVT::Other, Chain, TargetJT, Index, Size);
+  // The default target will be replaced in the FixJumpTable pass
+  const auto &MBBs = MJTI->getJumpTables()[JTI].MBBs;
+  SDValue DefMBB = DAG.getBasicBlock(*MBBs.begin());
+  return DAG.getNode(OpCode, DL, MVT::Other, Chain, TargetJT, Index, Size, DefMBB);
 }
 
 SDValue My66000TargetLowering::LowerVASTART(SDValue Op,

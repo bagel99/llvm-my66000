@@ -36,6 +36,7 @@ defm FMINN:  ALUrr<"fmin",  0b110111, 0b00000, f64, fminnum>;
 defm FMAX :  ALUrr<"fmax",  0b110110, 0b00000, f64, fmaximum>;
 defm FMIN :  ALUrr<"fmin",  0b110111, 0b00000, f64, fminimum>;
 defm CSGN :  ALUrr<"csgn",  0b111001, 0b00000, f64, fcopysign>;
+defm FPOW :  ALUrr<"fpow",  0b111101, 0b00000, f64, fpow>;
 
 // Can't use the standard pattern because the output type doesn't match inputs.
 let isCompare = 1 in {
@@ -285,6 +286,7 @@ defm FMINNF: FSrr<"fminf", 0b110111, 0b00010, fminnum>;
 defm FMAXF : FSrr<"fmaxf", 0b110110, 0b00010, fmaximum>;
 defm FMINF : FSrr<"fminf", 0b110111, 0b00010, fminimum>;
 defm CSGNF : FSrr<"csgnf", 0b111001, 0b00010, fcopysign>;
+defm FPOWF : FSrr<"fpowf", 0b111101, 0b00000, fpow>;
 
 let isCompare = 1 in {
 def FCMPFrr : ALU_RR<0b110100, 0b00010,

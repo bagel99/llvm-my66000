@@ -62,6 +62,8 @@ public:
 
   unsigned reverseBRIB(MYCB::CondBits cb) const;
 
+  unsigned reverseBRFB(MYCB::CondBits cb) const;	// FIXME - use float CB
+
   bool
   reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
 

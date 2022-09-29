@@ -64,9 +64,9 @@ static bool isJumpTable(MachineInstr &MI) {
   }
 }
 
-// `MI` is a br_table instruction missing its default target argument. This
-// function finds and adds the default target argument and removes any redundant
-// range check preceding the br_table.
+// `MI` is a JTT instruction with a dummy default target argument. This
+// function finds and changes the default target argument and removes any redundant
+// range check preceding the JTT.
 MachineBasicBlock *FixJumpTable(MachineInstr &MI, MachineBasicBlock *MBB,
                               MachineFunction &MF) {
   LLVM_DEBUG(dbgs() << "My66000FixJumpTable in " << MF.getName() << '\n');
@@ -93,12 +93,10 @@ MachineBasicBlock *FixJumpTable(MachineInstr &MI, MachineBasicBlock *MBB,
     // Install branch to default target following the jump table
     assert((FBB == nullptr || FBB == MBB) &&
            "Expected jump or fallthrough to br_table block");
-    if (!MBB->isLayoutSuccessor(TBB)) {
-dbgs() << "JT fallthrough not LayoutSuccessor\n";
-      TBB->moveAfter(MBB);
-    }
-  } else {
-dbgs() << "My66000FixJumpTable no default block\n";
+
+    // Remove the dummy default target and install the real one.
+    MI.RemoveOperand(MI.getNumExplicitOperands() - 1);
+    MI.addOperand(MF, MachineOperand::CreateMBB(TBB));
   }
   // Remove any branches from the header and splice in the jump table instead
   TII.removeBranch(*HeaderMBB, nullptr);

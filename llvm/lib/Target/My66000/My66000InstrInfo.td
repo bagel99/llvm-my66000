@@ -58,9 +58,10 @@ def SDT_BRcc :		SDTypeProfile<0, 3, [SDTCisVT<0, OtherVT>,
 					     SDTCisVT<1, i64>,
 					     SDTCisVT<2, i64>]>;
 def SDT_CALL : 		SDTypeProfile<0, 1, [SDTCisPtrTy<0>]>;
-def SDT_BR_JT :		SDTypeProfile<0, 3, [SDTCisVT<0, i64>,
+def SDT_BR_JT :		SDTypeProfile<0, 4, [SDTCisVT<0, i64>,
 					     SDTCisVT<1, i64>,
-					     SDTCisVT<2, i64>]>;
+					     SDTCisVT<2, i64>,
+					     SDTCisVT<3, OtherVT>]>;
 
 //
 // My66000 specific DAG Nodes.
@@ -639,17 +640,17 @@ def BRI : Simple<0b001101, 0b00000000000100000000000000,
 // Because JTx can fall through (if out of range) what should we do?
 let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1 in {
 def JT8 : Pseudo<
-	(outs), (ins InlineJT8:$t, GRegs:$i, i64imm:$n),
+	(outs), (ins InlineJT8:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
 	"jttb\t$i,#$n\n$t",
-	[(myJT8 tjumptable:$t, GRegs:$i, uimm16:$n)]>;
+	[(myJT8 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
 def JT16 : Pseudo<
-	(outs), (ins InlineJT16:$t, GRegs:$i, i64imm:$n),
-	"jttb\t$i,#$n\n$t",
-	[(myJT16 tjumptable:$t, GRegs:$i, uimm16:$n)]>;
+	(outs), (ins InlineJT16:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
+	"jtth\t$i,#$n\n$t",
+	[(myJT16 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
 def JT32 : Pseudo<
-	(outs), (ins InlineJT32:$t, GRegs:$i, i64imm:$n),
+	(outs), (ins InlineJT32:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
 	"jttw\t$i,#$n\n$t",
-	[(myJT32 tjumptable:$t, GRegs:$i, uimm16:$n)]>;
+	[(myJT32 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
 }
 
 let isBranch = 1, isTerminator = 1 in {
