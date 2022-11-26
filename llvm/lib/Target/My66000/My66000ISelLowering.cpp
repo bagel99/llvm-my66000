@@ -70,6 +70,8 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::JT32: return "My66000ISD::JT32";
   case My66000ISD::MEMCPY: return "My66000ISD::MEMCPY";
   case My66000ISD::WRAPPER: return "My66000ISD::WRAPPER";
+  case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
+  case My66000ISD::SHRUNKI5: return "My66000ISD::SHRUNKI5";
   }
   return nullptr;
 }
@@ -128,6 +130,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SRL, MVT::i64, Legal);
   setOperationAction(ISD::ROTR, MVT::i64, Legal);
   setOperationAction(ISD::ROTL, MVT::i64, Legal);
+  setOperationAction(ISD::BSWAP, MVT::i64, Legal);
   // We don't have a modulo instruction use div+carry
   setOperationAction(ISD::UREM, MVT::i64, Expand);
   setOperationAction(ISD::SREM, MVT::i64, Expand);
@@ -237,6 +240,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::f64, Custom);
   setOperationAction(ISD::SETCC, MVT::f64, Custom);
   setOperationAction(ISD::BR_CC, MVT::f64, Custom);
+  setOperationAction(ISD::SELECT, MVT::f64, Expand);
 
   // 32-bit floating point
   setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Expand);
@@ -269,6 +273,9 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::f32, Custom);
   setOperationAction(ISD::SETCC, MVT::f32, Custom);
   setOperationAction(ISD::BR_CC, MVT::f32, Custom);
+  setOperationAction(ISD::SELECT, MVT::f32, Expand);
+
+  setOperationAction(ISD::ConstantFP, MVT::f64, Custom);
 
   MaxStoresPerMemcpy = 1;
   MaxStoresPerMemcpyOptSize = 1;
@@ -301,6 +308,16 @@ bool My66000TargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF
   return false;
 }
 
+bool My66000TargetLowering::allowsMisalignedMemoryAccesses(
+    EVT VT, unsigned AddrSpace, unsigned Align, MachineMemOperand::Flags Flags,
+    bool *Fast) const {
+
+    if (Fast != nullptr)
+      *Fast = true;
+    return true;
+}
+
+// FIXME - do we neet the LLT version of allowsMisalignedMemoryAccesses?
 
 //===----------------------------------------------------------------------===//
 //  Misc Lower Operation implementation
@@ -1132,6 +1149,45 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerVASTART\n");
                       MachinePointerInfo(SV));
 }
 
+/*
+ * Convert all 64-bit floating point constants that have a 32-bit
+ * exact representation to 32-bit constant extended.  We will have patterns to
+ * match this.
+ */
+SDValue My66000TargetLowering::LowerConstantFP(SDValue Op,
+						SelectionDAG &DAG) const {
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerConstantFP\n");
+  EVT VT = Op.getValueType();
+  SDLoc DL(Op);
+  ConstantFPSDNode *CFP = cast<ConstantFPSDNode>(Op);
+  APFloat FPVal = CFP->getValueAPF();
+  if (VT == MVT::f64) {
+    APFloat FPVal2 = FPVal;	// convert clobbers it
+    bool losesInfo;
+    // The following copied from ConstantFP::isValueValidForType()
+    FPVal2.convert(APFloat::IEEEsingle(), APFloat::rmNearestTiesToEven, &losesInfo);
+LLVM_DEBUG(dbgs() << "\tAttempt shrink to f32: " << losesInfo << '\n');
+    if (!losesInfo) {
+      // FPVal can be represented by a f32
+      APSInt IVal(64, false);
+      bool isExact;
+      FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
+LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
+    " , IVal=" << IVal << '\n');
+      if (isExact) {
+	int64_t imm = IVal.getExtValue();
+        if (imm >= -16 && imm <= 15) {
+	  return DAG.getNode(My66000ISD::SHRUNKI5, DL, MVT::f64,
+			     DAG.getConstant(imm, DL, MVT::i64));
+	}
+      }
+      return DAG.getNode(My66000ISD::SHRUNK, DL, MVT::f64,
+			 DAG.getConstantFP(FPVal2, DL, MVT::f32));
+    }
+  }
+  return DAG.getConstantFP(FPVal, DL, VT);
+}
+
 SDValue My66000TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
 LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation\n");
   switch (Op.getOpcode()) {
@@ -1142,6 +1198,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation\n");
   case ISD::GlobalAddress:		return LowerGlobalAddress(Op, DAG);
   case ISD::BR_JT:			return LowerBR_JT(Op, DAG);
   case ISD::VASTART:			return LowerVASTART(Op, DAG);
+  case ISD::ConstantFP:			return LowerConstantFP(Op, DAG);
   default:
     llvm_unreachable("unimplemented operand");
   }

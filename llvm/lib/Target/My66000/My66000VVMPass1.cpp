@@ -30,6 +30,8 @@ using namespace llvm;
 
 static cl::opt<bool> EnableVVM("enable-vvm", cl::Hidden,
   cl::desc("Enable VVM Loop Mode"));
+static cl::opt<unsigned> MaxVVMInstr("max-inst-vvm", cl::Hidden,
+  cl::desc("Maximum number of instructions in VVM loop"), cl::init(16));
 
 namespace {
 
@@ -75,86 +77,126 @@ static unsigned MapLoopCond(unsigned cc) {
 }
 
 bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
-MachineBasicBlock *TB, *BB, *CB;
-    TB = Loop->getTopBlock();
-    BB = Loop->getBottomBlock();
-    if (TB != BB)
-      return false;	// For now, only single block loops
-    CB = Loop->findLoopControlBlock();
-    if (!CB || CB != TB)
-      return false;
-
-dbgs() << " found candidate inner loop " <<printMBBReference(*TB) << '\n';
+  MachineBasicBlock *TB = Loop->getTopBlock();	// the loop block
+  MachineBasicBlock *BB, *CB;
+  BB = Loop->getBottomBlock();
+  if (TB != BB)
+    return false;	// For now, only single block loops
+  CB = Loop->findLoopControlBlock();
+  if (!CB || CB != TB)
+    return false;
+  LLVM_DEBUG(dbgs() << " found candidate inner loop " << printMBBReference(*TB) << '\n');
   MachineBasicBlock::iterator I = TB->begin();
-  MachineBasicBlock::iterator E = TB->getFirstTerminator();
-  MachineInstr *BMI, *CMI = nullptr, *AMI = nullptr;
-  Register BReg, LReg, CReg;
+  MachineBasicBlock::iterator E = TB->getLastNonDebugInstr();
+  MachineInstr *BMI, *CMI = nullptr, *AMI = nullptr, *UMI = nullptr;
+  MachineInstr *MI;
+  Register BReg, LReg;
   unsigned BCnd;
   unsigned Type;
+  unsigned CmpOpNo;
+  MachineBasicBlock *EB = nullptr;	// the exit block if not fall-thru
+  bool CondIsExit = false;
   // Skip any optional terminating unconditional branch
-  if (E->isUnconditionalBranch())
-  {
+  MI = &*E;
+  if (MI->isUnconditionalBranch()) {
+    EB = MI->getOperand(0).getMBB();
+    if (EB == TB) CondIsExit = true;	// it is the loop branch
+    LLVM_DEBUG(dbgs() << " skip unconditional branch to " << printMBBReference(*EB) << '\n');
+    UMI = MI;	// remember we need to delete this
     --E;
-dbgs() << " skip unconditional branch\n";
   }
   // Then we must have a conditional branch
   BMI = &*E;
   if (E->getOpcode() == My66000::BRIB) {
-dbgs() << " found BRIB\n";
+    LLVM_DEBUG(dbgs() << " found BRIB\n");
     Type = 1;
   } else if (E->getOpcode() == My66000::BRC) {
-dbgs() << " found BRC\n";
+    LLVM_DEBUG(dbgs() << " found BRC\n");
     Type = 2;
-  } else
+  } else {
+    LLVM_DEBUG(dbgs() << " fail - no conditional branch\n");
     return false;	// weird, not a conditional branch
-  // Make sure this conditional branch goes to top of this BB
-  if (BMI->getOperand(0).getMBB() != TB) {
-dbgs() << " bad branch target\n";
-    return false;
   }
-dbgs() << *BMI;
+  // Make sure this conditional branch goes to top of the loop
+  // or else its the exit from the loop followed by an
+  // unconditional branch to the top.
+  CB = BMI->getOperand(0).getMBB();
+  if (CB != TB) {
+    if (!CondIsExit) {
+      LLVM_DEBUG(dbgs() << " fail - bad branch target\n");
+      return false;
+    } else {
+      LLVM_DEBUG(dbgs() << " exit was conditional to " << printMBBReference(*CB) << '\n');
+      EB = CB;
+    }
+  }
+//dbgs() << *BMI;
   BReg = BMI->getOperand(1).getReg();
   BCnd = BMI->getOperand(2).getImm();
   --E;
   // Now scan to top of loop looking for interesting stuff
   // FIXME - should count instructions, VVM has a limitation
+  unsigned NInstr = MaxVVMInstr;
   while (E != I) {
     MachineInstr *MI = &*E;
-//dbgs() << *MI;
-    if (MI->isCall())
+    if (MI->isCall()) {
+      LLVM_DEBUG(dbgs() << " fail - loop contains call\n");
       return false;	// calls not allowed in vector mode
+    }
+    if (NInstr == 0) {
+      LLVM_DEBUG(dbgs() << " fail - too many instructions in loop\n");
+      return false;
+    }
     if (MI->getNumDefs() == 1 && MI->getOperand(0).isReg()) {
       if (MI->getOperand(0).getReg() == BReg) {
-dbgs() << *MI;
 	if (MI->isCompare()) {
-dbgs() << " found def of branch variable is compare\n";
-	  CReg = MI->getOperand(1).getReg();
+	  LLVM_DEBUG(dbgs() << " def of branch variable is compare: " << *MI);
 	  CMI = MI;
 	} else {
-dbgs() << " found def of branch variable is not compare\n";
+	  LLVM_DEBUG(dbgs() << " def of branch variable is not compare: " << *MI);
 	  AMI = MI;
 	}
       }
-      else if (CMI != nullptr && MI->getOperand(0).getReg() == CReg) {
-dbgs() << *MI;
-dbgs() << " found def of compare variable\n";
-	// FIXME - should be and ADD
-	AMI = MI;
+      else if (CMI != nullptr) {	// we have seen the compare
+	if (MI->getOperand(0).getReg() == CMI->getOperand(1).getReg()) {
+	  LLVM_DEBUG(dbgs() << " def of compare variable op1: " << *MI);
+	  CmpOpNo = 2;
+	  AMI = MI;
+	} else if (CMI->getOperand(2).isReg() &&
+		   MI->getOperand(0).getReg() == CMI->getOperand(2).getReg()) {
+	  LLVM_DEBUG(dbgs() << " def of compare variable op2: " << *MI);
+	  CmpOpNo = 1;
+	  AMI = MI;
+        }
       }
     }
+    --NInstr;
     --E;
   }
-  // AMI must be an ADD instruction if incorporated into LOOP
-  if (AMI != nullptr &&
-      AMI->getOpcode() != My66000::ADDrr &&
-      AMI->getOpcode() != My66000::ADDri)
-    AMI = nullptr;
+  if (AMI != nullptr) {
+    if (AMI->getOpcode() != My66000::ADDrr &&
+        AMI->getOpcode() != My66000::ADDri) {
+      AMI = nullptr; // AMI must be an ADD instruction if incorporated into LOOP
+    } else {	// We don't handle other than increment version of ADD
+      if (!((AMI->getOperand(0).getReg() == AMI->getOperand(1).getReg()) ||
+	    (AMI->getOperand(2).isReg() &&
+	     AMI->getOperand(0).getReg() == AMI->getOperand(2).getReg()))) {
+	LLVM_DEBUG(dbgs() << " fail - ADD is not a simple increment\n");
+	return false;
+      }
+    }
+  }
   // Type 1 requires both CMI and AMI
-  if (Type == 1 && (CMI == nullptr || AMI == nullptr))
-    return false;
-
-dbgs() << " will vectorize this block:\n" << *TB;
-
+  if (Type == 1) {
+    if (CMI == nullptr) {
+      LLVM_DEBUG(dbgs() << " fail - type 1 has CMI == null\n");
+      return false;
+    }
+    if (AMI == nullptr) {
+      Type = 3;
+    }
+  }
+  LLVM_DEBUG(dbgs() << " will vectorize this block:\n");
   MachineFunction &MF = *TB->getParent();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineRegisterInfo &MRI = MF.getRegInfo();
@@ -167,28 +209,34 @@ dbgs() << " will vectorize this block:\n" << *TB;
   DebugLoc DL = BMI->getDebugLoc();
   E = TB->getFirstTerminator();
   unsigned Opc;
-  if (Type == 1) {
+  switch (Type) {
+  case 1: {
     LReg = AMI->getOperand(1).getReg();		// loop counter
-    if (CMI->getOperand(2).isReg()) {
+    if (CMI->getOperand(CmpOpNo).isReg()) {
       if (AMI->getOperand(2).isReg()) {
 	Opc = My66000::LOOP1rr;
+	LLVM_DEBUG(dbgs() << " type1rr\n");
       } else {
 	Opc = My66000::LOOP1ri;
+	LLVM_DEBUG(dbgs() << " type1ri\n");
       }
     } else {
       if (AMI->getOperand(2).isReg()) {
 	Opc = My66000::LOOP1ir;
+	LLVM_DEBUG(dbgs() << " type1ir\n");
       } else {
 	Opc = My66000::LOOP1ii;
+	LLVM_DEBUG(dbgs() << " type1ii\n");
       }
     }
     LIB = BuildMI(*TB, E, DL, TII.get(Opc))
 	    .addImm(BCnd)
 	    .addReg(LReg)
-	    .add(CMI->getOperand(2))
+	    .add(CMI->getOperand(CmpOpNo))
 	    .add(AMI->getOperand(2));
-
-  } else {	// Type 2
+    break;
+  }
+  case 2: {
     BCnd = MapLoopCond(BCnd);
     if (AMI == nullptr) {	// no increment
       LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
@@ -196,11 +244,14 @@ dbgs() << " will vectorize this block:\n" << *TB;
 	      .addReg(BReg)
 	      .addImm(0)
 	      .addImm(0);
+      LLVM_DEBUG(dbgs() << " type200\n");
     } else {
       if (AMI->getOperand(2).isReg()) {
 	Opc = My66000::LOOP1ri;
+	LLVM_DEBUG(dbgs() << " type2ri\n");
       } else {
 	Opc = My66000::LOOP1ii;
+	LLVM_DEBUG(dbgs() << " type2ii\n");
       }
       LIB = BuildMI(*TB, E, DL, TII.get(Opc))
 	      .addImm(BCnd)
@@ -208,9 +259,31 @@ dbgs() << " will vectorize this block:\n" << *TB;
 	      .addImm(0)
 	      .add(AMI->getOperand(2));
     }
+    break;
+   }
+   case 3: {
+      if (CMI->getOperand(2).isReg()) {
+	Opc = My66000::LOOP1ri;
+	LLVM_DEBUG(dbgs() << " type3ri\n");
+      } else {
+	Opc = My66000::LOOP1ii;
+	LLVM_DEBUG(dbgs() << " type3ii\n");
+      }
+      LIB = BuildMI(*TB, E, DL, TII.get(Opc))
+	      .addImm(BCnd)
+	      .add(CMI->getOperand(1))
+	      .add(CMI->getOperand(2))
+	      .addImm(0);
+    }
   }
   LIB.addReg(RA);
   LIB.addMBB(TB);
+  if (EB != nullptr && !TB->isLayoutSuccessor(EB)) {	// not a fall-thru
+    BuildMI(*TB, E, DL, TII.get(My66000::BRU)).addMBB(EB);
+    LLVM_DEBUG(dbgs() << " need terminating BRU\n");
+  }
+  if (UMI != nullptr)
+    UMI->eraseFromParent();
   BMI->eraseFromParent();
   if (CMI != nullptr)
     CMI->eraseFromParent();
@@ -223,7 +296,7 @@ bool My66000VVMLoop::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
 
   if (!EnableVVM) return false;
-dbgs() << "VVMLoopPass: " << MF.getName() << '\n';
+LLVM_DEBUG(dbgs() << "VVMLoopPass: " << MF.getName() << '\n');
   MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
   SmallVector<MachineLoop *, 4> Loops(MLI.begin(), MLI.end());
   for (int i = 0; i < (int)Loops.size(); ++i)

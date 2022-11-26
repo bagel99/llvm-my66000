@@ -48,7 +48,9 @@ enum NodeType : unsigned {
   JT16,		// Jump through table, 16 bit
   JT32,		// Jump through table, 32 bit
   MEMCPY,	// Memory copy
-  WRAPPER	// prefix for global address
+  WRAPPER,	// prefix for global address
+  SHRUNK,	// wrapper for shrunk FP constants
+  SHRUNKI5	// wrapper for shrunk FP constants that fit in I5
 };
 
 } // end namespace My66000ISD
@@ -72,6 +74,13 @@ class My66000TargetLowering : public TargetLowering {
 			Type *Ty, unsigned AS,
 			Instruction *I = nullptr) const override;
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
+
+  /// Returns true if the target allows unaligned memory accesses of the
+  /// specified type.
+  bool allowsMisalignedMemoryAccesses(
+      EVT VT, unsigned AddrSpace = 0, unsigned Align = 1,
+      MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
+      bool *Fast = nullptr) const override;
 
   ConstraintType getConstraintType(StringRef Constraint) const override;
 
@@ -111,6 +120,7 @@ class My66000TargetLowering : public TargetLowering {
   SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSIGN_EXTEND_INREG(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerConstantFP(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 

@@ -20,6 +20,8 @@ def uneed32: Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 65536 && Imm <= 4294967295; }]>;
 def uneed64: Operand<i64>, ImmLeaf<i64,
 		[{ return (uint64_t)(Imm) >= 4294967296; }]>;
+def simm5 :  Operand<i64>, ImmLeaf<i64,
+		[{ return isInt<6>(Imm); }]>;
 def simm16 : Operand<i64>, ImmLeaf<i64,
 		[{ return isInt<16>(Imm); }]>;
 def simm32 : Operand<i64>, ImmLeaf<i64,
@@ -338,18 +340,22 @@ def MOVri : ALU_RI<0b111011,
 }
 
 // Immediate 32-bit signed extended
+let isAsCheapAsAMove = 1 in {
 def MOVrw : ALU_RRR<0b000, 0b101,
 	(outs GRegs:$rd), (ins s32imm64:$imm),
 	"mov\t$rd,#$imm",
 	[(set GRegs:$rd, simm32:$imm)]>
 	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
+}
 
 // Immediate 64-bit
+let isAsCheapAsAMove = 1 in {
 def MOVrd : ALU_RRR<0b000, 0b111,
 	(outs GRegs:$rd), (ins i64imm:$imm),
 	"mov\t$rd,#$imm",
 	[(set GRegs:$rd, sneed64:$imm)]>
 	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
+}
 
 // Reg to Reg never matches, just built to copyPhysReg
 def MOVrr : ALU_RRR<0b000, 0b010,

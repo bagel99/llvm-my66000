@@ -15,12 +15,23 @@ def fpimm32 : Operand<f32>, FPImmLeaf<f32, [{ return true; }]>
 		{ let PrintMethod = "printFP32Operand"; }
 def fpimm1 : PatLeaf<(fpimm), [{ return N->isExactlyValue(+1.0); }]>;
 
+//
+// My66000 specific FP DAG Nodes.
+//
 def myFCMP : SDNode<"My66000ISD::FCMP",
 			SDTypeProfile<1, 2, [SDTCisVT<0, i64>,
 			    SDTCisSameAs<1, 2>]>,
 			[]>;
 def myBRfcc :	    SDNode<"My66000ISD::BRfcc", SDT_BRcc,
 			[SDNPHasChain]>;
+def mySHRUNK:	    SDNode<"My66000ISD::SHRUNK",
+			SDTypeProfile<1, 1,
+			  [SDTCisVT<0, f64>, SDTCisVT<1, f32>]>,
+			[]>;
+def mySHRUNKI5:	    SDNode<"My66000ISD::SHRUNKI5",
+			SDTypeProfile<1, 1,
+			  [SDTCisVT<0, f64>, SDTCisVT<1, i64>]>,
+			[]>;
 
 //
 // 64-bit floating point shares the GRegs with integers
@@ -67,6 +78,14 @@ multiclass FPUrd<string OpName, bits<6>OpC, bits<5>Flags,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm64:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (f64 GRegs:$rs1), fpimm64:$imm))]>;
+  def rf : ALU_RD<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm32:$imm),
+	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
+	[(set GRegs:$rd, (OpNode (f64 GRegs:$rs1), (mySHRUNK (fpimm32:$imm))))]>;
+  def rk : ALU_RD<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
+	[(set GRegs:$rd, (OpNode (f64 GRegs:$rs1), (mySHRUNKI5 (simm5:$imm))))]>;
 }
 defm FADD :  FPUrd<"fadd",  0b110001, 0b10001, fadd>;
 defm FMUL :  FPUrd<"fmul",  0b110010, 0b10001, fmul>;
@@ -77,15 +96,41 @@ def FCMPrd : ALU_RD<0b110100, 0b10001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm64:$imm),
 	"fcmp\t$rd,$rs1,#$imm",
 	[(set (i64 GRegs:$rd), (myFCMP (f64 GRegs:$rs1), fpimm64:$imm))]>;
+def FCMPrf : ALU_RD<0b110100, 0b10001,
+	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm32:$imm),
+	"fcmp\t$rd,$rs1,#$imm",
+	[(set (i64 GRegs:$rd), (myFCMP (f64 GRegs:$rs1), (mySHRUNK (fpimm32:$imm))))]>;
+def FCMPrk : ALU_RD<0b110100, 0b10001,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	"fcmp\t$rd,$rs1,#$imm",
+	[(set (i64 GRegs:$rd), (myFCMP (f64 GRegs:$rs1), (mySHRUNKI5 (simm5:$imm))))]>;
 }
+
+// Non-commutative ops with constants on the left
 def FDIVdr : ALU_DR<0b110011, 0b10101,
 	(outs GRegs:$rd), (ins fpimm64:$imm, GRegs:$rs2),
 	"fdiv\t$rd,#$imm,$rs2",
 	[(set GRegs:$rd, (fdiv fpimm64:$imm, (f64 GRegs:$rs2)))]>;
+def FDIVfr : ALU_DR<0b110011, 0b10101,
+	(outs GRegs:$rd), (ins fpimm32:$imm, GRegs:$rs2),
+	"fdiv\t$rd,#$imm,$rs2",
+	[(set GRegs:$rd, (fdiv (mySHRUNK (fpimm32:$imm)), (f64 GRegs:$rs2)))]>;
+def FDIVkr : ALU_DR<0b110011, 0b10101,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	"fdiv\t$rd,#$imm,$rs2",
+	[(set GRegs:$rd, (fdiv (mySHRUNKI5 (simm5:$imm)), (f64 GRegs:$rs2)))]>;
 def FSUBdr : ALU_DR<0b110001, 0b10101,
 	(outs GRegs:$rd), (ins fpimm64:$imm, GRegs:$rs2),
 	"fadd\t$rd,#$imm,-$rs2",
 	[(set GRegs:$rd, (fsub fpimm64:$imm, (f64 GRegs:$rs2)))]>;
+def FSUBfr : ALU_DR<0b110001, 0b10101,
+	(outs GRegs:$rd), (ins fpimm32:$imm, GRegs:$rs2),
+	"fadd\t$rd,#$imm,-$rs2",
+	[(set GRegs:$rd, (fsub (mySHRUNK (fpimm32:$imm)), (f64 GRegs:$rs2)))]>;
+def FSUBkr : ALU_DR<0b110001, 0b10101,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	"fadd\t$rd,#$imm,-$rs2",
+	[(set GRegs:$rd, (fsub (mySHRUNKI5 (simm5:$imm)), (f64 GRegs:$rs2)))]>;
 def FNEG : ALU_DR<0b110001, 0b10101,
 	(outs GRegs:$rd), (ins GRegs:$rs2),
 	"fadd\t$rd,#0,-$rs2",
@@ -112,10 +157,18 @@ def FMArd : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, fpimm64:$imm),
 	"fmac\t$rd,$rs1,$rs2,#$imm",
 	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (f64 GRegs:$rs2), fpimm64:$imm))]>;
+def FMArf : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, fpimm32:$imm),
+	"fmac\t$rd,$rs1,$rs2,#$imm",
+	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (f64 GRegs:$rs2), (mySHRUNK (fpimm32:$imm))))]>;
 def FMAdr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm64:$imm, GRegs:$rs3),
 	"fmac\t$rd,$rs1,#$imm,$rs3",
 	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), fpimm64:$imm, (f64 GRegs:$rs3)))]>;
+def FMAfr : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm32:$imm, GRegs:$rs3),
+	"fmac\t$rd,$rs1,#$imm,$rs3",
+	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (mySHRUNK (fpimm32:$imm)), (f64 GRegs:$rs3)))]>;
 
 // FMA 64-bit FMAD - preferred by DAGCombiner?
 def FMADrr : ALU_RRR<0b000, 0b000,
@@ -138,17 +191,37 @@ def FMADrd : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, fpimm64:$imm),
 	"fmac\t$rd,$rs1,$rs2,#$imm",
 	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (f64 GRegs:$rs2), fpimm64:$imm))]>;
+def FMADrf : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, fpimm32:$imm),
+	"fmac\t$rd,$rs1,$rs2,#$imm",
+	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (f64 GRegs:$rs2), (mySHRUNK (fpimm32:$imm))))]>;
 def FMADdr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm64:$imm, GRegs:$rs3),
 	"fmac\t$rd,$rs1,#$imm,$rs3",
 	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), fpimm64:$imm, (f64 GRegs:$rs3)))]>;
+def FMADfr : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm32:$imm, GRegs:$rs3),
+	"fmac\t$rd,$rs1,#$imm,$rs3",
+	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (mySHRUNK (fpimm32:$imm)), (f64 GRegs:$rs3)))]>;
 
 // Moves
+let isAsCheapAsAMove = 1 in {
 def FMOVrd : ALU_RRR<0b000, 0b111,
 	(outs GRegs:$rd), (ins fpimm64:$imm),
 	"mov\t$rd,#$imm",
 	[(set (f64 GRegs:$rd), fpimm64:$imm)]>
 	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
+def FMOVrf : ALU_RRR<0b000, 0b111,
+	(outs GRegs:$rd), (ins fpimm32:$imm),
+	"cvtfd\t$rd,#$imm",
+	[(set (f64 GRegs:$rd), (mySHRUNK (fpimm32:$imm)))]>
+	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
+def FMOVrk : ALU_RRR<0b000, 0b111,
+	(outs GRegs:$rd), (ins i64imm:$imm),
+	"cvtsd\t$rd,#$imm",
+	[(set (f64 GRegs:$rd), (mySHRUNKI5 (simm5:$imm)))]>
+	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
+}
 def : Pat<(myCMOV (f64 GRegs:$rs1), (f64 GRegs:$rs2), GRegs:$rs3),
           (CMOVrrr GRegs:$rs1, GRegs:$rs2, GRegs:$rs3)>;
 def : Pat<(myMUX (f64 GRegs:$rs1), (f64 GRegs:$rs2), GRegs:$rs3),
@@ -363,11 +436,13 @@ def FMADFdr : ALU_RRR<0b000, 0b000,
 	[(set FSRegs:$rd, (fmad (f32 FSRegs:$rs1), fpimm32:$imm, (f32 FSRegs:$rs3)))]>;
 
 // Moves
+let isAsCheapAsAMove = 1 in {
 def FMOVrs : ALU_RRR<0b000, 0b111,
 	(outs FSRegs:$rd), (ins fpimm32:$imm),
 	"mov\t$rd,#$imm",
 	[(set (f32 FSRegs:$rd), fpimm32:$imm)]>
 	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
+}
 /* FIXME
 def : Pat<(myCMOV (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), GRegs:$rs3),
           (CMOVrrr FSRegs:$rs1, FSRegs:$rs2, GRegs:$rs3)>;

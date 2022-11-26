@@ -89,7 +89,7 @@ bool My66000VVMFixup::fixLoop(MachineLoop *Loop) {
 
   // We are only interested in loops that start with VEC
   if (I->getOpcode() == My66000::VEC) {
-dbgs() << "  fix loop\n";
+LLVM_DEBUG(dbgs() << "  fix loop\n");
     findModified(TB, Modified);
     Livein.reset();
     for (MachineBasicBlock::succ_iterator SI = TB->succ_begin(),
@@ -105,14 +105,11 @@ dbgs() << "  fix loop\n";
 	}
       }
     }
-dbgs() << "  modified=" << Modified.to_string() << '\n';
-dbgs() << "  livein=  " << Livein.to_string() << '\n';
+LLVM_DEBUG(dbgs() << "  modified=" << Modified.to_string() << '\n');
+LLVM_DEBUG(dbgs() << "  livein=  " << Livein.to_string() << '\n');
     Modified &= Livein;
-dbgs() << "  bits=    " << Modified.to_string() << '\n';
+LLVM_DEBUG(dbgs() << "  bits=    " << Modified.to_string() << '\n');
     bits = Modified.to_ulong();
-    if ((bits & 0xFFE00001) != 0) {
-dbgs() << "  register out of range\n";
-    }
     I->RemoveOperand(1);
     I->addOperand(MachineOperand::CreateImm(bits>>1));
   }

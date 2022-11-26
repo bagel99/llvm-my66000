@@ -147,7 +147,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
   unsigned NSave = 0;
   Register HiReg = My66000::R0;
   Register LoReg = 100;
-  int64_t Offset;;
+  int64_t Offset;
   for (const auto &Entry : CSI) {
     Offset = MFI.getObjectOffset(Entry.getFrameIdx());
     unsigned Reg = Entry.getReg();
@@ -163,22 +163,23 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
   XFI->setHiSavedReg(HiReg);	// save for epilogue
   XFI->setLoSavedReg(LoReg);	// save for epilogue
 
+  Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
   if (NSave) {
     bool isLive = MBB.isLiveIn(LoReg);
-    Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
-    Register LoReg1 = LoReg;
     unsigned flags = 0;	// default to don't save SP
     if (MFI.hasTailCall()) {
 	flags |= 1;	// tail call saving multiple registers, save SP also
     }
     Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
     BuildMI(MBB, MBBI, DL, TII->get(My66000::ENTER))
-	      .addReg(LoReg1, getKillRegState(!isLive))
+	      .addReg(LoReg, getKillRegState(!isLive))
 	      .addReg(HiReg, getKillRegState(!isLive))
 	      .addImm(flags)
 	      .addImm(Offset);
     if (!isLive)
       MBB.addLiveIn(LoReg);
+  } else if (Offset != 0) {
+    adjustReg(MBB, MBBI, DL, SPReg, SPReg, -Offset, MachineInstr::FrameSetup);
   }
   // Generate new FP.
   if (hasFP(MF)) {
@@ -248,8 +249,8 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
   My66000FunctionInfo *XFI = MF.getInfo<My66000FunctionInfo>();
   Register HiReg = XFI->getHiSavedReg();
   Register LoReg = XFI->getLoSavedReg();
+  int64_t Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
   if (NSave) {
-    int64_t Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
     unsigned flags = 0;
     if (MFI.hasTailCall()) flags |= 5;	// restore to LR not IP, SP saved
     BuildMI(MBB, MBBI, DL, TII->get(My66000::EXIT))
@@ -259,6 +260,8 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
 	      .addImm(Offset);
     if (!MFI.hasTailCall())
 	MBB.erase(MBBI); 	// remove the return
+  } else if (Offset != 0) {
+    adjustReg(MBB, MBBI, DL, SPReg, SPReg, Offset, MachineInstr::FrameSetup);
   }
   // Deallocate stack
 //  adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackSize, MachineInstr::FrameDestroy);
