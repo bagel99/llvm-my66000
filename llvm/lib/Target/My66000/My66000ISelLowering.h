@@ -143,8 +143,13 @@ class My66000TargetLowering : public TargetLowering {
 
   // Tuning knobs
   bool isIntDivCheap(EVT VT, AttributeList Attr) const override;
-  bool isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
-                                    EVT VT) const override;
+  bool isFMAFasterThanFMulAndFAdd(const MachineFunction &MF, EVT VT)
+					    const override;
+  bool isFPImmLegal(const APFloat &Imm, EVT VT, bool ForCodeSize)
+					    const override;
+  bool shouldConvertConstantLoadToIntImm(const APInt &Imm,Type *Ty)
+					    const override;
+  bool reduceSelectOfFPConstantLoads(EVT CmpOpVT) const override;
 
 };
 

@@ -319,6 +319,25 @@ bool My66000TargetLowering::allowsMisalignedMemoryAccesses(
 
 // FIXME - do we neet the LLT version of allowsMisalignedMemoryAccesses?
 
+bool My66000TargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT,
+                                     bool ForCodeSize) const {
+   return true;	// FIXME - just f32 and f64?
+}
+
+bool My66000TargetLowering::shouldConvertConstantLoadToIntImm(const APInt &Imm,
+                                                          Type *Ty) const {
+  assert(Ty->isIntegerTy());
+
+  unsigned BitSize = Ty->getPrimitiveSizeInBits();
+  if (BitSize == 0 || BitSize > 64)
+    return false;
+  return true;
+}
+
+bool My66000TargetLowering::reduceSelectOfFPConstantLoads(EVT CmpOpVT) const {
+  return false;
+}
+
 //===----------------------------------------------------------------------===//
 //  Misc Lower Operation implementation
 //===----------------------------------------------------------------------===//
