@@ -58,7 +58,7 @@ private:
   void getShift(SDValue Addr, SDValue &Index, SDValue &Shift);
   bool tryExtract(SDNode *N, bool isSigned);
   bool tryInsert(SDNode *N, EVT VT);
-  bool tryRotate(SDNode *N, SDNode *NOR, unsigned Width);
+  bool tryRotate(SDNode *N, SDNode *NOR);
   bool tryANDOR(SDNode *N, unsigned Width);
   bool tryOR(SDNode *N);
   bool trySex(SDNode *N);
@@ -254,8 +254,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 }
 
 bool My66000DAGToDAGISel::tryRotate(SDNode *N,		/* the node to replace */
-				    SDNode *NOR,	/* the OR node */
-				    unsigned Width) {
+				    SDNode *NOR) {	/* the OR node */
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotate\n");
   SDLoc dl(N);
   uint64_t Shlimm = 0;
@@ -264,13 +263,12 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotate\n");
   SDValue OpR = NOR->getOperand(1);
   if (isOpcWithIntImmediate(OpL.getNode(), ISD::SHL, Shlimm) &&
       isOpcWithIntImmediate(OpR.getNode(), ISD::SRL, Shrimm)) {
-LLVM_DEBUG(dbgs() << "Shlimm=" << Shlimm << " Shrimm=" << Shrimm
-		  << " Width=" << Width << '\n');
+LLVM_DEBUG(dbgs() << "Shlimm=" << Shlimm << " Shrimm=" << Shrimm << '\n');
     KnownBits KnownL = CurDAG->computeKnownBits(OpL.getNode()->getOperand(0));
     unsigned WidthL = 64 - KnownL.countMinLeadingZeros();
     KnownBits KnownR = CurDAG->computeKnownBits(OpR.getNode()->getOperand(0));
     unsigned WidthR = 64 - KnownR.countMinLeadingZeros();
-    Width = std::min(WidthL,WidthR);
+    unsigned Width = std::min(WidthL,WidthR);
 LLVM_DEBUG(dbgs() << "WidthL=" << WidthL << " WidthR=" << WidthR << '\n');
     if (OpL.getNode()->getOperand(0) != OpR.getNode()->getOperand(0)) {
 LLVM_DEBUG(dbgs() << "Shift operands not the same, proceeding anyway!\n");
@@ -298,9 +296,7 @@ LLVM_DEBUG(dbgs() << "Not a rotate?\n");
 // Try to match (OR SHL, SHR)
 bool My66000DAGToDAGISel::tryOR(SDNode *N) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
-  KnownBits Known = CurDAG->computeKnownBits(N->getOperand(0).getNode()->getOperand(0));
-  unsigned Width = 64 - Known.countMinLeadingZeros();
-  return tryRotate(N, N, Width);
+  return tryRotate(N, N);
 }
 
 // Try to match (AND (OR ...) mask)
@@ -309,7 +305,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
 bool My66000DAGToDAGISel::tryANDOR(SDNode *N, unsigned Width) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryANDOR\n");
   SDNode *NOR = N->getOperand(0).getNode();
-  return tryRotate(N, NOR, Width);
+  return tryRotate(N, NOR);
 }
 
 // Found an AND, could be an extract or a bit clear

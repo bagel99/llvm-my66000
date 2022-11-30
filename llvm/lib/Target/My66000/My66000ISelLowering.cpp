@@ -581,6 +581,18 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSIGN_EXTEND_INREG\n");
 //                  Call Calling Convention Implementation
 //===----------------------------------------------------------------------===//
 
+static bool canUseTailCall(SmallVectorImpl<CCValAssign> &ArgLocs) {
+  // Punt if there are any indirect or stack arguments.
+  for (unsigned I = 0, E = ArgLocs.size(); I != E; ++I) {
+    CCValAssign &VA = ArgLocs[I];
+    if (VA.getLocInfo() == CCValAssign::Indirect)
+      return false;
+    if (!VA.isRegLoc())
+      return false;
+  }
+  return true;
+}
+
 /// My66000 call implementation
 SDValue My66000TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                      SmallVectorImpl<SDValue> &InVals) const {
@@ -593,8 +605,10 @@ SDValue My66000TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SDValue Callee = CLI.Callee;
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
-  bool IsTailCall = CLI.IsTailCall & !IsVarArg;
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerCall\n");
+  bool &IsTailCall = CLI.IsTailCall;;
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerCall"
+		  << " TailCall=" << CLI.IsTailCall
+		  << " VarArg=" << CLI.IsVarArg << '\n');
 
   MachineFunction &MF = DAG.getMachineFunction();
 
@@ -603,6 +617,8 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerCall\n");
                  *DAG.getContext());
 
   CCInfo.AnalyzeCallOperands(Outs, CC_My66000);
+  if (IsTailCall && !canUseTailCall(ArgLocs))
+    IsTailCall = false;
 
   SmallVector<CCValAssign, 16> RVLocs;
   // Analyze return values to determine the number of bytes of stack required.
@@ -741,6 +757,8 @@ static SDValue lowerCallResult(SDValue Chain, SDValue Glue,
                                SDLoc dl, SelectionDAG &DAG,
                                SmallVectorImpl<SDValue> &InVals) {
   SmallVector<std::pair<int, unsigned>, 4> ResultMemLocs;
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::lowerCallResult"
+		  << " reg=" << RVLocs.size() << '\n');
   // Copy results out of physical registers.
   for (unsigned i = 0, e = RVLocs.size(); i != e; ++i) {
     const CCValAssign &VA = RVLocs[i];
@@ -779,7 +797,7 @@ static SDValue lowerCallResult(SDValue Chain, SDValue Glue,
   // all load nodes are independent of each other.
   if (!MemOpChains.empty())
     Chain = DAG.getNode(ISD::TokenFactor, dl, MVT::Other, MemOpChains);
-
+LLVM_DEBUG(dbgs() << "\tInVals=" << InVals.size() << '\n');
   return Chain;
 }
 
