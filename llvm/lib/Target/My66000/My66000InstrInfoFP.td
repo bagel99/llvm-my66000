@@ -443,10 +443,11 @@ def FMOVrs : ALU_RRR<0b000, 0b111,
 	[(set (f32 FSRegs:$rd), fpimm32:$imm)]>
 	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
 }
-/* FIXME
-def : Pat<(myCMOV (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), GRegs:$rs3),
-          (CMOVrrr FSRegs:$rs1, FSRegs:$rs2, GRegs:$rs3)>;
-*/
+/* tried a Pat<> for this, but no joy */
+def CMOVSrrr:   ALU_RRR<0b001, 0b001,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, GRegs:$rs3),
+	"cmov\t$rd,$rs3,$rs1,$rs2",
+	[(set (f32 FSRegs:$rd), (myCMOV (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), GRegs:$rs3))]>;
 def MUXFSrrr :  ALU_RRR<0b001, 0b000,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, GRegs:$rs3),
 	"mux\t$rd,$rs3,$rs1,$rs2",
