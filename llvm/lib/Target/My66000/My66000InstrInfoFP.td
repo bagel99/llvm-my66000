@@ -28,9 +28,13 @@ def mySHRUNK:	    SDNode<"My66000ISD::SHRUNK",
 			SDTypeProfile<1, 1,
 			  [SDTCisVT<0, f64>, SDTCisVT<1, f32>]>,
 			[]>;
-def mySHRUNKI5:	    SDNode<"My66000ISD::SHRUNKI5",
+def myF64I5:	    SDNode<"My66000ISD::F64I5",
 			SDTypeProfile<1, 1,
 			  [SDTCisVT<0, f64>, SDTCisVT<1, i64>]>,
+			[]>;
+def myF32I5:	    SDNode<"My66000ISD::F32I5",
+			SDTypeProfile<1, 1,
+			  [SDTCisVT<0, f32>, SDTCisVT<1, i64>]>,
 			[]>;
 
 //
@@ -85,7 +89,7 @@ multiclass FPUrd<string OpName, bits<6>OpC, bits<5>Flags,
   def rk : ALU_RD<OpC, Flags,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
-	[(set GRegs:$rd, (OpNode (f64 GRegs:$rs1), (mySHRUNKI5 (simm5:$imm))))]>;
+	[(set GRegs:$rd, (OpNode (f64 GRegs:$rs1), (myF64I5 (simm5:$imm))))]>;
 }
 defm FADD :  FPUrd<"fadd",  0b110001, 0b10001, fadd>;
 defm FMUL :  FPUrd<"fmul",  0b110010, 0b10001, fmul>;
@@ -103,7 +107,7 @@ def FCMPrf : ALU_RD<0b110100, 0b10001,
 def FCMPrk : ALU_RD<0b110100, 0b10001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"fcmp\t$rd,$rs1,#$imm",
-	[(set (i64 GRegs:$rd), (myFCMP (f64 GRegs:$rs1), (mySHRUNKI5 (simm5:$imm))))]>;
+	[(set (i64 GRegs:$rd), (myFCMP (f64 GRegs:$rs1), (myF64I5 (simm5:$imm))))]>;
 }
 
 // Non-commutative ops with constants on the left
@@ -118,7 +122,7 @@ def FDIVfr : ALU_DR<0b110011, 0b10101,
 def FDIVkr : ALU_DR<0b110011, 0b10101,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	"fdiv\t$rd,#$imm,$rs2",
-	[(set GRegs:$rd, (fdiv (mySHRUNKI5 (simm5:$imm)), (f64 GRegs:$rs2)))]>;
+	[(set GRegs:$rd, (fdiv (myF64I5 (simm5:$imm)), (f64 GRegs:$rs2)))]>;
 def FSUBdr : ALU_DR<0b110001, 0b10101,
 	(outs GRegs:$rd), (ins fpimm64:$imm, GRegs:$rs2),
 	"fadd\t$rd,#$imm,-$rs2",
@@ -130,7 +134,7 @@ def FSUBfr : ALU_DR<0b110001, 0b10101,
 def FSUBkr : ALU_DR<0b110001, 0b10101,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	"fadd\t$rd,#$imm,-$rs2",
-	[(set GRegs:$rd, (fsub (mySHRUNKI5 (simm5:$imm)), (f64 GRegs:$rs2)))]>;
+	[(set GRegs:$rd, (fsub (myF64I5 (simm5:$imm)), (f64 GRegs:$rs2)))]>;
 def FNEG : ALU_DR<0b110001, 0b10101,
 	(outs GRegs:$rd), (ins GRegs:$rs2),
 	"fadd\t$rd,#0,-$rs2",
@@ -219,7 +223,7 @@ def FMOVrf : ALU_RRR<0b000, 0b111,
 def FMOVrk : ALU_RRR<0b000, 0b111,
 	(outs GRegs:$rd), (ins i64imm:$imm),
 	"cvtsd\t$rd,#$imm",
-	[(set (f64 GRegs:$rd), (mySHRUNKI5 (simm5:$imm)))]>
+	[(set (f64 GRegs:$rd), (myF64I5 (simm5:$imm)))]>
 	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
 }
 def : Pat<(myCMOV (f64 GRegs:$rs1), (f64 GRegs:$rs2), GRegs:$rs3),
@@ -306,8 +310,14 @@ defm FACOS :  UTRAN<"facos",  0b011101, 0b00000>;
 defm FATAN :  UTRAN<"fatan",  0b011110, 0b00000>;
 
 // Patterns to use reciprocal square root
+def : Pat<(fdiv (myF64I5 imm1), (fsqrt (f64 GRegs:$bot))),
+	(RSQRTu (f64 GRegs:$bot))>;
 def : Pat<(fdiv fpimm1, (fsqrt (f64 GRegs:$bot))),
 	(RSQRTu (f64 GRegs:$bot))>;
+def : Pat<(fdiv (myF64I5 (simm5:$top)), (fsqrt (f64 GRegs:$bot))),
+	(FMULrk (RSQRTu (f64 GRegs:$bot)), simm5:$top)>;
+def : Pat<(fdiv (mySHRUNK (fpimm32:$top)), (fsqrt (f64 GRegs:$bot))),
+	(FMULrf (RSQRTu (f64 GRegs:$bot)),fpimm32:$top)>;
 def : Pat<(fdiv fpimm64:$top, (fsqrt (f64 GRegs:$bot))),
 	(FMULrd (RSQRTu (f64 GRegs:$bot)), fpimm64:$top)>;
 def : Pat<(fdiv (f64 GRegs:$top), (fsqrt (f64 GRegs:$bot))),
@@ -366,6 +376,10 @@ def FCMPFrr : ALU_RR<0b110100, 0b00010,
 	(outs GRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
 	"fcmpf\t$rd,$rs1,$rs2",
 	[(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1), (f32 FSRegs:$rs2)))]>;
+def FCMPFrk : ALU_RD<0b110100, 0b10001,
+	(outs GRegs:$rd), (ins FSRegs:$rs1, i64imm:$imm),
+	"fcmpf\t$rd,$rs1,#$imm",
+	[(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1), (myF32I5 (simm5:$imm))))]>;
 }
 
 def FSUBF : Pat<(fsub (f32 FSRegs:$rs1), (f32 FSRegs:$rs2)),
@@ -387,6 +401,10 @@ multiclass FPUrs<string OpName, bits<6>OpC, bits<5>Flags,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), fpimm32:$imm))]>;
+  def rk : ALU_RW<OpC, Flags,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
+	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), (myF32I5 (simm5:$imm))))]>;
 }
 defm FADDF : FPUrs<"faddf", 0b110001, 0b10010, fadd>;
 defm FMULF : FPUrs<"fmulf", 0b110010, 0b10010, fmul>;
@@ -399,10 +417,22 @@ def FCMPFrs : ALU_RD<0b110100, 0b10001,
 	[(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1), fpimm32:$imm))]>;
 }
 
+def FSUBFsr : ALU_DR<0b110001, 0b10101,
+	(outs FSRegs:$rd), (ins fpimm32:$imm, FSRegs:$rs2),
+	"faddf\t$rd,#$imm,-$rs2",
+	[(set FSRegs:$rd, (fsub fpimm32:$imm, (f32 FSRegs:$rs2)))]>;
+def FSUBFkr : ALU_DR<0b110001, 0b10101,
+	(outs FSRegs:$rd), (ins i64imm:$imm, FSRegs:$rs2),
+	"faddf\t$rd,#$imm,-$rs2",
+	[(set FSRegs:$rd, (fsub (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs2)))]>;
 def FDIVFsr: ALU_WR<0b110011, 0b10010,
 	(outs FSRegs:$rd), (ins fpimm32:$imm, FSRegs:$rs1),
 	"fdivf\t$rd,#$imm,$rs1",
 	[(set FSRegs:$rd, (fdiv fpimm32:$imm, (f32 FSRegs:$rs1)))]>;
+def FDIVFkr : ALU_DR<0b110011, 0b10111,
+	(outs FSRegs:$rd), (ins i64imm:$imm, FSRegs:$rs2),
+	"fdivf\t$rd,#$imm,$rs2",
+	[(set FSRegs:$rd, (fdiv (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs2)))]>;
 def FNEGF : ALU_DR<0b110001, 0b10111,
 	(outs FSRegs:$rd), (ins FSRegs:$rs2),
 	"faddf\t$rd,#0,-$rs2",
@@ -441,6 +471,11 @@ def FMOVrs : ALU_RRR<0b000, 0b111,
 	(outs FSRegs:$rd), (ins fpimm32:$imm),
 	"mov\t$rd,#$imm",
 	[(set (f32 FSRegs:$rd), fpimm32:$imm)]>
+	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
+def FMOVFrk : ALU_RRR<0b000, 0b111,
+	(outs FSRegs:$rd), (ins i64imm:$imm),
+	"cvtsf\t$rd,#$imm",
+	[(set (f32 FSRegs:$rd), (myF32I5 (simm5:$imm)))]>
 	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
 }
 /* tried a Pat<> for this, but no joy */
@@ -525,15 +560,19 @@ defm FEXPF :  FSTRAN<"fexpf",  0b000101, 0b00010, fexp>;
 defm FSINF :  FSTRAN<"fsinf",  0b011000, 0b00010, fsin>;
 defm FCOSF :  FSTRAN<"fcosf",  0b011001, 0b00010, fcos>;
 defm FTANF :  USTRAN<"ftanf",  0b011010, 0b00010>;
-defm RSQRTF : USTRAN<"frsqrt", 0b001100, 0b00010>;
+defm RSQRTF : USTRAN<"frsqrtf",0b001100, 0b00010>;
 defm FEXP10F: USTRAN<"fexp10f",0b000110, 0b00010>;
 defm FASINF : USTRAN<"fasinf", 0b011100, 0b00010>;
 defm FACOSF : USTRAN<"facosf", 0b011101, 0b00010>;
 defm FATANF : USTRAN<"fatan",  0b011110, 0b00010>;
 
 // Patterns to use reciprocal square root
+def : Pat<(fdiv (myF32I5 imm1), (fsqrt (f32 FSRegs:$bot))),
+	(RSQRTFu (f32 FSRegs:$bot))>;
 def : Pat<(fdiv fpimm1, (fsqrt (f32 FSRegs:$bot))),
 	(RSQRTFu (f32 FSRegs:$bot))>;
+def : Pat<(fdiv (myF32I5 (simm5:$top)), (fsqrt (f32 FSRegs:$bot))),
+	(FMULFrk (RSQRTFu (f32 FSRegs:$bot)),(simm5:$top))>;
 def : Pat<(fdiv fpimm32:$top, (fsqrt (f32 FSRegs:$bot))),
 	(FMULFrs (RSQRTFu (f32 FSRegs:$bot)), fpimm32:$top)>;
 def : Pat<(fdiv (f32 FSRegs:$top), (fsqrt (f32 FSRegs:$bot))),

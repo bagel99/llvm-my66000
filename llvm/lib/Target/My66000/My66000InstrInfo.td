@@ -12,6 +12,8 @@ include "My66000InstrFormats.td"
 // Operand definitions for DAG matching
 //
 def imm_su : PatLeaf<(imm), [{ return !shouldAvoidImmediate(N); }]>;
+def imm1 : Operand<i64>, ImmLeaf<i64,
+		[{ return Imm == 1; }]>;
 def uimm16 : Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 0 && Imm <= 65535; }]>;
 def uimm32 : Operand<i64>, ImmLeaf<i64,

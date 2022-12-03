@@ -71,7 +71,8 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::MEMCPY: return "My66000ISD::MEMCPY";
   case My66000ISD::WRAPPER: return "My66000ISD::WRAPPER";
   case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
-  case My66000ISD::SHRUNKI5: return "My66000ISD::SHRUNKI5";
+  case My66000ISD::F64I5: return "My66000ISD::F64I5";
+  case My66000ISD::F32I5: return "My66000ISD::F32I5";
   }
   return nullptr;
 }
@@ -276,6 +277,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT, MVT::f32, Expand);
 
   setOperationAction(ISD::ConstantFP, MVT::f64, Custom);
+  setOperationAction(ISD::ConstantFP, MVT::f32, Custom);
 
   MaxStoresPerMemcpy = 1;
   MaxStoresPerMemcpyOptSize = 1;
@@ -1214,13 +1216,27 @@ LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
       if (isExact) {
 	int64_t imm = IVal.getExtValue();
         if (imm >= -16 && imm <= 15) {
-	  return DAG.getNode(My66000ISD::SHRUNKI5, DL, MVT::f64,
+	  return DAG.getNode(My66000ISD::F64I5, DL, MVT::f64,
 			     DAG.getConstant(imm, DL, MVT::i64));
 	}
       }
       return DAG.getNode(My66000ISD::SHRUNK, DL, MVT::f64,
 			 DAG.getConstantFP(FPVal2, DL, MVT::f32));
     }
+  }
+  else if (VT == MVT::f32) {
+      APSInt IVal(64, false);
+      bool isExact;
+      FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
+LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
+    " , IVal=" << IVal << '\n');
+      if (isExact) {
+	int64_t imm = IVal.getExtValue();
+        if (imm >= -16 && imm <= 15) {
+	  return DAG.getNode(My66000ISD::F32I5, DL, MVT::f64,
+			     DAG.getConstant(imm, DL, MVT::i64));
+	}
+      }
   }
   return DAG.getConstantFP(FPVal, DL, VT);
 }

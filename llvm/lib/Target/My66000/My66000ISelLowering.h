@@ -49,8 +49,9 @@ enum NodeType : unsigned {
   JT32,		// Jump through table, 32 bit
   MEMCPY,	// Memory copy
   WRAPPER,	// prefix for global address
-  SHRUNK,	// wrapper for shrunk FP constants
-  SHRUNKI5	// wrapper for shrunk FP constants that fit in I5
+  SHRUNK,	// wrapper for F64 constants shrunk to F32
+  F64I5,	// wrapper for F64 constants that fit in I5
+  F32I5		// wrapper for F32 constants that fit in I5
 };
 
 } // end namespace My66000ISD
