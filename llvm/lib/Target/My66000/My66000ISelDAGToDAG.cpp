@@ -392,27 +392,33 @@ LLVM_DEBUG(dbgs() << "\tSRL extract not implemented\n");
 bool My66000DAGToDAGISel::tryInsert(SDNode *N, EVT VT) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryInsert " << N->getOperationName(0) << "\n");
   SDLoc dl(N);
-  uint64_t Andimm = 0;
-  uint64_t Shfimm = 0;
+  uint64_t Andimm;
+  uint64_t Shfimm;
+  SDValue Op1, Op2;
 
   // FIXME - do we have to check that AND is single use?
   if (isOpcWithIntImmediate(N->getOperand(0).getNode(), ISD::AND, Andimm)) {
-      isOpcWithIntImmediate(N->getOperand(1).getNode(), ISD::SHL, Shfimm);
+    Op1 = N->getOperand(0).getOperand(0);
+    if (isOpcWithIntImmediate(N->getOperand(1).getNode(), ISD::SHL, Shfimm)) {
+      Op2 = N->getOperand(1).getOperand(0);
+    } else {
+      Shfimm = 0;
+      Op2 = N->getOperand(1);
+    }
     // Extend mask to 64-bits
     if (VT == MVT::i32) Andimm |= 0xFFFFFFFF00000000;
     if (VT == MVT::i16) Andimm |= 0xFFFFFFFFFFFF0000;
     if (VT == MVT::i8)  Andimm |= 0xFFFFFFFFFFFFFF00;
-//dbgs() << "\tmask1="; PrintHex(Andimm); dbgs() << "\n";
-//dbgs() << "\tmask2="; PrintHex(Andimm >> Shfimm); dbgs() << "\n";
+//dbgs() << "\tmask1="; dbgs().write_hex(Andimm) << '\n';
+//dbgs() << "\tshfimm=" << Shfimm << '\n';
     unsigned Width = countTrailingZeros(Andimm >> Shfimm);
     if (Width == 0 || !isShiftedMask_64(~Andimm)) {
 //dbgs() << "\tfail, not a mask\n";
       return false;
     }
     unsigned Offset = Shfimm;
-//dbgs() << "\tinsert pattern #1: w=" << Width << " o=" << Offset << "\n";
-    SDValue Ops[] = { N->getOperand(0).getOperand(0),
-		      N->getOperand(1).getOperand(0),
+//dbgs() << "\tinsert pattern #1: w=" << Width << " o=" << Offset << '\n';
+    SDValue Ops[] = { Op1, Op2,
 		      CurDAG->getTargetConstant(Width, dl, MVT::i32),
 		      CurDAG->getTargetConstant(Offset, dl, MVT::i32) };
     SDNode *INS = CurDAG->getMachineNode(My66000::INSrrw, dl, MVT::i64, Ops);

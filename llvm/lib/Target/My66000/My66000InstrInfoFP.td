@@ -165,6 +165,10 @@ def FMArf : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, fpimm32:$imm),
 	"fmac\t$rd,$rs1,$rs2,#$imm",
 	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (f64 GRegs:$rs2), (mySHRUNK (fpimm32:$imm))))]>;
+def FMArk : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, i64imm:$imm),
+	"fmac\t$rd,$rs1,$rs2,#$imm",
+	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (f64 GRegs:$rs2), (myF64I5 (simm5:$imm))))]>;
 def FMAdr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm64:$imm, GRegs:$rs3),
 	"fmac\t$rd,$rs1,#$imm,$rs3",
@@ -173,6 +177,10 @@ def FMAfr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm32:$imm, GRegs:$rs3),
 	"fmac\t$rd,$rs1,#$imm,$rs3",
 	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (mySHRUNK (fpimm32:$imm)), (f64 GRegs:$rs3)))]>;
+def FMAkr : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm, GRegs:$rs3),
+	"fmac\t$rd,$rs1,#$imm,$rs3",
+	[(set GRegs:$rd, (fma (f64 GRegs:$rs1), (myF64I5 (simm5:$imm)), (f64 GRegs:$rs3)))]>;
 
 // FMA 64-bit FMAD - preferred by DAGCombiner?
 def FMADrr : ALU_RRR<0b000, 0b000,
@@ -199,6 +207,10 @@ def FMADrf : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, fpimm32:$imm),
 	"fmac\t$rd,$rs1,$rs2,#$imm",
 	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (f64 GRegs:$rs2), (mySHRUNK (fpimm32:$imm))))]>;
+def FMADrk : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2, i64imm:$imm),
+	"fmac\t$rd,$rs1,$rs2,#$imm",
+	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (f64 GRegs:$rs2), (myF64I5 (simm5:$imm))))]>;
 def FMADdr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm64:$imm, GRegs:$rs3),
 	"fmac\t$rd,$rs1,#$imm,$rs3",
@@ -207,6 +219,10 @@ def FMADfr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, fpimm32:$imm, GRegs:$rs3),
 	"fmac\t$rd,$rs1,#$imm,$rs3",
 	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (mySHRUNK (fpimm32:$imm)), (f64 GRegs:$rs3)))]>;
+def FMADkr : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm, GRegs:$rs3),
+	"fmac\t$rd,$rs1,#$imm,$rs3",
+	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (myF64I5 (simm5:$imm)), (f64 GRegs:$rs3)))]>;
 
 // Moves
 let isAsCheapAsAMove = 1 in {
