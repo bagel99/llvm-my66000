@@ -8,6 +8,7 @@ Use the normal LLVM build process with the added cmake flag
 Usage Restrictions
 ==================
 Must use --frame-pointer=none.
+Should use -disable-lsr
 
 Command Line Options
 ====================
@@ -22,11 +23,7 @@ Command Line Options
 * ToDo *
 ********
 
-* Enable removal of jump table range check.
-
 * Enable multiword add using carry.
-
-* Implement 32-bit floating point.
 
 * Implement frame pointer.
 

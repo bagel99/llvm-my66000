@@ -71,6 +71,7 @@ namespace {
 } // end anonymous namespace
 
 char My66000PredBlock::ID = 0;
+char &llvm::My66000PredBlockID = My66000PredBlock::ID;
 
 INITIALIZE_PASS(My66000PredBlock, DEBUG_TYPE, PASS_NAME, false, false)
 
@@ -102,6 +103,8 @@ LLVM_DEBUG(dbgs() << "\tcond/uncond branch pair, uncond branch to fallthru\n");
     MachineBasicBlock::iterator I = Head->getLastNonDebugInstr();
     I->eraseFromParent();		// Remove the branch.
     }
+  } else {
+    FBB = Head->getFallThrough();
   }
   return true;
 }
@@ -146,7 +149,7 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
         cc = TII->reverseBRIB(static_cast<MYCB::CondBits>(cc));
       break;
     case My66000::BRFB:
-      op = My66000::PRIB;
+      op = My66000::PRFB;
       if (invert)
         cc = TII->reverseBRFB(static_cast<MYCB::CondBits>(cc));
       break;
@@ -449,9 +452,9 @@ LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch.\n");
 }
 
 bool My66000PredBlock::InsertPredInstructions(MachineBasicBlock *Head) {
-LLVM_DEBUG(dbgs() << "My66000PredBlock::InsertPredInstructions\n");
+LLVM_DEBUG(dbgs() << "My66000PredBlock::InsertPredInstructions "
+		  << printMBBReference(*Head) << '\n');
   bool Modified = false;
-LLVM_DEBUG(dbgs() << "\tHead:  " << printMBBReference(*Head) << '\n');
   if (Head->succ_size() != 2)
     return false;
   MachineBasicBlock *Tail = nullptr;
@@ -514,9 +517,13 @@ LLVM_DEBUG(dbgs() << "\tSucc1: " << printMBBReference(*Succ1) <<
 " #P=" << Succ1->pred_size() << " #S=" << Succ1->succ_size() << '\n');
     if (Succ1->pred_size() != 2)
       return false;
+    if (Succ0->pred_size() != 1)
+      return false;
     if (Succ0->succ_size() != 1)
       return false;
     Tail = Succ0->succ_begin()[0];
+LLVM_DEBUG(dbgs() << "\tTail:  " << printMBBReference(*Tail) <<
+" #P=" << Tail->pred_size() << " #S=" << Tail->succ_size() << '\n');
     if (Tail == Succ1) {
 LLVM_DEBUG(dbgs() << "\tTriangle2\n");
       Modified = ConvertT2(Head, Head1, Succ0, Succ1, Tail);

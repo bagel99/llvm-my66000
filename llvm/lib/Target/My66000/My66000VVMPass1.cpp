@@ -66,14 +66,18 @@ INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
 INITIALIZE_PASS_END(My66000VVMLoop, DEBUG_TYPE, PASS_NAME, false, false)
 
 
-static unsigned MapLoopCond(unsigned cc) {
+static unsigned MapLoopCond(unsigned &cc) {
   switch (cc) {
   default:
-    llvm_unreachable("Unrecognized VVM loop condition code");
-  case MYCC::EQ0: return MYCB::EQ;   case MYCC::NE0: return MYCB::NE;
-  case MYCC::GE0: return MYCB::GE;   case MYCC::LT0: return MYCB::LT;
-  case MYCC::GT0: return MYCB::GT;   case MYCC::LE0: return MYCB::LE;
+    return false;  // Unsupported VVM loop condition code
+  case MYCC::EQ0: cc = MYCB::EQ; break;
+  case MYCC::NE0: cc = MYCB::NE; break;
+  case MYCC::GE0: cc = MYCB::GE; break;
+  case MYCC::LT0: cc = MYCB::LT; break;
+  case MYCC::GT0: cc = MYCB::GT; break;
+  case MYCC::LE0: cc = MYCB::LE; break;
   }
+  return true;
 }
 
 bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
@@ -237,7 +241,10 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     break;
   }
   case 2: {
-    BCnd = MapLoopCond(BCnd);
+    if (!MapLoopCond(BCnd)) {
+      LLVM_DEBUG(dbgs() << " unsupported condition\n");
+      return false;
+    }
     if (AMI == nullptr) {	// no increment
       LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
 	      .addImm(BCnd)

@@ -363,12 +363,12 @@ static MYCB::CondBits ISDCCtoMy66000CB(ISD:: CondCode CC) {
   case ISD::SETUGT: return MYCB::HI;
   case ISD::SETUGE: return MYCB::HS;
   // float ordered
-  case ISD::SETOEQ: return MYCB::EQ;
-  case ISD::SETONE: return MYCB::NE;
-  case ISD::SETOLT: return MYCB::LT;
-  case ISD::SETOGT: return MYCB::GT;
-  case ISD::SETOLE: return MYCB::LE;
-  case ISD::SETOGE: return MYCB::GE;
+  case ISD::SETOEQ: return MYCB::NNE;
+  case ISD::SETONE: return MYCB::NEQ;
+  case ISD::SETOLT: return MYCB::NGE;
+  case ISD::SETOGT: return MYCB::NLE;
+  case ISD::SETOLE: return MYCB::NGT;
+  case ISD::SETOGE: return MYCB::NLT;
   // float check order
   case ISD::SETO:   return MYCB::OR;
   case ISD::SETUO:  return MYCB::UN;

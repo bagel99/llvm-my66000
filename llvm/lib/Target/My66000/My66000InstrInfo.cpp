@@ -306,13 +306,17 @@ unsigned My66000InstrInfo::reverseBRIB(MYCB::CondBits cb) const {
 }
 
 unsigned My66000InstrInfo::reverseBRFB(MYCB::CondBits cb) const {
-  // FIXME - should use floating condition bits
   switch (cb) {
   default:
+    dbgs() << "Unrecognized floating condition bit=" << cb << '\n';
     llvm_unreachable("Unrecognized floating condition bit");
   case MYCB::NE: return MYCB::EQ;  case MYCB::EQ: return MYCB::NE;
   case MYCB::GT: return MYCB::LE;  case MYCB::LE: return MYCB::GT;
   case MYCB::GE: return MYCB::LT;  case MYCB::LT: return MYCB::GE;
+  case MYCB::NNE: return MYCB::NEQ;  case MYCB::NEQ: return MYCB::NNE;
+  case MYCB::NGE: return MYCB::NLT;  case MYCB::NLT: return MYCB::NGE;
+  case MYCB::NGT: return MYCB::NLE;  case MYCB::NLE: return MYCB::NGT;
+  case MYCB::OR:  return MYCB::UN;   case MYCB::UN:  return MYCB::OR;
   }
 }
 
@@ -326,11 +330,17 @@ LLVM_DEBUG(dbgs() << "My66000InstrInfo::reverseBranchCondition\n");
      Cond[2].setImm(reverseBRC(cc));
      return false;
   } else if (Cond[0].getImm() == My66000::BRIB) {
-//dbgs() << "\tBRB " << Cond[2].getImm() << "\n";
+//dbgs() << "\tBRIB " << Cond[2].getImm() << "\n";
      MYCB::CondBits cb = static_cast<MYCB::CondBits>(Cond[2].getImm());
      Cond[2].setImm(reverseBRIB(cb));
      return false;
+  } else if (Cond[0].getImm() == My66000::BRFB) {
+//dbgs() << "\tBRFB " << Cond[2].getImm() << "\n";
+     MYCB::CondBits cb = static_cast<MYCB::CondBits>(Cond[2].getImm());
+     Cond[2].setImm(reverseBRFB(cb));
+     return false;
   }
-  // BRFB, BBIT not reversible
+  // BBIT not reversible
+LLVM_DEBUG(dbgs() << "\tNot reversible: " << Cond[0].getImm() << '\n');
   return true;
 }

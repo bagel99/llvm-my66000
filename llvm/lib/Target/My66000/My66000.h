@@ -40,6 +40,7 @@ namespace llvm {
   void initializeMy66000VVMFixupPass(PassRegistry &p);
 
   extern char &My66000VVMLoopID;
+  extern char &My66000PredBlockID;
 
   // Condition Codes used with BRcond
   namespace MYCC {
@@ -51,14 +52,20 @@ namespace llvm {
     };
   }
   // Condition Bits resulting from CMP
+  // There are some duplicate values between integer and float
   namespace MYCB {
     enum CondBits {
 	NE=0, EQ,
 	GT=2, GE, LT, LE,	// signed
-	OR=8, UN,		// ordered, unordered
+	OR=6, UN,		// float ordered, unordered
 	HI=10, HS, LO, LS,	// unsigned
+	NNE=8, NEQ,		// float
+	NGE=10, NGT, NLT, NLE,	// float
 	SIN=16, FIN, CIN, RIN,	// range
-	NM=34, N, Z, P, SM, UM,	// number line
+	NM=34, N, Z, P, SM, UM,	// integer number line
+//	SNAN=32, QNAN,
+	FPI=34, FPN, FPD, FPZ,	// float
+	FNZ=38, FND, FNN, FNI	// float
     };
   }
 
