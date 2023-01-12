@@ -8,8 +8,10 @@
 
 #include "ProfiledBinary.h"
 #include "ErrorHandling.h"
+#include "ProfileGenerator.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Demangle/Demangle.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -20,16 +22,19 @@
 using namespace llvm;
 using namespace sampleprof;
 
-static cl::opt<bool> ShowDisassembly("show-disassembly", cl::ReallyHidden,
-                                     cl::init(false), cl::ZeroOrMore,
-                                     cl::desc("Print disassembled code."));
+cl::opt<bool> ShowDisassemblyOnly("show-disassembly-only", cl::ReallyHidden,
+                                  cl::init(false), cl::ZeroOrMore,
+                                  cl::desc("Print disassembled code."));
 
-static cl::opt<bool> ShowSourceLocations("show-source-locations",
-                                         cl::ReallyHidden, cl::init(false),
-                                         cl::ZeroOrMore,
-                                         cl::desc("Print source locations."));
+cl::opt<bool> ShowSourceLocations("show-source-locations", cl::ReallyHidden,
+                                  cl::init(false), cl::ZeroOrMore,
+                                  cl::desc("Print source locations."));
 
-static cl::opt<bool> ShowPseudoProbe(
+cl::opt<bool> ShowCanonicalFnName("show-canonical-fname", cl::ReallyHidden,
+                                  cl::init(false), cl::ZeroOrMore,
+                                  cl::desc("Print canonical function name."));
+
+cl::opt<bool> ShowPseudoProbe(
     "show-pseudo-probe", cl::ReallyHidden, cl::init(false), cl::ZeroOrMore,
     cl::desc("Print pseudo probe section and disassembled info."));
 
@@ -47,38 +52,6 @@ static const Target *getTarget(const ObjectFile *Obj) {
   return TheTarget;
 }
 
-template <class ELFT>
-static uint64_t getELFImageLMAForSec(const ELFFile<ELFT> &Obj,
-                                     const object::ELFSectionRef &Sec,
-                                     StringRef FileName) {
-  // Search for a PT_LOAD segment containing the requested section. Return this
-  // segment's p_addr as the image load address for the section.
-  const auto &PhdrRange = unwrapOrError(Obj.program_headers(), FileName);
-  for (const typename ELFT::Phdr &Phdr : PhdrRange)
-    if ((Phdr.p_type == ELF::PT_LOAD) && (Phdr.p_vaddr <= Sec.getAddress()) &&
-        (Phdr.p_vaddr + Phdr.p_memsz > Sec.getAddress()))
-      // Segments will always be loaded at a page boundary.
-      return Phdr.p_paddr & ~(Phdr.p_align - 1U);
-  return 0;
-}
-
-// Get the image load address for a specific section. Note that an image is
-// loaded by segments (a group of sections) and segments may not be consecutive
-// in memory.
-static uint64_t getELFImageLMAForSec(const object::ELFSectionRef &Sec) {
-  if (const auto *ELFObj = dyn_cast<ELF32LEObjectFile>(Sec.getObject()))
-    return getELFImageLMAForSec(ELFObj->getELFFile(), Sec,
-                                ELFObj->getFileName());
-  else if (const auto *ELFObj = dyn_cast<ELF32BEObjectFile>(Sec.getObject()))
-    return getELFImageLMAForSec(ELFObj->getELFFile(), Sec,
-                                ELFObj->getFileName());
-  else if (const auto *ELFObj = dyn_cast<ELF64LEObjectFile>(Sec.getObject()))
-    return getELFImageLMAForSec(ELFObj->getELFFile(), Sec,
-                                ELFObj->getFileName());
-  const auto *ELFObj = cast<ELF64BEObjectFile>(Sec.getObject());
-  return getELFImageLMAForSec(ELFObj->getELFFile(), Sec, ELFObj->getFileName());
-}
-
 void ProfiledBinary::load() {
   // Attempt to open the binary.
   OwningBinary<Binary> OBinary = unwrapOrError(createBinary(Path), Path);
@@ -94,8 +67,8 @@ void ProfiledBinary::load() {
     exitWithError("unsupported target", TheTriple.getTriple());
   LLVM_DEBUG(dbgs() << "Loading " << Path << "\n");
 
-  // Find the preferred base address for text sections.
-  setPreferredBaseAddress(Obj);
+  // Find the preferred load address for text sections.
+  setPreferredTextSegmentAddresses(Obj);
 
   // Decode pseudo probe related section
   decodePseudoProbe(Obj);
@@ -118,7 +91,8 @@ bool ProfiledBinary::inlineContextEqual(uint64_t Address1,
   const FrameLocationStack &Context2 = getFrameLocationStack(Offset2);
   if (Context1.size() != Context2.size())
     return false;
-
+  if (Context1.empty())
+    return false;
   // The leaf frame contains location within the leaf, and it
   // needs to be remove that as it's not part of the calling context
   return std::equal(Context1.begin(), Context1.begin() + Context1.size() - 1,
@@ -126,47 +100,72 @@ bool ProfiledBinary::inlineContextEqual(uint64_t Address1,
 }
 
 std::string
-ProfiledBinary::getExpandedContextStr(const std::list<uint64_t> &Stack) const {
+ProfiledBinary::getExpandedContextStr(const SmallVectorImpl<uint64_t> &Stack,
+                                      bool &WasLeafInlined) const {
   std::string ContextStr;
-  SmallVector<std::string, 8> ContextVec;
+  SmallVector<std::string, 16> ContextVec;
   // Process from frame root to leaf
-  for (auto Iter = Stack.rbegin(); Iter != Stack.rend(); Iter++) {
-    uint64_t Offset = virtualAddrToOffset(*Iter);
+  for (auto Address : Stack) {
+    uint64_t Offset = virtualAddrToOffset(Address);
     const FrameLocationStack &ExpandedContext = getFrameLocationStack(Offset);
+    // An instruction without a valid debug line will be ignored by sample
+    // processing
+    if (ExpandedContext.empty())
+      return std::string();
+    // Set WasLeafInlined to the size of inlined frame count for the last
+    // address which is leaf
+    WasLeafInlined = (ExpandedContext.size() > 1);
     for (const auto &Loc : ExpandedContext) {
       ContextVec.push_back(getCallSite(Loc));
     }
   }
 
   assert(ContextVec.size() && "Context length should be at least 1");
+  // Compress the context string except for the leaf frame
+  std::string LeafFrame = ContextVec.back();
+  ContextVec.pop_back();
+  CSProfileGenerator::compressRecursionContext<std::string>(ContextVec);
 
   std::ostringstream OContextStr;
   for (uint32_t I = 0; I < (uint32_t)ContextVec.size(); I++) {
     if (OContextStr.str().size()) {
       OContextStr << " @ ";
     }
-
-    if (I == ContextVec.size() - 1) {
-      // Only keep the function name for the leaf frame
-      StringRef Ref(ContextVec[I]);
-      OContextStr << Ref.split(":").first.str();
-    } else {
-      OContextStr << ContextVec[I];
-    }
+    OContextStr << ContextVec[I];
   }
+  // Only keep the function name for the leaf frame
+  if (OContextStr.str().size())
+    OContextStr << " @ ";
+  OContextStr << StringRef(LeafFrame).split(":").first.str();
   return OContextStr.str();
 }
 
-void ProfiledBinary::setPreferredBaseAddress(const ELFObjectFileBase *Obj) {
-  for (section_iterator SI = Obj->section_begin(), SE = Obj->section_end();
-       SI != SE; ++SI) {
-    const SectionRef &Section = *SI;
-    if (Section.isText()) {
-      PreferredBaseAddress = getELFImageLMAForSec(Section);
-      return;
-    }
+template <class ELFT>
+void ProfiledBinary::setPreferredTextSegmentAddresses(const ELFFile<ELFT> &Obj, StringRef FileName) {
+  const auto &PhdrRange = unwrapOrError(Obj.program_headers(), FileName);
+  for (const typename ELFT::Phdr &Phdr : PhdrRange) {
+    if ((Phdr.p_type == ELF::PT_LOAD) && (Phdr.p_flags & ELF::PF_X)) {
+        // Segments will always be loaded at a page boundary.
+        PreferredTextSegmentAddresses.push_back(Phdr.p_vaddr & ~(Phdr.p_align - 1U));
+        TextSegmentOffsets.push_back(Phdr.p_offset & ~(Phdr.p_align - 1U));
+      }
   }
-  exitWithError("no text section found", Obj->getFileName());
+
+  if (PreferredTextSegmentAddresses.empty())
+    exitWithError("no executable segment found", FileName);
+}
+
+void ProfiledBinary::setPreferredTextSegmentAddresses(const ELFObjectFileBase *Obj) {
+  if (const auto *ELFObj = dyn_cast<ELF32LEObjectFile>(Obj))
+    setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
+  else if (const auto *ELFObj = dyn_cast<ELF32BEObjectFile>(Obj))
+    setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
+  else if (const auto *ELFObj = dyn_cast<ELF64LEObjectFile>(Obj))
+    setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
+  else if (const auto *ELFObj = cast<ELF64BEObjectFile>(Obj))
+    setPreferredTextSegmentAddresses(ELFObj->getELFFile(), Obj->getFileName());
+  else
+    llvm_unreachable("invalid ELF object format");
 }
 
 void ProfiledBinary::decodePseudoProbe(const ELFObjectFileBase *Obj) {
@@ -196,65 +195,97 @@ void ProfiledBinary::decodePseudoProbe(const ELFObjectFileBase *Obj) {
 bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
                                         SectionSymbolsTy &Symbols,
                                         const SectionRef &Section) {
-
   std::size_t SE = Symbols.size();
-  uint64_t SectionOffset = Section.getAddress() - PreferredBaseAddress;
+  uint64_t SectionOffset = Section.getAddress() - getPreferredBaseAddress();
   uint64_t SectSize = Section.getSize();
-  uint64_t StartOffset = Symbols[SI].Addr - PreferredBaseAddress;
+  uint64_t StartOffset = Symbols[SI].Addr - getPreferredBaseAddress();
   uint64_t EndOffset = (SI + 1 < SE)
-                           ? Symbols[SI + 1].Addr - PreferredBaseAddress
+                           ? Symbols[SI + 1].Addr - getPreferredBaseAddress()
                            : SectionOffset + SectSize;
   if (StartOffset >= EndOffset)
     return true;
 
-  std::string &&SymbolName = Symbols[SI].Name.str();
-  if (ShowDisassembly)
+  StringRef SymbolName =
+      ShowCanonicalFnName
+          ? FunctionSamples::getCanonicalFnName(Symbols[SI].Name)
+          : Symbols[SI].Name;
+  if (ShowDisassemblyOnly)
     outs() << '<' << SymbolName << ">:\n";
 
+  auto WarnInvalidInsts = [](uint64_t Start, uint64_t End) {
+    WithColor::warning() << "Invalid instructions at "
+                         << format("%8" PRIx64, Start) << " - "
+                         << format("%8" PRIx64, End) << "\n";
+  };
+
   uint64_t Offset = StartOffset;
+  // Size of a consecutive invalid instruction range starting from Offset -1
+  // backwards.
+  uint64_t InvalidInstLength = 0;
   while (Offset < EndOffset) {
     MCInst Inst;
     uint64_t Size;
     // Disassemble an instruction.
-    if (!DisAsm->getInstruction(Inst, Size, Bytes.slice(Offset - SectionOffset),
-                                Offset + PreferredBaseAddress, nulls()))
-      return false;
+    bool Disassembled =
+        DisAsm->getInstruction(Inst, Size, Bytes.slice(Offset - SectionOffset),
+                               Offset + getPreferredBaseAddress(), nulls());
+    if (Size == 0)
+      Size = 1;
 
-    if (ShowDisassembly) {
+    if (ShowDisassemblyOnly) {
       if (ShowPseudoProbe) {
         ProbeDecoder.printProbeForAddress(outs(),
-                                          Offset + PreferredBaseAddress);
+                                          Offset + getPreferredBaseAddress());
       }
-      outs() << format("%8" PRIx64 ":", Offset);
+      outs() << format("%8" PRIx64 ":", Offset + getPreferredBaseAddress());
       size_t Start = outs().tell();
-      IPrinter->printInst(&Inst, Offset + Size, "", *STI.get(), outs());
+      if (Disassembled)
+        IPrinter->printInst(&Inst, Offset + Size, "", *STI.get(), outs());
+      else
+        outs() << "\t<unknown>";
       if (ShowSourceLocations) {
         unsigned Cur = outs().tell() - Start;
         if (Cur < 40)
           outs().indent(40 - Cur);
-        InstructionPointer Inst(this, Offset);
-        outs() << getReversedLocWithContext(symbolize(Inst));
+        InstructionPointer IP(this, Offset);
+        outs() << getReversedLocWithContext(symbolize(IP, ShowCanonicalFnName));
       }
       outs() << "\n";
     }
 
-    const MCInstrDesc &MCDesc = MII->get(Inst.getOpcode());
+    if (Disassembled) {
+      const MCInstrDesc &MCDesc = MII->get(Inst.getOpcode());
+      // Populate a vector of the symbolized callsite at this location
+      // We don't need symbolized info for probe-based profile, just use an
+      // empty stack as an entry to indicate a valid binary offset
+      FrameLocationStack SymbolizedCallStack;
+      if (!UsePseudoProbes) {
+        InstructionPointer IP(this, Offset);
+        SymbolizedCallStack = symbolize(IP, true);
+      }
+      Offset2LocStackMap[Offset] = SymbolizedCallStack;
+      // Populate address maps.
+      CodeAddrs.push_back(Offset);
+      if (MCDesc.isCall())
+        CallAddrs.insert(Offset);
+      else if (MCDesc.isReturn())
+        RetAddrs.insert(Offset);
 
-    // Populate a vector of the symbolized callsite at this location
-    InstructionPointer IP(this, Offset);
-    Offset2LocStackMap[Offset] = symbolize(IP, true);
-
-    // Populate address maps.
-    CodeAddrs.push_back(Offset);
-    if (MCDesc.isCall())
-      CallAddrs.insert(Offset);
-    else if (MCDesc.isReturn())
-      RetAddrs.insert(Offset);
+      if (InvalidInstLength) {
+        WarnInvalidInsts(Offset - InvalidInstLength, Offset - 1);
+        InvalidInstLength = 0;
+      }
+    } else {
+      InvalidInstLength += Size;
+    }
 
     Offset += Size;
   }
 
-  if (ShowDisassembly)
+  if (InvalidInstLength)
+    WarnInvalidInsts(Offset - InvalidInstLength, Offset - 1);
+
+  if (ShowDisassemblyOnly)
     outs() << "\n";
 
   FuncStartAddrMap[StartOffset] = Symbols[SI].Name.str();
@@ -285,9 +316,10 @@ void ProfiledBinary::setUpDisassembler(const ELFObjectFileBase *Obj) {
   if (!MII)
     exitWithError("no instruction info for target " + TripleName, FileName);
 
-  MCObjectFileInfo MOFI;
-  MCContext Ctx(AsmInfo.get(), MRI.get(), &MOFI);
-  MOFI.InitMCObjectFileInfo(Triple(TripleName), false, Ctx);
+  MCContext Ctx(Triple(TripleName), AsmInfo.get(), MRI.get(), STI.get());
+  std::unique_ptr<MCObjectFileInfo> MOFI(
+      TheTarget->createMCObjectFileInfo(Ctx, /*PIC=*/false));
+  Ctx.setObjectFileInfo(MOFI.get());
   DisAsm.reset(TheTarget->createMCDisassembler(*STI, Ctx));
   if (!DisAsm)
     exitWithError("no disassembler for target " + TripleName, FileName);
@@ -320,7 +352,7 @@ void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
   for (std::pair<const SectionRef, SectionSymbolsTy> &SecSyms : AllSymbols)
     stable_sort(SecSyms.second);
 
-  if (ShowDisassembly)
+  if (ShowDisassemblyOnly)
     outs() << "\nDisassembly of " << FileName << ":\n";
 
   // Dissassemble a text section.
@@ -330,7 +362,7 @@ void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
     if (!Section.isText())
       continue;
 
-    uint64_t ImageLoadAddr = PreferredBaseAddress;
+    uint64_t ImageLoadAddr = getPreferredBaseAddress();
     uint64_t SectionOffset = Section.getAddress() - ImageLoadAddr;
     uint64_t SectSize = Section.getSize();
     if (!SectSize)
@@ -339,11 +371,12 @@ void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
     // Register the text section.
     TextSections.insert({SectionOffset, SectSize});
 
-    if (ShowDisassembly) {
+    if (ShowDisassemblyOnly) {
       StringRef SectionName = unwrapOrError(Section.getName(), FileName);
       outs() << "\nDisassembly of section " << SectionName;
-      outs() << " [" << format("0x%" PRIx64, SectionOffset) << ", "
-             << format("0x%" PRIx64, SectionOffset + SectSize) << "]:\n\n";
+      outs() << " [" << format("0x%" PRIx64, Section.getAddress()) << ", "
+             << format("0x%" PRIx64, Section.getAddress() + SectSize)
+             << "]:\n\n";
     }
 
     // Get the section data.
@@ -376,7 +409,7 @@ FrameLocationStack ProfiledBinary::symbolize(const InstructionPointer &IP,
                                              bool UseCanonicalFnName) {
   assert(this == IP.Binary &&
          "Binary should only symbolize its own instruction");
-  auto Addr = object::SectionedAddress{IP.Offset + PreferredBaseAddress,
+  auto Addr = object::SectionedAddress{IP.Offset + getPreferredBaseAddress(),
                                        object::SectionedAddress::UndefSection};
   DIInliningInfo InlineStack =
       unwrapOrError(Symbolizer->symbolizeInlinedCode(Path, Addr), getName());
@@ -391,7 +424,9 @@ FrameLocationStack ProfiledBinary::symbolize(const InstructionPointer &IP,
     if (UseCanonicalFnName)
       FunctionName = FunctionSamples::getCanonicalFnName(FunctionName);
     LineLocation Line(CallerFrame.Line - CallerFrame.StartLine,
-                      CallerFrame.Discriminator);
+                      DILocation::getBaseDiscriminatorFromDiscriminator(
+                          CallerFrame.Discriminator,
+                          /* IsFSDiscriminator */ false));
     FrameLocation Callsite(FunctionName.str(), Line);
     CallStack.push_back(Callsite);
   }

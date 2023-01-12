@@ -50,6 +50,14 @@ if(${LIBOMP_USE_HWLOC})
   include_directories(${LIBOMP_HWLOC_INSTALL_DIR}/include)
 endif()
 
+# Building with time profiling support requires LLVM directory includes.
+if(LIBOMP_PROFILING_SUPPORT)
+  include_directories(
+    ${LLVM_MAIN_INCLUDE_DIR}
+    ${LLVM_INCLUDE_DIR}
+  )
+endif()
+
 # Getting correct source files to build library
 set(LIBOMP_CXXFILES)
 set(LIBOMP_ASMFILES)
@@ -85,7 +93,9 @@ else()
     # Windows specific files
     libomp_append(LIBOMP_CXXFILES z_Windows_NT_util.cpp)
     libomp_append(LIBOMP_CXXFILES z_Windows_NT-586_util.cpp)
-    libomp_append(LIBOMP_ASMFILES z_Windows_NT-586_asm.asm) # Windows assembly file
+    if(${LIBOMP_ARCH} STREQUAL "i386" OR ${LIBOMP_ARCH} STREQUAL "x86_64")
+      libomp_append(LIBOMP_ASMFILES z_Windows_NT-586_asm.asm) # Windows assembly file
+    endif()
   else()
     # Unix specific files
     libomp_append(LIBOMP_CXXFILES z_Linux_util.cpp)
@@ -104,7 +114,7 @@ libomp_append(LIBOMP_CXXFILES kmp_ftn_cdecl.cpp)
 libomp_append(LIBOMP_CXXFILES kmp_ftn_extra.cpp)
 libomp_append(LIBOMP_CXXFILES kmp_version.cpp)
 libomp_append(LIBOMP_CXXFILES ompt-general.cpp IF_TRUE LIBOMP_OMPT_SUPPORT)
-libomp_append(LIBOMP_CXXFILES tsan_annotations.cpp IF_TRUE LIBOMP_TSAN_SUPPORT)
+libomp_append(LIBOMP_CXXFILES ompd-specific.cpp IF_TRUE LIBOMP_OMPD_SUPPORT)
 
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
 # For Windows, there is a resource file (.rc -> .res) that is also compiled
@@ -135,7 +145,7 @@ libomp_get_ldflags(LIBOMP_CONFIGURED_LDFLAGS)
 
 libomp_get_libflags(LIBOMP_CONFIGURED_LIBFLAGS)
 # Build libomp library. Add LLVMSupport dependency if building in-tree with libomptarget profiling enabled.
-if(OPENMP_STANDALONE_BUILD OR (NOT OPENMP_ENABLE_LIBOMPTARGET_PROFILING))
+if(OPENMP_STANDALONE_BUILD OR (NOT OPENMP_ENABLE_LIBOMP_PROFILING))
   add_library(omp ${LIBOMP_LIBRARY_KIND} ${LIBOMP_SOURCE_FILES})
   # Linking command will include libraries in LIBOMP_CONFIGURED_LIBFLAGS
   target_link_libraries(omp ${LIBOMP_CONFIGURED_LIBFLAGS} ${CMAKE_DL_LIBS})
@@ -144,6 +154,8 @@ else()
     LINK_LIBS ${LIBOMP_CONFIGURED_LIBFLAGS} ${CMAKE_DL_LIBS}
     LINK_COMPONENTS Support
     )
+  # libomp must be a C++ library such that it can link libLLVMSupport
+  set(LIBOMP_LINKER_LANGUAGE CXX)
 endif()
 
 set_target_properties(omp PROPERTIES
@@ -176,6 +188,7 @@ if(NOT WIN32)
     WORKING_DIRECTORY ${LIBOMP_LIBRARY_DIR}
   )
 endif()
+set(LIBOMP_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR} PARENT_SCOPE)
 
 # Create *.inc before compiling any sources
 # objects depend on : .inc files
@@ -194,6 +207,7 @@ if(WIN32)
   libomp_append(LIBOMP_MASM_DEFINITIONS "-D_M_IA32" IF_TRUE IA32)
   libomp_append(LIBOMP_MASM_DEFINITIONS "-D_M_AMD64" IF_TRUE INTEL64)
   libomp_append(LIBOMP_MASM_DEFINITIONS "-DOMPT_SUPPORT" IF_TRUE_1_0 LIBOMP_OMPT_SUPPORT)
+  libomp_append(LIBOMP_MASM_DEFINITIONS "-DOMPD_SUPPORT" IF_TRUE_1_0 LIBOMP_OMPD_SUPPORT)
   libomp_list_to_string("${LIBOMP_MASM_DEFINITIONS}" LIBOMP_MASM_DEFINITIONS)
   set_property(SOURCE z_Windows_NT-586_asm.asm APPEND_STRING PROPERTY COMPILE_FLAGS " ${LIBOMP_MASM_DEFINITIONS}")
   set_source_files_properties(thirdparty/ittnotify/ittnotify_static.cpp PROPERTIES COMPILE_DEFINITIONS "UNICODE")

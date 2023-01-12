@@ -11,6 +11,7 @@
 
 #include "CallContext.h"
 #include "PseudoProbe.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/DebugInfo/Symbolize/Symbolize.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -98,10 +99,13 @@ class ProfiledBinary {
   std::string Path;
   // The target triple.
   Triple TheTriple;
-  // The runtime base address that the executable sections are loaded at.
-  mutable uint64_t BaseAddress = 0;
-  // The preferred base address that the executable sections are loaded at.
-  uint64_t PreferredBaseAddress = 0;
+  // The runtime base address that the first executable segment is loaded at.
+  uint64_t BaseAddress = 0;
+  // The preferred load address of each executable segment.
+  std::vector<uint64_t> PreferredTextSegmentAddresses;
+  // The file offset of each executable segment.
+  std::vector<uint64_t> TextSegmentOffsets;
+
   // Mutiple MC component info
   std::unique_ptr<const MCRegisterInfo> MRI;
   std::unique_ptr<const MCAsmInfo> AsmInfo;
@@ -135,7 +139,10 @@ class ProfiledBinary {
 
   bool UsePseudoProbes = false;
 
-  void setPreferredBaseAddress(const ELFObjectFileBase *O);
+  void setPreferredTextSegmentAddresses(const ELFObjectFileBase *O);
+
+  template <class ELFT>
+  void setPreferredTextSegmentAddresses(const ELFFile<ELFT> &Obj, StringRef FileName);
 
   void decodePseudoProbe(const ELFObjectFileBase *Obj);
 
@@ -173,17 +180,27 @@ public:
     setupSymbolizer();
     load();
   }
-  uint64_t virtualAddrToOffset(uint64_t VitualAddress) const {
-    return VitualAddress - BaseAddress;
+  uint64_t virtualAddrToOffset(uint64_t VirtualAddress) const {
+    return VirtualAddress - BaseAddress;
   }
   uint64_t offsetToVirtualAddr(uint64_t Offset) const {
     return Offset + BaseAddress;
   }
-  const StringRef getPath() const { return Path; }
-  const StringRef getName() const { return llvm::sys::path::filename(Path); }
+  StringRef getPath() const { return Path; }
+  StringRef getName() const { return llvm::sys::path::filename(Path); }
   uint64_t getBaseAddress() const { return BaseAddress; }
   void setBaseAddress(uint64_t Address) { BaseAddress = Address; }
-  uint64_t getPreferredBaseAddress() const { return PreferredBaseAddress; }
+  
+  // Return the preferred load address for the first executable segment.
+  uint64_t getPreferredBaseAddress() const { return PreferredTextSegmentAddresses[0]; }
+  // Return the file offset for the first executable segment.
+  uint64_t getTextSegmentOffset() const { return TextSegmentOffsets[0]; }
+  const std::vector<uint64_t> &getPreferredTextSegmentAddresses() const {
+    return PreferredTextSegmentAddresses;
+  }
+  const std::vector<uint64_t> &getTextSegmentOffsets() const {
+    return TextSegmentOffsets;
+  }
 
   bool addressIsCode(uint64_t Address) const {
     uint64_t Offset = virtualAddrToOffset(Address);
@@ -225,9 +242,11 @@ public:
     return FuncStartAddrMap[Offset];
   }
 
-  const FrameLocation &getInlineLeafFrameLoc(uint64_t Offset,
-                                             bool NameOnly = false) {
-    return getFrameLocationStack(Offset).back();
+  Optional<FrameLocation> getInlineLeafFrameLoc(uint64_t Offset) {
+    const auto &Stack = getFrameLocationStack(Offset);
+    if (Stack.empty())
+      return {};
+    return Stack.back();
   }
 
   // Compare two addresses' inline context
@@ -236,17 +255,27 @@ public:
   // Get the context string of the current stack with inline context filled in.
   // It will search the disassembling info stored in Offset2LocStackMap. This is
   // used as the key of function sample map
-  std::string getExpandedContextStr(const std::list<uint64_t> &stack) const;
+  std::string getExpandedContextStr(const SmallVectorImpl<uint64_t> &Stack,
+                                    bool &WasLeafInlined) const;
 
   const PseudoProbe *getCallProbeForAddr(uint64_t Address) const {
     return ProbeDecoder.getCallProbeForAddr(Address);
   }
   void
   getInlineContextForProbe(const PseudoProbe *Probe,
-                           SmallVector<std::string, 16> &InlineContextStack,
-                           bool IncludeLeaf) const {
+                           SmallVectorImpl<std::string> &InlineContextStack,
+                           bool IncludeLeaf = false) const {
     return ProbeDecoder.getInlineContextForProbe(Probe, InlineContextStack,
                                                  IncludeLeaf);
+  }
+  const AddressProbesMap &getAddress2ProbesMap() const {
+    return ProbeDecoder.getAddress2ProbesMap();
+  }
+  const PseudoProbeFuncDesc *getFuncDescForGUID(uint64_t GUID) {
+    return ProbeDecoder.getFuncDescForGUID(GUID);
+  }
+  const PseudoProbeFuncDesc *getInlinerDescForProbe(const PseudoProbe *Probe) {
+    return ProbeDecoder.getInlinerDescForProbe(Probe);
   }
 };
 
