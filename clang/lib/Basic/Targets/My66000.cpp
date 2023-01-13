@@ -19,15 +19,9 @@
 using namespace clang;
 using namespace clang::targets;
 
-const Builtin::Info My66000TargetInfo::BuiltinInfo[] = {
-#define BUILTIN(ID, TYPE, ATTRS)                                               \
-  {#ID, TYPE, ATTRS, nullptr, ALL_LANGUAGES, nullptr},
-#include "clang/Basic/BuiltinsLe64.def"
-};
-
 ArrayRef<Builtin::Info> My66000TargetInfo::getTargetBuiltins() const {
-  return llvm::makeArrayRef(BuiltinInfo, clang::Le64::LastTSBuiltin -
-                                             Builtin::FirstTSBuiltin);
+  // FIXME: someday we might need target specific builtins
+  return None;
 }
 
 void My66000TargetInfo::getTargetDefines(const LangOptions &Opts,

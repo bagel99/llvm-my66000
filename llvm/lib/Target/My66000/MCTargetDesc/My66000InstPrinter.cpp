@@ -307,8 +307,12 @@ printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     O << Op.getImm();
     return;
   }
-  if (Op.isFPImm()) {
-    O << Op.getFPImm();
+  if (Op.isSFPImm()) {
+    O << Op.getSFPImm();
+    return;
+  }
+  if (Op.isDFPImm()) {
+    O << Op.getDFPImm();
     return;
   }
   assert(Op.isExpr() && "unknown operand kind in printOperand");
@@ -340,8 +344,8 @@ void My66000InstPrinter::printFP32Operand(const MCInst *MI, unsigned opNum,
     uint32_t i;
   } u;
   const MCOperand &Op = MI->getOperand(opNum);
-  if (Op.isFPImm()) {
-    u.f = Op.getFPImm();
+  if (Op.isSFPImm()) {
+    u.f = Op.getSFPImm();
     O << format_hex(u.i, 9, true);
   }
 }
@@ -353,8 +357,8 @@ void My66000InstPrinter::printFP64Operand(const MCInst *MI, unsigned opNum,
     uint64_t i;
   } u;
   const MCOperand &Op = MI->getOperand(opNum);
-  if (Op.isFPImm()) {
-    u.f = Op.getFPImm();
+  if (Op.isDFPImm()) {
+    u.f = Op.getDFPImm();
     O << format_hex(u.i, 18, true);
   }
 }

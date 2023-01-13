@@ -93,9 +93,9 @@ MCOperand My66000MCInstLower::LowerOperand(const MachineOperand &MO,
       // This is fine for numeric values, but may cause NaNs to change bits.
       const ConstantFP *Imm = MO.getFPImm();
       if (Imm->getType()->isFloatTy())
-        return MCOperand::createFPImm(Imm->getValueAPF().convertToFloat());
+        return MCOperand::createSFPImm(Imm->getValueAPF().convertToFloat());
       else if (Imm->getType()->isDoubleTy())
-        return MCOperand::createFPImm(Imm->getValueAPF().convertToDouble());
+        return MCOperand::createDFPImm(Imm->getValueAPF().convertToDouble());
       else
         llvm_unreachable("unknown floating point immediate type");
       break;

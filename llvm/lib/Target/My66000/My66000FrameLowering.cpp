@@ -41,12 +41,12 @@ bool My66000FrameLowering::hasFP(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 LLVM_DEBUG(dbgs() << "hasFP: "
 << MF.getTarget().Options.DisableFramePointerElim(MF)
-<< RegInfo->needsStackRealignment(MF)
+<< RegInfo->hasStackRealignment(MF)
 << MFI.hasVarSizedObjects()
 << MFI.isFrameAddressTaken()
 << '\n');
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-         RegInfo->needsStackRealignment(MF) || MFI.hasVarSizedObjects() ||
+         RegInfo->hasStackRealignment(MF) || MFI.hasVarSizedObjects() ||
          MFI.isFrameAddressTaken();
 }
 
@@ -60,7 +60,7 @@ void My66000FrameLowering::determineFrameLayout(MachineFunction &MF) const {
 
   // Get the alignment.
   Align StackAlign = getStackAlign();
-  if (RI->needsStackRealignment(MF)) {
+  if (RI->hasStackRealignment(MF)) {
     Align MaxStackAlign = std::max(StackAlign, MFI.getMaxAlign());
     FrameSize += (MaxStackAlign.value() - StackAlign.value());
     StackAlign = MaxStackAlign;
@@ -111,7 +111,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
   const My66000InstrInfo *TII = STI.getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
 
-  if (RI->needsStackRealignment(MF) && MFI.hasVarSizedObjects()) {
+  if (RI->hasStackRealignment(MF) && MFI.hasVarSizedObjects()) {
     report_fatal_error(
         "My66000 backend can't currently handle functions that need stack "
         "realignment and have variable sized objects");
@@ -203,7 +203,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitEpilogue\n");
   // Restore the stack pointer using the value of the frame pointer. Only
   // necessary if the stack pointer was modified, meaning the stack size is
   // unknown.
-  if (RI->needsStackRealignment(MF) || MFI.hasVarSizedObjects()) {
+  if (RI->hasStackRealignment(MF) || MFI.hasVarSizedObjects()) {
     assert(hasFP(MF) && "frame pointer should not have been eliminated");
     auto *XFI = MF.getInfo<My66000FunctionInfo>();
     uint64_t FPOffset = StackSize - XFI->getVarArgsSaveSize();
@@ -352,7 +352,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::getFrameIndexReference\n");
   if (FI >= MinCSFI && FI <= MaxCSFI) {
     FrameReg = SPReg;
     Offset += MF.getFrameInfo().getStackSize();
-  } else if (RI->needsStackRealignment(MF)) {
+  } else if (RI->hasStackRealignment(MF)) {
     assert(!MFI.hasVarSizedObjects() &&
            "Unexpected combination of stack realignment and varsized objects");
     // If the stack was realigned, the frame pointer is set in order to allow

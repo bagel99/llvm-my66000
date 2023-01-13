@@ -38,13 +38,13 @@ void My66000TargetObjectFile::Initialize(MCContext &Ctx, const TargetMachine &TM
 				ELF::SHF_ALLOC);
   MergeableConst4Section = Ctx.getELFSection(".rodata",
 				ELF::SHT_PROGBITS,
-				ELF::SHF_ALLOC | ELF::SHF_MERGE, 4, "");
+				ELF::SHF_ALLOC | ELF::SHF_MERGE, 4);
   MergeableConst8Section = Ctx.getELFSection(".rodata",
 				ELF::SHT_PROGBITS,
-				ELF::SHF_ALLOC | ELF::SHF_MERGE, 8, "");
+				ELF::SHF_ALLOC | ELF::SHF_MERGE, 8);
   MergeableConst16Section = Ctx.getELFSection(".rodata",
 				ELF::SHT_PROGBITS,
-				ELF::SHF_ALLOC | ELF::SHF_MERGE, 16, "");
+				ELF::SHF_ALLOC | ELF::SHF_MERGE, 16);
   CStringSection = Ctx.getELFSection(".rodata",
 				ELF::SHT_PROGBITS,
 				ELF::SHF_ALLOC | ELF::SHF_MERGE | ELF::SHF_STRINGS);

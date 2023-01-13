@@ -311,8 +311,8 @@ bool My66000TargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF
 }
 
 bool My66000TargetLowering::allowsMisalignedMemoryAccesses(
-    EVT VT, unsigned AddrSpace, unsigned Align, MachineMemOperand::Flags Flags,
-    bool *Fast) const {
+    EVT VT, unsigned AddrSpace, Align Alignment,
+    MachineMemOperand::Flags Flags, bool *Fast) const {
 
     if (Fast != nullptr)
       *Fast = true;
