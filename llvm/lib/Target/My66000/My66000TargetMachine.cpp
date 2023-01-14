@@ -21,7 +21,7 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/Support/CodeGen.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 
 using namespace llvm;
 
@@ -100,7 +100,7 @@ bool My66000PassConfig::addInstSelector() {
 
 void My66000PassConfig::addPreRegAlloc() {
   initializeMy66000VVMLoopPass(*PassRegistry::getPassRegistry());
-  insertPass(&RegisterCoalescerID, &My66000VVMLoopID, false);
+  insertPass(&RegisterCoalescerID, &My66000VVMLoopID);
 }
 
 void My66000PassConfig::addMachineLateOptimization() {

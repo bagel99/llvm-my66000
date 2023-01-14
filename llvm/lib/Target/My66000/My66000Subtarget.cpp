@@ -12,7 +12,7 @@
 
 #include "My66000Subtarget.h"
 #include "My66000.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 
 using namespace llvm;
 
