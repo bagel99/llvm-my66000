@@ -1233,7 +1233,7 @@ LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
       if (isExact) {
 	int64_t imm = IVal.getExtValue();
         if (imm >= -16 && imm <= 15) {
-	  return DAG.getNode(My66000ISD::F32I5, DL, MVT::f64,
+	  return DAG.getNode(My66000ISD::F32I5, DL, MVT::f32,
 			     DAG.getConstant(imm, DL, MVT::i64));
 	}
       }
