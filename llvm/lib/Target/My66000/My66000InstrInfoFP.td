@@ -454,6 +454,39 @@ def FNEGF : ALU_DR<0b110001, 0b10111,
 	"faddf\t$rd,#0,-$rs2",
 	[(set FSRegs:$rd, (fneg (f32 FSRegs:$rs2)))]>;
 
+// FMA 32-bit FMA - sometimes we get fma and somtimes fmad
+def FMAFrr : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, FSRegs:$rs3),
+	"fmacf\t$rd,$rs1,$rs2,$rs3",
+	[(set FSRegs:$rd, (any_fma (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), (f32 FSRegs:$rs3)))]>;
+def FMAFrn : ALU_RRR<0b000, 0b001,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, FSRegs:$rs3),
+	"fmacf\t$rd,$rs1,$rs2,-$rs3",
+	[(set FSRegs:$rd, (any_fma (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), (fneg (f32 FSRegs:$rs3))))]>;
+def FMAFnr : ALU_RRR<0b000, 0b010,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, FSRegs:$rs3),
+	"fmacf\t$rd,$rs2,-$rs1,$rs3",	// must swap rs1 and rs2
+	[(set FSRegs:$rd, (any_fma (fneg FSRegs:$rs1), (f32 FSRegs:$rs2), (f32 FSRegs:$rs3)))]>;
+def FMAFnn : ALU_RRR<0b000, 0b010,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, FSRegs:$rs3),
+	"fmacf\t$rd,$rs2,-$rs1,-$rs3",	// must swap rs1 and rs2
+	[(set FSRegs:$rd, (any_fma (fneg FSRegs:$rs1), (f32 FSRegs:$rs2), (fneg (f32 FSRegs:$rs3))))]>;
+def FMAFrd : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, fpimm32:$imm),
+	"fmacf\t$rd,$rs1,$rs2,#$imm",
+	[(set FSRegs:$rd, (any_fma (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), fpimm32:$imm))]>;
+def FMAFrk : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, i64imm:$imm),
+	"fmacf\t$rd,$rs1,$rs2,#$imm",
+	[(set FSRegs:$rd, (any_fma (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), (myF32I5 (simm5:$imm))))]>;
+def FMAFdr : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm, FSRegs:$rs3),
+	"fmacf\t$rd,$rs1,#$imm,$rs3",
+	[(set FSRegs:$rd, (any_fma (f32 FSRegs:$rs1), fpimm32:$imm, (f32 FSRegs:$rs3)))]>;
+def FMAFkr : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, i64imm:$imm, FSRegs:$rs3),
+	"fmacf\t$rd,$rs1,#$imm,$rs3",
+	[(set FSRegs:$rd, (any_fma (f32 FSRegs:$rs1), (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs3)))]>;
 
 // FMA 32-bit FMAD - preferred by DAGCombiner
 def FMADFrr : ALU_RRR<0b000, 0b000,
@@ -476,10 +509,18 @@ def FMADFrd : ALU_RRR<0b000, 0b000,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, fpimm32:$imm),
 	"fmacf\t$rd,$rs1,$rs2,#$imm",
 	[(set FSRegs:$rd, (fmad (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), fpimm32:$imm))]>;
+def FMADFrk : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, i64imm:$imm),
+	"fmacf\t$rd,$rs1,$rs2,#$imm",
+	[(set FSRegs:$rd, (fmad (f32 FSRegs:$rs1), (f32 FSRegs:$rs2), (myF32I5 (simm5:$imm))))]>;
 def FMADFdr : ALU_RRR<0b000, 0b000,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm, FSRegs:$rs3),
 	"fmacf\t$rd,$rs1,#$imm,$rs3",
 	[(set FSRegs:$rd, (fmad (f32 FSRegs:$rs1), fpimm32:$imm, (f32 FSRegs:$rs3)))]>;
+def FMADFkr : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, i64imm:$imm, FSRegs:$rs3),
+	"fmacf\t$rd,$rs1,#$imm,$rs3",
+	[(set FSRegs:$rd, (fmad (f32 FSRegs:$rs1), (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs3)))]>;
 
 // Moves
 let isAsCheapAsAMove = 1 in {
