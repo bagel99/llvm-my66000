@@ -87,18 +87,17 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::adjustReg: " << Val << "\n");
 
   if (DstReg == SrcReg && Val == 0)
     return;
-
-  if (isInt<16>(Val)) {
-    BuildMI(MBB, MBBI, DL, TII->get(My66000::ADDri), DstReg)
+  unsigned inst;
+  if (isInt<16>(Val))
+    inst = My66000::ADDri;
+  else if (isInt<32>(Val))
+    inst = My66000::ADDrw;
+  else
+    inst = My66000::ADDrd;
+  BuildMI(MBB, MBBI, DL, TII->get(inst), DstReg)
         .addReg(SrcReg)
         .addImm(Val)
         .setMIFlag(Flag);
-  } else if (isInt<32>(Val)) {
-    // FIXME
-    report_fatal_error("32 bit adjustments not yet implemented");
-  } else {
-    report_fatal_error("adjustReg cannot yet handle adjustments >32 bits");
-  }
 }
 
 void My66000FrameLowering::emitPrologue(MachineFunction &MF,

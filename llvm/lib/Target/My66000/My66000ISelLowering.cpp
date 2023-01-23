@@ -183,8 +183,9 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
 
   // Have psuedo instruction for frame addresses.
   setOperationAction(ISD::FRAMEADDR, MVT::i64, Legal);
-  // Custom lower global addresses.
+  // Handle the various types of symbolic address.
   setOperationAction(ISD::GlobalAddress, MVT::i64, Custom);
+  setOperationAction(ISD::BlockAddress, MVT::i64, Custom);
 
   // Expand var-args ops.
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
@@ -1138,6 +1139,20 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerGlobalAddress\n");
   return DAG.getNode(My66000ISD::WRAPPER, dl, PtrVT, Result);
 }
 
+SDValue My66000TargetLowering::LowerBlockAddress(SDValue Op,
+                                                 SelectionDAG &DAG) const {
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBlockAddress\n");
+  const BlockAddressSDNode *Node = cast<BlockAddressSDNode>(Op);
+  SDLoc DL(Node);
+  const BlockAddress *BA = Node->getBlockAddress();
+  int64_t Offset = Node->getOffset();
+  auto PtrVT = getPointerTy(DAG.getDataLayout());
+
+  SDValue Result = DAG.getTargetBlockAddress(BA, PtrVT, Offset);
+  Result = DAG.getNode(My66000ISD::WRAPPER, DL, PtrVT, Result);
+  return Result;
+}
+
 unsigned My66000TargetLowering::getJumpTableEncoding() const {
   return MachineJumpTableInfo::EK_Inline;
 }
@@ -1249,6 +1264,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation\n");
   case ISD::SETCC:			return LowerSETCC(Op, DAG);
   case ISD::SIGN_EXTEND_INREG:		return LowerSIGN_EXTEND_INREG(Op, DAG);
   case ISD::GlobalAddress:		return LowerGlobalAddress(Op, DAG);
+  case ISD::BlockAddress:		return LowerBlockAddress(Op, DAG);
   case ISD::BR_JT:			return LowerBR_JT(Op, DAG);
   case ISD::VASTART:			return LowerVASTART(Op, DAG);
   case ISD::ConstantFP:			return LowerConstantFP(Op, DAG);
@@ -1293,7 +1309,7 @@ LLVM_DEBUG(dbgs() << "found FirstCarry n=" << n << " old=" << old << '\n');
 }
 
 static MachineBasicBlock *emitADDCARRY(MachineInstr &MI,
-                                       MachineBasicBlock *BB) {
+                                       MachineBasicBlock *BB, unsigned inst) {
   MachineFunction &MF = *BB->getParent();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
@@ -1311,7 +1327,7 @@ LLVM_DEBUG(dbgs() << "emitADDCARRY\n" << MI << '\n');
 	    .addReg(CI).addImm(3);	// InOut
   }
   MachineInstr *Add =
-    BuildMI(*BB, MI, DL, TII.get(My66000::ADDrr), Sum)
+    BuildMI(*BB, MI, DL, TII.get(inst), Sum)
 	    .addReg(LHS).addReg(RHS)
 	    .addReg(CI, RegState::Implicit)
 	    .addReg(CO, RegState::ImplicitDefine);
@@ -1333,7 +1349,7 @@ LLVM_DEBUG(dbgs() << "emitUADD0\n" << MI << '\n');
   BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CO)
       .addImm(2);	// Out
   // FIXME - is there a way of doing this without the if?
-  if (inst == My66000::ADDrr) {
+  if (inst == My66000::ADDrr || inst == My66000::ADDrn) {
     unsigned RHS = MI.getOperand(3).getReg();
     BuildMI(*BB, MI, DL, TII.get(inst), Sum)
       .addReg(LHS).addReg(RHS)
@@ -1477,8 +1493,11 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   default:
     llvm_unreachable("Unexpected instr type to insert");
   case My66000::UADDOrr:	return emitUADDO(MI, BB, My66000::ADDrr);
+  case My66000::USUBOrr:	return emitUADDO(MI, BB, My66000::ADDrn);
   case My66000::UADDOri:	return emitUADDO(MI, BB, My66000::ADDri);
-  case My66000::ADDCARRYrr:	return emitADDCARRY(MI, BB);
+  case My66000::USUBOri:	return emitUADDO(MI, BB, My66000::ADDri);
+  case My66000::ADDCARRYrr:	return emitADDCARRY(MI, BB, My66000::ADDrr);
+  case My66000::SUBCARRYrr:	return emitADDCARRY(MI, BB, My66000::ADDrn);
   case My66000::UMULHILOrr:	return emitUMULHILO(MI, BB, My66000::MULrr);
   case My66000::UMULHILOri:	return emitUMULHILO(MI, BB, My66000::MULri);
   case My66000::UMULHILOrw:	return emitUMULHILO(MI, BB, My66000::MULrw);

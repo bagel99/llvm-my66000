@@ -536,6 +536,10 @@ def LAgxs: LDST_RX<0b000111, 0b00000,
 	"la\t$rd,[ip,$rx<<$sc,$addr]",
 	[(set GRegs:$rd,
 	 (add (shl GRegs:$rx, shfinx:$sc), (myWRAPPER tglobaladdr:$addr)))]>;
+def LAb  : LDST_RX<0b000111, 0b00000,
+	(outs GRegs:$rd), (ins gbladr:$addr),
+	"la\t$rd,[ip,$addr]",
+	[(set GRegs:$rd, (myWRAPPER tblockaddress:$addr))]>;
 
 //
 // Store
@@ -722,10 +726,12 @@ def SDT_ADDCO : SDTypeProfile<2, 2,
 		[SDTCisVT<0, i64>,SDTCisVT<1, i64>,SDTCisVT<2, i64>,
 		 SDTCisVT<3, i64>]>;
 def uaddo :	SDNode<"ISD::UADDO", SDT_ADDCO, []>;
+def usubo :	SDNode<"ISD::USUBO", SDT_ADDCO, []>;
 def SDT_ADDCIO : SDTypeProfile<2, 3,
 		[SDTCisVT<0, i64>,SDTCisVT<1, i64>,SDTCisVT<2, i64>,
 		 SDTCisVT<3, i64>,SDTCisVT<4, i64>]>;
 def addcarry :	SDNode<"ISD::ADDCARRY", SDT_ADDCIO, []>;
+def subcarry :	SDNode<"ISD::SUBCARRY", SDT_ADDCIO, []>;
 def umul_lohi : SDNode<"ISD::UMUL_LOHI", SDTIntBinHiLoOp, []>;
 
 let usesCustomInserter = 1 in {
@@ -737,10 +743,22 @@ def UADDOri : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs),
 	"# UADD0ri",
 	[(set GRegs:$sum, GRegs:$co, (uaddo GRegs:$lhs, simm16:$rhs))]>;
+def USUBOrr : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs),
+	"# UADD0rr",
+	[(set GRegs:$sum, GRegs:$co, (usubo GRegs:$lhs, GRegs:$rhs))]>;
+def USUBOri : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs),
+	"# UADD0ri",
+	[(set GRegs:$sum, GRegs:$co, (usubo GRegs:$lhs, simm16:$rhs))]>;
 def ADDCARRYrr : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
 	"# ADDCARRYr",
 	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
+def SUBCARRYrr : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
+	"# SUBCARRYr",
+	[(set GRegs:$sum, GRegs:$co, (subcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
 
 def UMULHILOrr : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, GRegs:$rhs),
