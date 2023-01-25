@@ -725,14 +725,21 @@ def CARRYi : ALU_RI<0b111110,
 def SDT_ADDCO : SDTypeProfile<2, 2,
 		[SDTCisVT<0, i64>,SDTCisVT<1, i64>,SDTCisVT<2, i64>,
 		 SDTCisVT<3, i64>]>;
-def uaddo :	SDNode<"ISD::UADDO", SDT_ADDCO, []>;
-def usubo :	SDNode<"ISD::USUBO", SDT_ADDCO, []>;
 def SDT_ADDCIO : SDTypeProfile<2, 3,
 		[SDTCisVT<0, i64>,SDTCisVT<1, i64>,SDTCisVT<2, i64>,
 		 SDTCisVT<3, i64>,SDTCisVT<4, i64>]>;
+def SDT_ISHFW : SDTypeProfile<2, 3,
+		[SDTCisVT<0, i64>,SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>,
+		 SDTCisSameAs<0, 3>,SDTCisInt<4>]>;
+def uaddo :	SDNode<"ISD::UADDO", SDT_ADDCO, []>;
+def usubo :	SDNode<"ISD::USUBO", SDT_ADDCO, []>;
 def addcarry :	SDNode<"ISD::ADDCARRY", SDT_ADDCIO, []>;
 def subcarry :	SDNode<"ISD::SUBCARRY", SDT_ADDCIO, []>;
 def umul_lohi : SDNode<"ISD::UMUL_LOHI", SDTIntBinHiLoOp, []>;
+def smul_lohi : SDNode<"ISD::SMUL_LOHI", SDTIntBinHiLoOp, []>;
+def srl_parts : SDNode<"ISD::SRL_PARTS", SDT_ISHFW, []>;
+def shl_parts : SDNode<"ISD::SHL_PARTS", SDT_ISHFW, []>;
+def sra_parts : SDNode<"ISD::SRA_PARTS", SDT_ISHFW, []>;
 
 let usesCustomInserter = 1 in {
 def UADDOrr : Pseudo<
@@ -772,6 +779,18 @@ def UMULHILOrw : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
 	"# UMULHILOrw",
 	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, sneed32:$rhs))]>;
+def SMULHILOrr : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, GRegs:$rhs),
+	"# SMULHILOrr",
+	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, GRegs:$rhs))]>;
+def SMULHILOri : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
+	"# SMULHILOri",
+	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, simm16:$rhs))]>;
+def SMULHILOrw : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
+	"# SMULHILOrw",
+	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, sneed32:$rhs))]>;
 
 def UDIVREMrr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
@@ -830,6 +849,19 @@ def SDIVREMdr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
 	"# SDIVREMdr",
 	[(set GRegs:$div, GRegs:$rem, (sdivrem sneed64:$lhs, GRegs:$rhs))]>;
+
+def SRL2rr : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
+	"# SRL2rr",
+	[(set GRegs:$lo, GRegs:$hi, (srl_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
+def SLL2rr : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
+	"# SHL2rr",
+	[(set GRegs:$lo, GRegs:$hi, (shl_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
+def SRA2rr : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
+	"# SRL2rr",
+	[(set GRegs:$lo, GRegs:$hi, (sra_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
 
 def ROTLrr : Pseudo<
 	(outs GRegs:$dst), (ins GRegs:$lhs, GRegs:$rhs),

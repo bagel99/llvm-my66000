@@ -1459,6 +1459,24 @@ LLVM_DEBUG(dbgs() << "emitUDIVREM\n" << MI << '\n');
   return BB;
 }
 
+// Double length shifts using CARRY
+static MachineBasicBlock *emitSHF2(MachineInstr &MI,
+                                       MachineBasicBlock *BB, unsigned inst) {
+  MachineFunction &MF = *BB->getParent();
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+  unsigned RESLO = MI.getOperand(0).getReg();
+  unsigned RESHI = MI.getOperand(1).getReg();
+  unsigned INLO  = MI.getOperand(2).getReg();
+  unsigned INHI  = MI.getOperand(3).getReg();
+
+  BuildMI(*BB, MI, DL, TII.get(My66000::CARRYio), RESHI)
+	.addReg(INHI).addImm(3); //In/Out
+  BuildMI(*BB, MI, DL, TII.get(inst), RESLO).addReg(INLO).add(MI.getOperand(4));
+  MI.eraseFromParent(); // The pseudo instruction is gone now.
+  return BB;
+}
+
 static MachineBasicBlock *emitROTx(MachineInstr &MI,
                                        MachineBasicBlock *BB, unsigned inst) {
   MachineFunction &MF = *BB->getParent();
@@ -1501,6 +1519,9 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   case My66000::UMULHILOrr:	return emitUMULHILO(MI, BB, My66000::MULrr);
   case My66000::UMULHILOri:	return emitUMULHILO(MI, BB, My66000::MULri);
   case My66000::UMULHILOrw:	return emitUMULHILO(MI, BB, My66000::MULrw);
+  case My66000::SMULHILOrr:	return emitUMULHILO(MI, BB, My66000::MULrr);
+  case My66000::SMULHILOri:	return emitUMULHILO(MI, BB, My66000::MULri);
+  case My66000::SMULHILOrw:	return emitUMULHILO(MI, BB, My66000::MULrw);
   case My66000::UDIVREMrr:	return emitDIVREM(MI, BB, My66000::UDIVrr);
   case My66000::UDIVREMri:	return emitDIVREM(MI, BB, My66000::UDIVri);
   case My66000::UDIVREMrw:	return emitDIVREM(MI, BB, My66000::UDIVrw);
@@ -1519,6 +1540,9 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   case My66000::ROTLrr:		return emitROTx(MI, BB, My66000::SLLrr);
   case My66000::ROTRri:		return emitROTx(MI, BB, My66000::SRLri);
   case My66000::ROTRrr:		return emitROTx(MI, BB, My66000::SRLrr);
+  case My66000::SRL2rr:		return emitSHF2(MI, BB, My66000::SRLrr);
+  case My66000::SLL2rr:		return emitSHF2(MI, BB, My66000::SLLrr);
+  case My66000::SRA2rr:		return emitSHF2(MI, BB, My66000::SRArr);
   }
 }
 
