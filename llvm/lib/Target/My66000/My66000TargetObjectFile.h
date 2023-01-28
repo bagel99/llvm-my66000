@@ -16,10 +16,6 @@ namespace llvm {
 static const unsigned CodeModelLargeSize = 256;
 
   class My66000TargetObjectFile : public TargetLoweringObjectFileELF {
-    MCSection *BSSSectionLarge;
-    MCSection *DataSectionLarge;
-    MCSection *ReadOnlySectionLarge;
-    MCSection *DataRelROSectionLarge;
 
   public:
     void Initialize(MCContext &Ctx, const TargetMachine &TM) override;

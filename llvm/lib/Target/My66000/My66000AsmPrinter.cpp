@@ -68,7 +68,6 @@ namespace {
     bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNum,
                                const char *ExtraCode, raw_ostream &O) override;
 
-    void emitArrayBound(MCSymbol *Sym, const GlobalVariable *GV);
     void emitGlobalVariable(const GlobalVariable *GV) override;
 
     void emitFunctionEntryLabel() override;
@@ -80,27 +79,6 @@ namespace {
 
 My66000TargetStreamer &My66000AsmPrinter::getTargetStreamer() {
   return static_cast<My66000TargetStreamer&>(*OutStreamer->getTargetStreamer());
-}
-
-void My66000AsmPrinter::emitArrayBound(MCSymbol *Sym, const GlobalVariable *GV) {
-/*
-  assert( ( GV->hasExternalLinkage() || GV->hasWeakLinkage() ||
-            GV->hasLinkOnceLinkage() || GV->hasCommonLinkage() ) &&
-          "Unexpected linkage");
-  if (ArrayType *ATy = dyn_cast<ArrayType>(GV->getValueType())) {
-
-    MCSymbol *SymGlob = OutContext.getOrCreateSymbol(
-                          Twine(Sym->getName() + StringRef(".globound")));
-    OutStreamer->EmitSymbolAttribute(SymGlob, MCSA_Global);
-    OutStreamer->EmitAssignment(SymGlob,
-                                MCConstantExpr::create(ATy->getNumElements(),
-                                                       OutContext));
-    if (GV->hasWeakLinkage() || GV->hasLinkOnceLinkage() ||
-        GV->hasCommonLinkage()) {
-      OutStreamer->EmitSymbolAttribute(SymGlob, MCSA_Weak);
-    }
-  }
-*/
 }
 
 void My66000AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
@@ -127,7 +105,6 @@ void My66000AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   case GlobalValue::WeakODRLinkage:
   case GlobalValue::ExternalLinkage:
   case GlobalValue::CommonLinkage:
-    emitArrayBound(GVSym, GV);
     OutStreamer->emitSymbolAttribute(GVSym, MCSA_Global);
 
     if (GV->hasWeakLinkage() || GV->hasLinkOnceLinkage() ||
@@ -143,9 +120,6 @@ void My66000AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
 
   emitAlignment(std::max(Alignment, Align(4)), GV);
 
-  if (GV->isThreadLocal()) {
-    report_fatal_error("TLS is not supported by this target!");
-  }
   unsigned Size = DL.getTypeAllocSize(C->getType());
   if (MAI->hasDotTypeDotSizeDirective()) {
     OutStreamer->emitSymbolAttribute(GVSym, MCSA_ELF_TypeObject);

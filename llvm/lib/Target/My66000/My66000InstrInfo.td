@@ -760,11 +760,11 @@ def USUBOri : Pseudo<
 	[(set GRegs:$sum, GRegs:$co, (usubo GRegs:$lhs, simm16:$rhs))]>;
 def ADDCARRYrr : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
-	"# ADDCARRYr",
+	"# ADDCARRYrr",
 	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
 def SUBCARRYrr : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
-	"# SUBCARRYr",
+	"# SUBCARRYrr",
 	[(set GRegs:$sum, GRegs:$co, (subcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
 
 def UMULHILOrr : Pseudo<
@@ -779,6 +779,10 @@ def UMULHILOrw : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
 	"# UMULHILOrw",
 	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, sneed32:$rhs))]>;
+def UMULHILOrd : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
+	"# UMULHILOrd",
+	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, sneed64:$rhs))]>;
 def SMULHILOrr : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, GRegs:$rhs),
 	"# SMULHILOrr",
@@ -791,6 +795,10 @@ def SMULHILOrw : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
 	"# SMULHILOrw",
 	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, sneed32:$rhs))]>;
+def SMULHILOrd : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
+	"# SMULHILOrd",
+	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, sneed64:$rhs))]>;
 
 def UDIVREMrr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
@@ -901,6 +909,10 @@ def PRIB : PB<0b00011,
 def PRFB : PB<0b00011,
 	(outs), (ins i64imm:$cb, GRegs:$rs1, i16imm:$inf),
 	"pb1\t$cb,$rs1,$inf",
+	[]>;
+def PBIT : PB<0b00011,
+	(outs), (ins i64imm:$bit, GRegs:$rs1, i16imm:$inf),
+	"pb1\t$bit,$rs1,$inf",
 	[]>;
 
 

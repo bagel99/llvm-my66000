@@ -337,20 +337,18 @@ LLVM_DEBUG(dbgs() << "\tunsigned extract pattern #1: w=" << Width << " o=" << Of
         return true;
       }
       else if (N->getOperand(0).getNode()->getOpcode() == ISD::OR) {
-	return tryANDOR(N, Width);
+	if (tryANDOR(N, Width))
+	  return true;
       }
-      else
-      {	// We have AND with a mask.
-        unsigned Width = countTrailingOnes(Andimm);
-	if (Width > 15)
-	{ // A large mask is better done by SRLri than AND imm
+      // We have AND with a mask.
+      if (Width > 15)
+      { // A large mask is better done by SRLri than AND imm
 LLVM_DEBUG(dbgs() << "\tunsigned extract pattern #2: w=" << Width <<  "\n");
-          SDValue Ops[] = { N->getOperand(0),
-                            CurDAG->getTargetConstant(Width, dl, MVT::i64),
-                            CurDAG->getTargetConstant(0, dl, MVT::i64) };
-	  CurDAG->SelectNodeTo(N, My66000::SRLri, MVT::i64, Ops);
-          return true;
-	}
+	SDValue Ops[] = { N->getOperand(0),
+			  CurDAG->getTargetConstant(Width, dl, MVT::i64),
+			  CurDAG->getTargetConstant(0, dl, MVT::i64) };
+	CurDAG->SelectNodeTo(N, My66000::SRLri, MVT::i64, Ops);
+	return true;
       }
     } else {	// AND of non-immediate
       // Look for bit clear idiom with and(r,(rotl -2,r))

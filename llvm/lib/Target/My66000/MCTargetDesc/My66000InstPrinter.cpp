@@ -243,6 +243,15 @@ void My66000InstPrinter::printInst(const MCInst *MI, uint64_t Address,
     printShadow(O, MI->getOperand(2).getImm());
     }
     break;
+  case My66000::PBIT: {
+    O << "\tpb1\t";
+    printOperand(MI, 0, O);
+    O << ",";
+    printOperand(MI, 1, O);
+    O << ",";
+    printShadow(O, MI->getOperand(2).getImm());
+    }
+    break;
   case My66000::VEC: {
     O << "\tvec\t";
     printOperand(MI, 0, O);

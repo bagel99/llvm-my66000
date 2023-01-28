@@ -154,7 +154,7 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
         cc = TII->reverseBRFB(static_cast<MYCB::CondBits>(cc));
       break;
     case My66000::BBIT:
-      op = My66000::PRIB;
+      op = My66000::PBIT;
       break;
     default:
       llvm_unreachable("Predicate conversion: unknown conditional branch");
