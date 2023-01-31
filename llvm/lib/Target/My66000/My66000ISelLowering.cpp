@@ -93,6 +93,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
                                      const My66000Subtarget &Subtarget)
     : TargetLowering(TM), Subtarget(Subtarget) {
 
+  setMinStackArgumentAlignment(Align(8));
   // Set up the register classes.
   addRegisterClass(MVT::i64, &My66000::GRegsRegClass);
   // Floating values use the same registers as integer.
@@ -858,6 +859,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
   SmallVector<ArgDataPair, 4> ArgData;
   SmallVector<SDValue, 4> MemOps;
 
+  LLVM_DEBUG(dbgs() << "\tArgLocs.size=" << ArgLocs.size() << '\n');
   // 1a. CopyFromReg (and load) arg registers.
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -865,8 +867,6 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
 
     if (VA.isRegLoc()) {      // Arguments passed in registers
       EVT RegVT = VA.getLocVT();
-LLVM_DEBUG(dbgs() << "LowerFormalArguments argument type: "
-		  << (unsigned)RegVT.getSimpleVT().SimpleTy << '\n');
       switch (RegVT.getSimpleVT().SimpleTy) {
       default: {
         LLVM_DEBUG(errs() << "LowerFormalArguments Unhandled argument type: "
@@ -905,17 +905,18 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments argument type: "
     // Argument registers
     auto *XFI = MF.getInfo<My66000FunctionInfo>();
     unsigned FirstVAReg = CCInfo.getFirstUnallocated(ArgRegs);
+    LLVM_DEBUG(dbgs() << "\tIsVarArg FirstVAReg=" << FirstVAReg << '\n');
+    LLVM_DEBUG(dbgs() << "\tFirstVAReg=" << FirstVAReg << '\n');
+    LLVM_DEBUG(dbgs() << "\tlengthof(ArgRegs)=" << array_lengthof(ArgRegs) << '\n');
     if (FirstVAReg < array_lengthof(ArgRegs)) {
-      // Save remaining registers, storing higher register numbers at a higher
-      // address
-      // There are (array_lengthof(ArgRegs) - FirstVAReg) registers which
-      // need to be saved.
+      // Save remaining registers possibly containing varags.
       int VaSaveSize = (array_lengthof(ArgRegs) - FirstVAReg) * 8;
       int Offset = -VaSaveSize;
-    // Record the frame index of the first variable argument
-    // which is a value necessary to VASTART.
+      // Record the frame index of the first variable argument
+      // which is a value necessary to VASTART.
       int VaFI = MFI.CreateFixedObject(8, Offset, true);
       XFI->setVarArgsFrameIndex(VaFI);
+      // FIXME - use STM if more than one
       for (unsigned i = FirstVAReg; i < array_lengthof(ArgRegs); i++) {
         // Move argument from phys reg -> virt reg
         unsigned VReg = RegInfo.createVirtualRegister(&My66000::GRegsRegClass);
@@ -932,8 +933,6 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments argument type: "
         Offset += 8;
       }
       XFI->setVarArgsSaveSize(VaSaveSize);
-    } else {
-      llvm_unreachable("Too many var args parameters.");
     }
   }
 

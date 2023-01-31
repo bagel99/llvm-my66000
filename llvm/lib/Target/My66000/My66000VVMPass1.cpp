@@ -81,14 +81,15 @@ static unsigned MapLoopCond(unsigned &cc) {
 }
 
 bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
+  LLVM_DEBUG(dbgs() << "checkLoop\n");
+//  Loop->dump();
   MachineBasicBlock *TB = Loop->getTopBlock();	// the loop block
-  MachineBasicBlock *BB, *CB;
-  BB = Loop->getBottomBlock();
-  if (TB != BB)
-    return false;	// For now, only single block loops
-  CB = Loop->findLoopControlBlock();
+  MachineBasicBlock *CB = Loop->findLoopControlBlock();
   if (!CB || CB != TB)
     return false;
+  MachineBasicBlock *BB = Loop->getBottomBlock();
+  if (TB != BB)
+    return false;	// For now, only single block loops
   LLVM_DEBUG(dbgs() << " found candidate inner loop " << printMBBReference(*TB) << '\n');
   MachineBasicBlock::iterator I = TB->begin();
   MachineBasicBlock::iterator E = TB->getLastNonDebugInstr();
