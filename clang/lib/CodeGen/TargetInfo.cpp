@@ -11211,6 +11211,9 @@ private:
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy) const;
   void computeInfo(CGFunctionInfo &FI) const override;
+public:
+  Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
+                    QualType Ty) const override;
 };
 } // end anonymous namespace
 
@@ -11251,6 +11254,27 @@ void My66000ABIInfo::computeInfo(CGFunctionInfo &FI) const {
   for (auto &Arg : FI.arguments())
     Arg.info = classifyArgumentType(Arg.type);
 }
+
+Address My66000ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
+                                QualType Ty) const {
+  CharUnits SlotSize = CharUnits::fromQuantity(8);
+
+  // Empty records are ignored for parameter passing purposes.
+  if (isEmptyRecord(getContext(), Ty, true)) {
+    Address Addr(CGF.Builder.CreateLoad(VAListAddr), SlotSize);
+    Addr = CGF.Builder.CreateElementBitCast(Addr, CGF.ConvertTypeForMem(Ty));
+    return Addr;
+  }
+
+  auto TInfo = getContext().getTypeInfoInChars(Ty);
+
+  // Arguments bigger than 2*Xlen bytes are passed indirectly.
+  bool IsIndirect = TInfo.Width > 2 * SlotSize;
+
+  return emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect, TInfo,
+                          SlotSize, /*AllowHigherAlign=*/true);
+}
+
 
 namespace {
 class My66000TargetCodeGenInfo : public TargetCodeGenInfo {

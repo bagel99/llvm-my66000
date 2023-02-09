@@ -88,14 +88,13 @@ MCOperand My66000MCInstLower::LowerOperand(const MachineOperand &MO,
     case MachineOperand::MO_Immediate:
       return MCOperand::createImm(MO.getImm() + offset);
     case MachineOperand::MO_FPImmediate: {
-      // Copied from WebAssemblyMCInstLower:
-      // TODO: MC converts all floating point immediate operands to double.
-      // This is fine for numeric values, but may cause NaNs to change bits.
       const ConstantFP *Imm = MO.getFPImm();
+      const uint64_t BitPattern =
+          Imm->getValueAPF().bitcastToAPInt().getZExtValue();
       if (Imm->getType()->isFloatTy())
-        return MCOperand::createSFPImm(Imm->getValueAPF().convertToFloat());
+        return MCOperand::createSFPImm(static_cast<uint32_t>(BitPattern));
       else if (Imm->getType()->isDoubleTy())
-        return MCOperand::createDFPImm(Imm->getValueAPF().convertToDouble());
+        return MCOperand::createDFPImm(BitPattern);
       else
         llvm_unreachable("unknown floating point immediate type");
       break;

@@ -908,14 +908,18 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
     LLVM_DEBUG(dbgs() << "\tIsVarArg FirstVAReg=" << FirstVAReg << '\n');
     LLVM_DEBUG(dbgs() << "\tFirstVAReg=" << FirstVAReg << '\n');
     LLVM_DEBUG(dbgs() << "\tlengthof(ArgRegs)=" << array_lengthof(ArgRegs) << '\n');
-    if (FirstVAReg < array_lengthof(ArgRegs)) {
-      // Save remaining registers possibly containing varags.
-      int VaSaveSize = (array_lengthof(ArgRegs) - FirstVAReg) * 8;
-      int Offset = -VaSaveSize;
-      // Record the frame index of the first variable argument
-      // which is a value necessary to VASTART.
-      int VaFI = MFI.CreateFixedObject(8, Offset, true);
-      XFI->setVarArgsFrameIndex(VaFI);
+    // Save remaining registers possibly containing varags.
+    int Offset;
+    int VaSaveSize = (array_lengthof(ArgRegs) - FirstVAReg) * 8;
+    if (VaSaveSize == 0)
+      Offset = CCInfo.getNextStackOffset();
+    else
+      Offset = -VaSaveSize;
+    // Record the frame index of the first variable argument
+    // which is a value necessary to VASTART.
+    int VaFI = MFI.CreateFixedObject(8, Offset, true);
+    XFI->setVarArgsFrameIndex(VaFI);
+    if (VaSaveSize > 0) {
       // FIXME - use STM if more than one
       for (unsigned i = FirstVAReg; i < array_lengthof(ArgRegs); i++) {
         // Move argument from phys reg -> virt reg

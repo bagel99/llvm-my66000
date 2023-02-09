@@ -38,18 +38,15 @@ public:
 
   ArrayRef<Builtin::Info> getTargetBuiltins() const override;
 
-  BuiltinVaListKind getBuiltinVaListKind() const override {
-    return TargetInfo::PNaClABIBuiltinVaList;
-  }
-
   const char *getClobbers() const override { return ""; }
 
+  BuiltinVaListKind getBuiltinVaListKind() const override {
+    return TargetInfo::VoidPtrBuiltinVaList;
+  }
   ArrayRef<const char *> getGCCRegNames() const override { return None; }
-
   ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
     return None;
   }
-
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
     return false;
