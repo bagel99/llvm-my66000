@@ -320,6 +320,19 @@ class TRAN<bits<6> func, bits<5> flags, dag outs, dag ins, string asmstr,
   let Inst{5-0}   = func;
 }
 
+class ABS<bits<6> minor, bits<5> func, bits<5> flags, dag outs, dag ins, string asmstr,
+		  list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src1 register
+  let Opcode = 0b001101;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = rs1;
+  let Inst{15-11} = flags;
+  let Inst{10-5}  = minor;
+  let Inst{4-0}   = func;
+}
+
 class VECF<bits<6> major, dag outs, dag ins, string asmstr,
 		  list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {

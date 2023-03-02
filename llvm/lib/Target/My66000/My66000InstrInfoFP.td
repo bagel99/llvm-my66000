@@ -72,9 +72,10 @@ def       : Pat<(fdiv (f64 GRegs:$rs1), (fneg (f64 GRegs:$rs2))),
 def       : Pat<(fdiv (fneg (f64 GRegs:$rs1)), (f64 GRegs:$rs2)),
 		(FDIVnr GRegs:$rs1, GRegs:$rs2)>;
 
-// There must be an integer version to do this, maybe a shift.
-def FABS  : Pat<(fabs (f64 GRegs:$rs1)),
-		(FMAXrn GRegs:$rs1, GRegs:$rs1)>;
+def FABS : ABS<0b000101, 0b00000, 0b00100,
+	(outs GRegs:$rd), (ins GRegs:$rs1),
+	"fabs\t$rd,$rs1",
+	[(set GRegs:$rd, (fabs (f64 GRegs:$rs1)))]>;
 
 multiclass FPUrd<string OpName, bits<6>OpC, bits<5>Flags,
 		   SDPatternOperator OpNode> {
@@ -268,6 +269,22 @@ def CVTds : CVT<0b100000, 0b00000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"cvtds\t$rd,$rs1",
 	[(set (i64 GRegs:$rd), (fp_to_sint (f64 GRegs:$rs1)))]>;
+def CVTdsni : CVT<0b100111, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs1),
+	"cvtdsni\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (ffloor (f64 GRegs:$rs1))))]>;
+def CVTdspi : CVT<0b100110, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs1),
+	"cvtdspi\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (fceil (f64 GRegs:$rs1))))]>;
+def CVTdstz : CVT<0b100101, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs1),
+	"cvtdstz\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (ftrunc (f64 GRegs:$rs1))))]>;
+def CVTdsaz : CVT<0b100100, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs1),
+	"cvtdsaz\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (fround (f64 GRegs:$rs1))))]>;
 
 // Rounds
 multiclass RNDrr<string OpName, bits<5>OpC, bits<5>OpF,
@@ -287,7 +304,15 @@ def RNDNE : RND<0b00000, 0b00000,
 	"rndne\t$rd,$rs1",
 	[]>;
 
-//
+// Patterns for rounding and conversion
+def AssertSext : SDNode<"ISD::AssertSext", SDTUnaryOp>;
+def : Pat<(sint_to_fp (i64 (fp_to_sint (f64 GRegs:$Rn)))),
+	  (RNDTZrr (f64 GRegs:$Rn))>;
+def : Pat<(sint_to_fp (i64 (AssertSext (fp_to_sint (f64 GRegs:$Rn))))),
+	  (RNDTZrr (f64 GRegs:$Rn))>;
+def : Pat<(fpextend (f32 (sint_to_fp GRegs:$Rn))),
+	  (CVTsd GRegs:$Rn)>;
+
 // Transcendentals
 //
 // For some reason some transcendentals are not pre-defined
@@ -408,8 +433,11 @@ def       : Pat<(fdiv (f32 FSRegs:$rs1), (fneg (f32 FSRegs:$rs2))),
 		(FDIVFrn FSRegs:$rs1, FSRegs:$rs2)>;
 def       : Pat<(fdiv (fneg (f32 FSRegs:$rs1)), (f32 FSRegs:$rs2)),
 		(FDIVFnr FSRegs:$rs1, FSRegs:$rs2)>;
-def FABSF : Pat<(fabs (f32 FSRegs:$rs1)),
-		(FMAXFrn FSRegs:$rs1, FSRegs:$rs1)>;
+def FABSF : ABS<0b000101, 0b00001, 0b00100,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1),
+	"fabsf\t$rd,$rs1",
+	[(set FSRegs:$rd, (fabs (f32 FSRegs:$rs1)))]>;
+
 
 multiclass FPUrs<string OpName, bits<6>OpC, bits<5>Flags,
 		   SDPatternOperator OpNode> {
@@ -574,6 +602,22 @@ def CVTfs : CVT<0b101000, 0b00000,
 	(outs GRegs:$rd), (ins FSRegs:$rs1),
 	"cvtfs\t$rd,$rs1",
 	[(set (i64 GRegs:$rd), (fp_to_sint (f32 FSRegs:$rs1)))]>;
+def CVTfsni : CVT<0b101111, 0b00000,
+	(outs GRegs:$rd), (ins FSRegs:$rs1),
+	"cvtfsni\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (ffloor (f32 FSRegs:$rs1))))]>;
+def CVTfspi : CVT<0b101110, 0b00000,
+	(outs GRegs:$rd), (ins FSRegs:$rs1),
+	"cvtfspi\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (fceil (f32 FSRegs:$rs1))))]>;
+def CVTfstz : CVT<0b101101, 0b00000,
+	(outs GRegs:$rd), (ins FSRegs:$rs1),
+	"cvtfstz\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (ftrunc (f32 FSRegs:$rs1))))]>;
+def CVTfsaz : CVT<0b101100, 0b00000,
+	(outs GRegs:$rd), (ins FSRegs:$rs1),
+	"cvtfsaz\t$rd,$rs1",
+	[(set (i64 GRegs:$rd), (fp_to_sint (fround (f32 FSRegs:$rs1))))]>;
 
 // Rounds
 multiclass RNDFSrr<string OpName, bits<5>OpC, bits<5>OpF,

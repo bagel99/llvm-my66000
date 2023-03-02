@@ -215,8 +215,6 @@ def ANDN  : Pat<(and GRegs:$rs1, (not GRegs:$rs2)),
 		(ANDrn GRegs:$rs1, GRegs:$rs2)>;
 def XORN  : Pat<(xor (not GRegs:$rs1), GRegs:$rs2),
 		(XORnr GRegs:$rs1, GRegs:$rs2)>;
-def ABS   : Pat<(abs GRegs:$rs1),
-		(SMAXrn GRegs:$rs1, GRegs:$rs1)>;
 //
 // ALU RW - have 16-bit immediate versions
 //
@@ -444,6 +442,10 @@ def POPZ : R1<0b001001, 0b01000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"pop\t$rd,-$rs1",
 	[(set GRegs:$rd, (ctpop (xor GRegs:$rs1 ,-1)))]>;
+def IABS : ABS<0b000101, 0b00000, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs1),
+	"abs\t$rd,$rs1",
+	[(set GRegs:$rd, (abs GRegs:$rs1))]>;
 
 //
 // Experimental BITR instruction
@@ -762,10 +764,18 @@ def ADDCARRYrr : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
 	"# ADDCARRYrr",
 	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
+def ADDCARRYri : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs, GRegs:$ci),
+	"# ADDCARRYri",
+	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, simm16:$rhs, GRegs:$ci))]>;
 def SUBCARRYrr : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
 	"# SUBCARRYrr",
 	[(set GRegs:$sum, GRegs:$co, (subcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
+def SUBCARRYri : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs, GRegs:$ci),
+	"# ADDCARRYri",
+	[(set GRegs:$sum, GRegs:$co, (subcarry GRegs:$lhs, simm16:$rhs, GRegs:$ci))]>;
 
 def UMULHILOrr : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, GRegs:$rhs),

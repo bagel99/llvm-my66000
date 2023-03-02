@@ -187,7 +187,7 @@ unsigned shf;
       return;
     }
   }
-//dbgs() << "shift none\n";
+LLVM_DEBUG(dbgs() << "shift none\n");
   Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
   Index = Addr;
 }
@@ -197,7 +197,7 @@ bool My66000DAGToDAGISel::SelectADDRrr(SDValue Addr,
 				       SDValue &Shift, SDValue &Offset) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
   if (Addr.getOpcode() == ISD::FrameIndex) {
-//dbgs() << "\tfail 1\n";
+  LLVM_DEBUG(dbgs() << "\tfail 1\n");
     return false;
   }
   if (Addr.getOpcode() == My66000ISD::WRAPPER) {
@@ -205,7 +205,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
     Index = CurDAG->getRegister(My66000::R0, MVT::i64);
     Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
     Offset = Addr.getOperand(0);
-//dbgs() << "\tmatch 1\n";
+    LLVM_DEBUG(dbgs() << "\tmatch 1\n");
     return true;
   }
   if (Addr.getOpcode() == ISD::ADD) {
@@ -213,24 +213,33 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
       Base  = CurDAG->getRegister(My66000::R0, MVT::i64);
       getShift(Addr.getOperand(0), Index, Shift);
       Offset = Addr.getOperand(1).getOperand(0);
-//dbgs() << "\tmatch 2\n";
+      LLVM_DEBUG(dbgs() << "\tmatch 2\n");
       return true;
     } else {	// not TargetGlobalAddress
       if (Addr.getOperand(0).getOpcode() == ISD::ADD) { // add of add
 	Base = Addr.getOperand(0).getOperand(0);
 	getShift(Addr.getOperand(0).getOperand(1), Index, Shift);
-	if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
+	ConstantSDNode *CN;
+	if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
           Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
 					     MVT::i64);
-//dbgs() << "\tmatch 3\n";
+	  LLVM_DEBUG(dbgs() << "\tmatch 3\n");
           return true;
+	} else {
+	  if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(0).getOperand(1))) {
+	    Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
+					       MVT::i64);
+	    Index  = Addr.getOperand(1);
+	    LLVM_DEBUG(dbgs() << "\tmatch 6\n");
+            return true;
+	  }
 	}
       }	else {	// not add of add, just add
 	Base = Addr.getOperand(0);
         if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
 	  // base + displacement
           if (isInt<16>(CN->getSExtValue())) {
-//dbgs() << "\tdefer to ri\n";
+	    LLVM_DEBUG(dbgs() << "\tdefer to ri\n");
 	    return false; // simple base + 16-bit displacement, handle elsewhere
           }
 	  // base + large displacement
@@ -238,18 +247,18 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 	  Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);;
 	  Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
                                              MVT::i64);
-//dbgs() << "\tmatch 4\n";
+	  LLVM_DEBUG(dbgs() << "\tmatch 4\n");
           return true;
         } else { // not a constant node
 	  getShift(Addr.getOperand(1), Index, Shift);
 	  Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
-//dbgs() << "\tmatch 5\n";
+	  LLVM_DEBUG(dbgs() << "\tmatch 5\n");
           return true;
 	}
       }
     }
   }
-//dbgs() << "fail 3\n";
+  LLVM_DEBUG(dbgs() << "fail 3\n");
   return false;
 }
 

@@ -201,6 +201,12 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
       Type = 3;
     }
   }
+  else if (Type == 2) {
+    if (!MapLoopCond(BCnd)) {
+      LLVM_DEBUG(dbgs() << " unsupported condition\n");
+      return false;
+    }
+  }
   LLVM_DEBUG(dbgs() << " will vectorize this block:\n");
   MachineFunction &MF = *TB->getParent();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
@@ -242,10 +248,6 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     break;
   }
   case 2: {
-    if (!MapLoopCond(BCnd)) {
-      LLVM_DEBUG(dbgs() << " unsupported condition\n");
-      return false;
-    }
     if (AMI == nullptr) {	// no increment
       LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
 	      .addImm(BCnd)

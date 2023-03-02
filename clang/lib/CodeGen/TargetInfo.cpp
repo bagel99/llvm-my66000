@@ -11218,6 +11218,9 @@ public:
 } // end anonymous namespace
 
 ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty) const {
+  Ty = useFirstFieldIfTransparentUnion(Ty);
+  if (Ty->isAnyComplexType())
+    return ABIArgInfo::getDirect();
   uint64_t Size = getContext().getTypeSize(Ty);
   if (!isAggregateTypeForABI(Ty)) {
     if (const EnumType *EnumTy = Ty->getAs<EnumType>())

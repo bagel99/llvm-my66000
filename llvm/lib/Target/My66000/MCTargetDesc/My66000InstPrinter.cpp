@@ -357,7 +357,7 @@ void My66000InstPrinter::printFP32Operand(const MCInst *MI, unsigned opNum,
 }
 
 void My66000InstPrinter::printFP64Operand(const MCInst *MI, unsigned opNum,
-					raw_ostream &O) {    double   f;
+					raw_ostream &O) {
   uint64_t i;
   const MCOperand &Op = MI->getOperand(opNum);
   if (Op.isDFPImm()) {

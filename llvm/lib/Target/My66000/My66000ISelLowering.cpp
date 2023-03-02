@@ -293,7 +293,8 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
 //  Tuning knobs
 //===----------------------------------------------------------------------===//
 bool My66000TargetLowering::isIntDivCheap(EVT VT, AttributeList Attr) const {
-  return true;		// let's see what this does
+  bool OptSize = Attr.hasFnAttr(Attribute::MinSize);
+  return OptSize;
 }
 
 bool My66000TargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
@@ -339,6 +340,25 @@ bool My66000TargetLowering::shouldConvertConstantLoadToIntImm(const APInt &Imm,
 }
 
 bool My66000TargetLowering::reduceSelectOfFPConstantLoads(EVT CmpOpVT) const {
+  return false;
+}
+
+bool My66000TargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
+                                               SDValue C) const {
+  // Check integral scalar types.
+  if (!VT.isScalarInteger())
+    return false;
+// FIXME - how can we do the equivalent of below
+//  if (CurDAG->shouldOptForSize())
+//    return false;
+  if (auto *ConstNode = dyn_cast<ConstantSDNode>(C.getNode())) {
+    if (!ConstNode->getAPIntValue().isSignedIntN(64))
+      return false;
+    uint64_t UImm = static_cast<uint64_t>(ConstNode->getSExtValue());
+    if (isPowerOf2_64(UImm + 1) || isPowerOf2_64(UImm - 1) ||
+        isPowerOf2_64(1 - UImm) || isPowerOf2_64(-1 - UImm))
+      return true;
+  }
   return false;
 }
 
@@ -411,16 +431,22 @@ static MYCC::CondCodes ISDCCtoMy66000CC(ISD:: CondCode CC, EVT VT) {
     default: llvm_unreachable("Unknown f32 condition code!");
     // float unordered
     case ISD::SETUEQ: return MYCC::FEQF;
+    case ISD::SETNE:		// is this correct?
     case ISD::SETUNE: return MYCC::FNEF;
     case ISD::SETUGE: return MYCC::FGEF;
+    case ISD::SETLT:
     case ISD::SETULT: return MYCC::FLTF;
     case ISD::SETUGT: return MYCC::FGTF;
+    case ISD::SETLE:
     case ISD::SETULE: return MYCC::FLEF;
     // float ordered
+    case ISD::SETEQ:		// is this correct?
     case ISD::SETOEQ: return MYCC::FEQF;
     case ISD::SETONE: return MYCC::FNEF;
+    case ISD::SETGE:
     case ISD::SETOGE: return MYCC::FGEF;
     case ISD::SETOLT: return MYCC::FLTF;
+    case ISD::SETGT:
     case ISD::SETOGT: return MYCC::FGTF;
     case ISD::SETOLE: return MYCC::FLEF;
     // float check order
@@ -1319,19 +1345,20 @@ static MachineBasicBlock *emitADDCARRY(MachineInstr &MI,
   unsigned Sum = MI.getOperand(0).getReg();
   unsigned CO = MI.getOperand(1).getReg();
   unsigned LHS = MI.getOperand(2).getReg();
-  unsigned RHS = MI.getOperand(3).getReg();
   unsigned CI = MI.getOperand(4).getReg();
   unsigned Reg;
 LLVM_DEBUG(dbgs() << "emitADDCARRY\n" << MI << '\n');
-  if (!adjustFirstCarry(MI, BB, 3, Reg)) {
+  MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
+  unsigned CarryFlag = MRI.use_empty(CO) ? 1: 3;
+  if (!adjustFirstCarry(MI, BB, CarryFlag, Reg)) {
     MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
     unsigned CA = MRI.createVirtualRegister(&My66000::GRegsRegClass);
     BuildMI(*BB, MI, DL, TII.get(My66000::CARRYio), CA)
-	    .addReg(CI).addImm(3);	// InOut
+	    .addReg(CI).addImm(CarryFlag);
   }
   MachineInstr *Add =
     BuildMI(*BB, MI, DL, TII.get(inst), Sum)
-	    .addReg(LHS).addReg(RHS)
+	    .addReg(LHS).add(MI.getOperand(3))
 	    .addReg(CI, RegState::Implicit)
 	    .addReg(CO, RegState::ImplicitDefine);
   Add->tieOperands(4, 3);
@@ -1348,21 +1375,11 @@ static MachineBasicBlock *emitUADDO(MachineInstr &MI,
   unsigned CO = MI.getOperand(1).getReg();
   unsigned LHS = MI.getOperand(2).getReg();
 LLVM_DEBUG(dbgs() << "emitUADD0\n" << MI << '\n');
-
   BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CO)
       .addImm(2);	// Out
-  // FIXME - is there a way of doing this without the if?
-  if (inst == My66000::ADDrr || inst == My66000::ADDrn) {
-    unsigned RHS = MI.getOperand(3).getReg();
-    BuildMI(*BB, MI, DL, TII.get(inst), Sum)
-      .addReg(LHS).addReg(RHS)
+  BuildMI(*BB, MI, DL, TII.get(inst), Sum)
+      .addReg(LHS).add(MI.getOperand(3))
       .addReg(CO, RegState::Implicit);
-  } else {
-    unsigned RHS = MI.getOperand(3).getImm();
-    BuildMI(*BB, MI, DL, TII.get(inst), Sum)
-      .addReg(LHS).addImm(RHS)
-      .addReg(CO, RegState::Implicit);
-  }
   MI.eraseFromParent(); // The pseudo instruction is gone now.
   return BB;
 }
@@ -1383,20 +1400,10 @@ LLVM_DEBUG(dbgs() << "emitUMULHILO\n" << MI << '\n');
   BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CI)
       .addImm(2);	// Out
   MachineInstr *Mul;
-  // FIXME - is there a way of doing this without the if?
-  if (inst == My66000::MULrr) {
-    unsigned RHS = MI.getOperand(3).getReg();
-    Mul = BuildMI(*BB, MI, DL, TII.get(inst), LO)
-	    .addReg(LHS).addReg(RHS)
-	    .addReg(CI, RegState::Implicit)
-	    .addReg(HI, RegState::ImplicitDefine);
-  } else {	// MULri, MULrw
-    unsigned RHS = MI.getOperand(3).getImm();
-    Mul = BuildMI(*BB, MI, DL, TII.get(inst), LO)
-	    .addReg(LHS).addImm(RHS)
-	    .addReg(CI, RegState::Implicit)
-	    .addReg(HI, RegState::ImplicitDefine);
-  }
+  Mul = BuildMI(*BB, MI, DL, TII.get(inst), LO)
+	.addReg(LHS).add(MI.getOperand(3))
+	.addReg(CI, RegState::Implicit)
+	.addReg(HI, RegState::ImplicitDefine);
   Mul->tieOperands(4, 3);
   MI.eraseFromParent(); // The pseudo instruction is gone now.
   return BB;
@@ -1419,40 +1426,8 @@ LLVM_DEBUG(dbgs() << "emitUDIVREM\n" << MI << '\n');
     BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CI)
 	.addImm(2);	// Out
   }
-  switch (inst) {
-    case My66000::UDIVrr:
-    case My66000::SDIVrr:
-    case My66000::SDIVrn:
-    case My66000::SDIVnr:
-    case My66000::SDIVnn: {
-      unsigned LHS = MI.getOperand(2).getReg();
-      unsigned RHS = MI.getOperand(3).getReg();
-      Div =  BuildMI(*BB, MI, DL, TII.get(inst), DIV)
-	    .addReg(LHS).addReg(RHS);
-      break;
-    }
-    case My66000::UDIVwr:
-    case My66000::SDIVwr:
-    case My66000::UDIVdr:
-    case My66000::SDIVdr: {
-      uint64_t LHS = MI.getOperand(2).getImm();
-      unsigned RHS = MI.getOperand(3).getReg();
-      Div =  BuildMI(*BB, MI, DL, TII.get(inst), DIV)
-	    .addImm(LHS).addReg(RHS);
-      break;
-    }
-    case My66000::UDIVri:
-    case My66000::UDIVrw:
-    case My66000::SDIVrx:
-    case My66000::UDIVrd:
-    case My66000::SDIVrd: {
-      unsigned LHS = MI.getOperand(2).getReg();
-      uint64_t RHS = MI.getOperand(3).getImm();
-      Div =  BuildMI(*BB, MI, DL, TII.get(inst), DIV)
-	    .addReg(LHS).addImm(RHS);
-      break;
-    }
-  }
+  Div = BuildMI(*BB, MI, DL, TII.get(inst), DIV)
+	.add(MI.getOperand(2)).add(MI.getOperand(3));
   if (!REMunused) {	// deal with the CARRY instruction
     Div->addOperand(MachineOperand::CreateReg(CI, false, true));
     Div->addOperand(MachineOperand::CreateReg(REM, true, true));
@@ -1519,6 +1494,8 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   case My66000::USUBOri:	return emitUADDO(MI, BB, My66000::ADDri);
   case My66000::ADDCARRYrr:	return emitADDCARRY(MI, BB, My66000::ADDrr);
   case My66000::SUBCARRYrr:	return emitADDCARRY(MI, BB, My66000::ADDrn);
+  case My66000::ADDCARRYri:	return emitADDCARRY(MI, BB, My66000::ADDri);
+  case My66000::SUBCARRYri:	return emitADDCARRY(MI, BB, My66000::ADDri);
   case My66000::UMULHILOrr:	return emitUMULHILO(MI, BB, My66000::MULrr);
   case My66000::UMULHILOri:	return emitUMULHILO(MI, BB, My66000::MULri);
   case My66000::UMULHILOrw:	return emitUMULHILO(MI, BB, My66000::MULrw);

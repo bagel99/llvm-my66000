@@ -152,6 +152,8 @@ class My66000TargetLowering : public TargetLowering {
   bool shouldConvertConstantLoadToIntImm(const APInt &Imm,Type *Ty)
 					    const override;
   bool reduceSelectOfFPConstantLoads(EVT CmpOpVT) const override;
+  bool decomposeMulByConstant(LLVMContext &Context, EVT VT,
+					    SDValue C) const override;
 
 };
 
