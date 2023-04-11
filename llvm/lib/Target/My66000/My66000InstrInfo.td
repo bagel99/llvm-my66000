@@ -125,8 +125,16 @@ def myWRAPPER:	    SDNode<"My66000ISD::WRAPPER",
 			[]>;
 def myMEMCPY:	    SDNode<"My66000ISD::MEMCPY",
 			SDTypeProfile<0, 3,
-			  [SDTCisVT<0, i64>,SDTCisVT<1, i64>,SDTCisVT<2, i64>]>,
+			  [SDTCisPtrTy<0>,
+			   SDTCisVT<1, i64>,
+			   SDTCisVT<2, i64>]>,
 			[SDNPHasChain, SDNPMayStore, SDNPMayLoad]>;
+def myMEMSET:	    SDNode<"My66000ISD::MEMSET",
+			SDTypeProfile<0, 3,
+			  [SDTCisPtrTy<0>,
+			   SDTCisVT<1, i64>,
+			   SDTCisVT<2, i64>]>,
+			[SDNPHasChain, SDNPMayStore]>;
 
 //
 // ALU RI
@@ -564,29 +572,6 @@ let mayStore = 1 in {
   defm STB : Store<"stb", 0b101000, 0b001000, i64, truncstorei8>;
 }
 
-def LDM : LDST_BD<0b010011,
-	(outs), (ins GRegs:$rd, GRegs:$rs, MEMrr:$addr),
-	"ldm\t$rd,$rs,[$addr]",
-	[]>;
-def STM : LDST_BD<0b010100,
-	(outs), (ins GRegs:$rd, GRegs:$rs, MEMrr:$addr),
-	"stm\t$rd,$rs,[$addr]",
-	[]>;
-
-// ENTER/EXIT
-let mayStore = 1 in {
-def ENTER : ALU_RI<0b101100,
-	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$f, i16imm:$imm),
-	"enter\t$rd,$rb,$f,$imm",
-	[]>;
-}
-let mayLoad = 1 in {
-def EXIT : ALU_RI<0b101100,
-	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$f, i16imm:$imm),
-	"exit\t$rd,$rb,$f,$imm",
-	[]>;
-}
-
 // Because ADDRrr rejects anything ADDRri can handle, we need a pattern for both.
 multiclass StImm<string OpName, bits<6>Op, SDPatternOperator OpNode> {
   def ii : LDST_RX<Op, 0b00000,
@@ -603,6 +588,39 @@ let mayStore = 1 in {
   defm STW : StImm<"stw", 0b011010, truncstorei32>;
   defm STH : StImm<"sth", 0b011001, truncstorei16>;
   defm STB : StImm<"stb", 0b011011, truncstorei8>;
+}
+
+def LDM : LDST_BD<0b010011,
+	(outs), (ins GRegs:$rd, GRegs:$rs, MEMrr:$addr),
+	"ldm\t$rd,$rs,[$addr]",
+	[]>;
+def STM : LDST_BD<0b010100,
+	(outs), (ins GRegs:$rd, GRegs:$rs, MEMrr:$addr),
+	"stm\t$rd,$rs,[$addr]",
+	[]>;
+
+// Memory to memory copy, memory set
+def MEMCPY : ALU_RRM<0b101, 0b000,
+	(outs), (ins GRegs:$dst, GRegs:$src, GRegs:$len),
+	"mm\t$len,$src,$dst",
+	[(myMEMCPY GRegs:$dst, GRegs:$src, GRegs:$len)]>;
+def MEMSET: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, GRegs:$src, GRegs:$len),
+	"ms\t$len,$src,$dst",
+	[(myMEMSET GRegs:$dst, GRegs:$src, GRegs:$len)]>;
+
+// ENTER/EXIT
+let mayStore = 1 in {
+def ENTER : ALU_RI<0b101100,
+	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$f, i16imm:$imm),
+	"enter\t$rd,$rb,$f,$imm",
+	[]>;
+}
+let mayLoad = 1 in {
+def EXIT : ALU_RI<0b101100,
+	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$f, i16imm:$imm),
+	"exit\t$rd,$rb,$f,$imm",
+	[]>;
 }
 
 //
@@ -898,12 +916,6 @@ def ROTRri : Pseudo<
 	"# ROTRri",
 	[(set GRegs:$dst, (rotr GRegs:$lhs, simm16:$rhs))]>;
 }
-
-// Memory to memory copy
-def MEMCPY : ALU_RRM<0b101, 0b000,
-	(outs), (ins GRegs:$dst, GRegs:$src, GRegs:$len),
-	"mm\t$len,$src,$dst",
-	[(myMEMCPY GRegs:$dst, GRegs:$src, GRegs:$len)]>;
 
 //
 // Predication Instructions, never selected

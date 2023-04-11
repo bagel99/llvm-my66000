@@ -48,6 +48,7 @@ enum NodeType : unsigned {
   JT16,		// Jump through table, 16 bit
   JT32,		// Jump through table, 32 bit
   MEMCPY,	// Memory copy
+  MEMSET,	// Memory set
   WRAPPER,	// prefix for global address
   SHRUNK,	// wrapper for F64 constants shrunk to F32
   F64I5,	// wrapper for F64 constants that fit in I5
@@ -122,6 +123,8 @@ class My66000TargetLowering : public TargetLowering {
   SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSIGN_EXTEND_INREG(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerConstantFP(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;

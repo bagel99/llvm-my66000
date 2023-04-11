@@ -69,6 +69,7 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::JT16: return "My66000ISD::JT16";
   case My66000ISD::JT32: return "My66000ISD::JT32";
   case My66000ISD::MEMCPY: return "My66000ISD::MEMCPY";
+  case My66000ISD::MEMSET: return "My66000ISD: MEMSET";
   case My66000ISD::WRAPPER: return "My66000ISD::WRAPPER";
   case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
   case My66000ISD::F64I5: return "My66000ISD::F64I5";
@@ -285,8 +286,8 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   MaxStoresPerMemcpyOptSize = 1;
   MaxStoresPerMemmove = 1;
   MaxStoresPerMemmoveOptSize = 1;
-//  MaxStoresPerMemset = 1;
-//  MaxStoresPerMemsetOptSize = 1;
+  MaxStoresPerMemset = 1;
+  MaxStoresPerMemsetOptSize = 1;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1232,6 +1233,58 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerVASTART\n");
                       MachinePointerInfo(SV));
 }
 
+SDValue My66000TargetLowering::lowerFRAMEADDR(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  const My66000RegisterInfo &RI = *Subtarget.getRegisterInfo();
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  MFI.setFrameAddressIsTaken(true);
+  Register FrameReg = RI.getFrameRegister(MF);
+  int XLenInBytes = 8;
+
+  EVT VT = Op.getValueType();
+  SDLoc DL(Op);
+  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameReg, VT);
+  unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  while (Depth--) {
+    int Offset = -(XLenInBytes * 2);
+    SDValue Ptr = DAG.getNode(ISD::ADD, DL, VT, FrameAddr,
+                              DAG.getIntPtrConstant(Offset, DL));
+    FrameAddr =
+        DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr, MachinePointerInfo());
+  }
+  return FrameAddr;
+}
+
+SDValue My66000TargetLowering::lowerRETURNADDR(SDValue Op,
+                                             SelectionDAG &DAG) const {
+  const My66000RegisterInfo &RI = *Subtarget.getRegisterInfo();
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  MFI.setReturnAddressIsTaken(true);
+  int XLenInBytes = 8;
+
+  if (verifyReturnAddressArgumentIsConstant(Op, DAG))
+    return SDValue();
+
+  EVT VT = Op.getValueType();
+  SDLoc DL(Op);
+  unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  if (Depth) {
+    int Off = -XLenInBytes;
+    SDValue FrameAddr = lowerFRAMEADDR(Op, DAG);
+    SDValue Offset = DAG.getConstant(Off, DL, VT);
+    return DAG.getLoad(VT, DL, DAG.getEntryNode(),
+                       DAG.getNode(ISD::ADD, DL, VT, FrameAddr, Offset),
+                       MachinePointerInfo());
+  }
+
+  // Return the value of the return address register, marking it an implicit
+  // live-in.
+  Register Reg = MF.addLiveIn(RI.getRARegister(), getRegClassFor(MVT::i64));
+  return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::i64);
+}
+
 /*
  * Convert all 64-bit floating point constants that have a 32-bit
  * exact representation to 32-bit constant extended.  We will have patterns to
@@ -1286,7 +1339,8 @@ LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
 }
 
 SDValue My66000TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation\n");
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation: ");
+LLVM_DEBUG(Op.dump());
   switch (Op.getOpcode()) {
   case ISD::BR_CC:			return LowerBR_CC(Op, DAG);
   case ISD::SELECT_CC:			return LowerSELECT_CC(Op, DAG);
@@ -1296,6 +1350,8 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation\n");
   case ISD::BlockAddress:		return LowerBlockAddress(Op, DAG);
   case ISD::BR_JT:			return LowerBR_JT(Op, DAG);
   case ISD::VASTART:			return LowerVASTART(Op, DAG);
+  case ISD::FRAMEADDR:			return lowerFRAMEADDR(Op, DAG);
+  case ISD::RETURNADDR:			return lowerRETURNADDR(Op, DAG);
   case ISD::ConstantFP:			return LowerConstantFP(Op, DAG);
   default:
     llvm_unreachable("unimplemented operand");

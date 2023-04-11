@@ -92,9 +92,16 @@ multiclass FPUrd<string OpName, bits<6>OpC, bits<5>Flags,
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (f64 GRegs:$rs1), (myF64I5 (simm5:$imm))))]>;
 }
+// FIXME - The flags field in the follow are wrong
 defm FADD :  FPUrd<"fadd",  0b110001, 0b10001, fadd>;
 defm FMUL :  FPUrd<"fmul",  0b110010, 0b10001, fmul>;
 defm FDIV :  FPUrd<"fdiv",  0b110011, 0b10001, fdiv>;
+defm FMAXN:  FPUrd<"fmax",  0b110110, 0b10001, fmaxnum>;
+defm FMINN:  FPUrd<"fmin",  0b110111, 0b10001, fminnum>;
+defm FMAX :  FPUrd<"fmax",  0b110110, 0b10001, fmaximum>;
+defm FMIN :  FPUrd<"fmin",  0b110111, 0b10001, fminimum>;
+defm CSGN :  FPUrd<"csgn",  0b111001, 0b10001, fcopysign>;
+defm FPOW :  FPUrd<"fpow",  0b111101, 0b10001, fpow>;
 
 let isCompare = 1 in {
 def FCMPrd : ALU_RD<0b110100, 0b10001,
@@ -450,9 +457,16 @@ multiclass FPUrs<string OpName, bits<6>OpC, bits<5>Flags,
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), (myF32I5 (simm5:$imm))))]>;
 }
+// FIXME - The flags field in the follow are wrong
 defm FADDF : FPUrs<"faddf", 0b110001, 0b10010, fadd>;
 defm FMULF : FPUrs<"fmulf", 0b110010, 0b10010, fmul>;
 defm FDIVF : FPUrs<"fdivf", 0b110011, 0b10010, fdiv>;
+defm FMAXNF: FPUrs<"fmaxf", 0b110110, 0b00010, fmaxnum>;
+defm FMINNF: FPUrs<"fminf", 0b110111, 0b00010, fminnum>;
+defm FMAXF : FPUrs<"fmaxf", 0b110110, 0b00010, fmaximum>;
+defm FMINF : FPUrs<"fminf", 0b110111, 0b00010, fminimum>;
+defm CSGNF : FPUrs<"csgnf", 0b111001, 0b00010, fcopysign>;
+defm FPOWF : FPUrs<"fpowf", 0b111101, 0b00010, fpow>;
 
 let isCompare = 1 in {
 def FCMPFrs : ALU_RD<0b110100, 0b10001,

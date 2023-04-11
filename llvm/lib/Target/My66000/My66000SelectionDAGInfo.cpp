@@ -34,3 +34,14 @@ LLVM_DEBUG(dbgs() << "EmitTargetCodeForMemmove\n");
   Dst = DAG.getNode(My66000ISD::MEMCPY, dl, MVT::Other, Chain, Dst, Src, Size);
   return Dst;
 }
+
+SDValue My66000SelectionDAGInfo::EmitTargetCodeForMemset(
+    SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
+    SDValue Size, Align Alignment, bool isVolatile,
+    MachinePointerInfo DstPtrInfo) const {
+LLVM_DEBUG(dbgs() << "EmitTargetCodeForMemset\n");
+  // Ignore Align
+  Dst = DAG.getNode(My66000ISD::MEMSET, dl, MVT::Other, Chain, Dst,
+		    DAG.getAnyExtOrTrunc(Src, dl, MVT::i64), Size);
+  return Dst;
+}
