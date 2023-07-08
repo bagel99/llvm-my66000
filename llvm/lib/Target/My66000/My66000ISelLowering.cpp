@@ -294,8 +294,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
 //  Tuning knobs
 //===----------------------------------------------------------------------===//
 bool My66000TargetLowering::isIntDivCheap(EVT VT, AttributeList Attr) const {
-  bool OptSize = Attr.hasFnAttr(Attribute::MinSize);
-  return OptSize;
+  return true;
 }
 
 bool My66000TargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
@@ -491,10 +490,14 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSETCC\n");
 		Shf, DAG.getConstant(1, dl, MVT::i64));
       }
     }
-    if ((CC == ISD::SETLT) && isOneConstant(RHS)) {
+    if (CC == ISD::SETLT && isOneConstant(RHS)) {
 LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
 	RHS = DAG.getConstant(0, dl, MVT::i64);
 	CC = ISD::SETLE;
+    } else if (CC == ISD::SETGT && isAllOnesConstant(RHS)) {
+LLVM_DEBUG(dbgs() << "Convert GT -1 into GE 0\n");
+	RHS = DAG.getConstant(0, dl, MVT::i64);
+	CC = ISD::SETGE;
     }
   } else {
     inst = My66000ISD::FCMP;
@@ -529,6 +532,23 @@ LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
     }
   } else {
     inst = My66000ISD::FCMP;
+  }
+  /* If items selected are constants that differ by 1 */
+  if (CC == ISD::SETLT && isNullConstant(RHS) &&
+      isa<ConstantSDNode>(TVal) && isa<ConstantSDNode>(FVal)) {
+    const APInt &TrueVal = cast<ConstantSDNode>(TVal)->getAPIntValue();
+    const APInt &FalseVal = cast<ConstantSDNode>(FVal)->getAPIntValue();
+    if (TrueVal - 1 == FalseVal) {
+	SDValue Sra = DAG.getNode(ISD::SRL, dl, MVT::i64, LHS,
+			    DAG.getConstant(63, dl, MVT::i64));
+        return DAG.getNode(ISD::ADD, dl, MVT::i64, Sra, FVal);
+    }
+    if (TrueVal + 1 == FalseVal) {
+	SDValue Sra = DAG.getNode(ISD::SRA, dl, MVT::i64, LHS,
+			    DAG.getConstant(63, dl, MVT::i64));
+        return DAG.getNode(ISD::ADD, dl, MVT::i64, Sra, FVal);
+    }
+
   }
   MYCB::CondBits CB = ISDCCtoMy66000CB(CC);
   SDValue Cmp = DAG.getNode(inst, dl, MVT::i64, LHS, RHS);

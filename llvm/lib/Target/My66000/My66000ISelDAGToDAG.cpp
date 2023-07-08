@@ -55,7 +55,7 @@ public:
 		    SDValue &Shift, SDValue &Offset);
 
 private:
-  void getShift(SDValue Addr, SDValue &Index, SDValue &Shift);
+  bool getShift(SDValue Addr, SDValue &Index, SDValue &Shift);
   bool tryExtract(SDNode *N, bool isSigned);
   bool tryInsert(SDNode *N, EVT VT);
   bool tryRotate(SDNode *N, SDNode *NOR);
@@ -125,6 +125,18 @@ static bool isOpcWithIntImmediate(const SDNode *N, unsigned Opc, uint64_t &Imm) 
          && isIntImmediate(N->getOperand(1).getNode(), Imm);
 }
 
+// isExtractBit - This tests if the node is an EXT of a single bit
+// and returns the bit number.
+static bool isExtractBit(const SDNode *N, uint64_t &Bit) {
+  uint64_t Width;
+  if (N->getOpcode() == My66000ISD::EXT &&
+      isIntImmediate(N->getOperand(1).getNode(), Width)) {
+    if (Width == 1 && isIntImmediate(N->getOperand(2).getNode(), Bit))
+      return true;
+  }
+  return false;
+}
+
 bool My66000DAGToDAGISel::SelectADDRri(SDValue Addr,
 				       SDValue &Base, SDValue &Offset) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRri\n");
@@ -168,7 +180,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRri\n");
 /* Get shift amount, return false if not shift.
  * If shift amount > 3 then keep shift node.
  */
-void My66000DAGToDAGISel::getShift(SDValue Addr, SDValue &Index, SDValue &Shift) {
+bool My66000DAGToDAGISel::getShift(SDValue Addr, SDValue &Index, SDValue &Shift) {
 unsigned shf;
 
  if (Addr.getOpcode() == ISD::SHL) {
@@ -178,18 +190,13 @@ unsigned shf;
       if (shf <= 3) {
 	Shift = CurDAG->getTargetConstant(shf, SDLoc(Addr), MVT::i64);
 	Index = Addr.getOperand(0);
-//dbgs() << "shift <= 3\n";
-      } else {	// keep shift node
-	Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
-	Index = Addr;
-//dbgs() << "shift > 3\n";
+	return true;
       }
-      return;
+//dbgs() << "shift > 3\n";
     }
   }
-LLVM_DEBUG(dbgs() << "shift none\n");
-  Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
-  Index = Addr;
+LLVM_DEBUG(dbgs() << "no valid shift\n");
+  return false;
 }
 
 bool My66000DAGToDAGISel::SelectADDRrr(SDValue Addr,
@@ -211,14 +218,26 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
   if (Addr.getOpcode() == ISD::ADD) {
     if (Addr.getOperand(1).getOpcode() == My66000ISD::WRAPPER) {
       Base  = CurDAG->getRegister(My66000::R0, MVT::i64);
-      getShift(Addr.getOperand(0), Index, Shift);
+      if (!getShift(Addr.getOperand(0), Index, Shift)) {
+	Index = Addr.getOperand(0);
+	Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
+      }
       Offset = Addr.getOperand(1).getOperand(0);
       LLVM_DEBUG(dbgs() << "\tmatch 2\n");
       return true;
     } else {	// not TargetGlobalAddress
       if (Addr.getOperand(0).getOpcode() == ISD::ADD) { // add of add
-	Base = Addr.getOperand(0).getOperand(0);
-	getShift(Addr.getOperand(0).getOperand(1), Index, Shift);
+	SDValue LHS = Addr.getOperand(0).getOperand(0);
+	SDValue RHS = Addr.getOperand(0).getOperand(1);
+	if (getShift(RHS, Index, Shift)) {		// RHS is valid shift
+	  Base = LHS;
+	} else if (getShift(LHS, Index, Shift)) {	// LHS is valid shift
+	  Base = RHS;
+	} else {					// no valid shift
+	  Base = LHS;
+	  Index = RHS;
+	  Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
+	}
 	ConstantSDNode *CN;
 	if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
           Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
@@ -226,6 +245,15 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 	  LLVM_DEBUG(dbgs() << "\tmatch 3\n");
           return true;
 	} else {
+	  if (getShift(Addr.getOperand(1), Index, Shift)) {
+	    Base = Addr.getOperand(0).getOperand(0);
+	    if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(0).getOperand(1))) {
+	      Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
+					     MVT::i64);
+	      LLVM_DEBUG(dbgs() << "\tmatch 7\n");
+	      return true;
+	    }
+	  }
 	  if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(0).getOperand(1))) {
 	    Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
 					       MVT::i64);
@@ -250,7 +278,10 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 	  LLVM_DEBUG(dbgs() << "\tmatch 4\n");
           return true;
         } else { // not a constant node
-	  getShift(Addr.getOperand(1), Index, Shift);
+	  if (!getShift(Addr.getOperand(1), Index, Shift)) {
+	    Index = Addr.getOperand(1);
+	    Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
+	  }
 	  Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
 	  LLVM_DEBUG(dbgs() << "\tmatch 5\n");
           return true;
@@ -305,7 +336,46 @@ LLVM_DEBUG(dbgs() << "Not a rotate?\n");
 // Try to match (OR SHL, SHR)
 bool My66000DAGToDAGISel::tryOR(SDNode *N) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
-  return tryRotate(N, N);
+  if (tryRotate(N, N))
+    return true;
+  // See if OR is trying to combine two compares that are candidates
+  // for CIN, FIN, ...
+  SDNode *L = N->getOperand(0).getNode();
+  SDNode *R = N->getOperand(1).getNode();
+  uint64_t BitL, BitR, CmpI;
+  if (isExtractBit(L, BitL) && isExtractBit(R, BitR)) {
+    SDNode *LL = L->getOperand(0).getNode();
+    SDNode *RL = R->getOperand(0).getNode();
+    if (LL->getOpcode() == My66000ISD::CMP &&
+        RL->getOpcode() == My66000ISD::CMP &&
+	isIntImmediate(LL->getOperand(1).getNode(), CmpI) &&
+	CmpI == 0) {
+      uint64_t Bit;
+      // FIXME - check RHS CMP arms reversed?
+      if (LL->getOperand(0) == RL->getOperand(0)) {
+        LLVM_DEBUG(dbgs() << "OR(EXT(CMP(a,0),1,i),EXT(CMP(a,b),1,j): " <<
+			     BitL << ", " << BitR << '\n');
+        if (BitL == 2 && BitR == 5)
+	  Bit = MYCB::FIN;
+        else if (BitL == 2 && BitR == 4)
+	  Bit = MYCB::RIN;
+        else if (BitL == 3 && BitR == 5)
+	  Bit = MYCB::SIN;
+        else if (BitL == 3 && BitR == 4)
+	  Bit = MYCB::CIN;
+        else
+	  return false;
+        SDLoc dl(N);
+        SDValue Ops[] = { R->getOperand(0),	// CMP
+			  CurDAG->getTargetConstant(1, dl, MVT::i64),
+			  CurDAG->getTargetConstant(Bit, dl, MVT::i64) };
+        SDNode *SRL = CurDAG->getMachineNode(My66000::SRLri, dl, MVT::i64, Ops);
+        ReplaceNode(N, SRL);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Try to match (AND (OR ...) mask)
