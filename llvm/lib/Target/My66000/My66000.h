@@ -45,27 +45,28 @@ namespace llvm {
   // Condition Codes used with BRcond
   namespace MYCC {
     enum CondCodes {
-	NM=0,   NN,  EQ0, NE0, GE0, GT0, LE0, LT0,	// integer
-	FOR=8,  FUN, FEQ, FNE, FGE, FLT, FGT, FLE,	// float double
-	FORF=16,FUNF,FEQF,FNEF,FGEF,FLTF,FGTF,FLEF,	// float single
-	IN=24, EXIT, RFE=30, AL=31
+	EQ0=0, NE0, GE0, LT0, GT0, LE0,			// integer
+	A=6, N,						// always, never
+	DEQ=8, DNE, DGE, DLT, DGT, DLE, DOR, DUN,	// float double
+	FEQ=16,FNE, FGE, FLT, FGT, FLE, FOR, FUN,	// float single
+	IN=24,
+	SVR=29, SVC, RET
     };
   }
-  // Condition Bits resulting from CMP
+  // Condition Bits resulting from CMP and FCMP
   // There are some duplicate values between integer and float
   namespace MYCB {
     enum CondBits {
-	NE=0, EQ,
-	GT=2, GE, LT, LE,	// signed
-	OR=6, UN,		// float ordered, unordered
-	HI=10, HS, LO, LS,	// unsigned
-	NNE=8, NEQ,		// float
-	NGE=10, NGT, NLT, NLE,	// float
-	SIN=16, FIN, CIN, RIN,	// range
-	NM=34, N, Z, P, SM, UM,	// integer number line
-//	SNAN=32, QNAN,
-	FPI=34, FPN, FPD, FPZ,	// float
-	FNZ=38, FND, FNN, FNI	// float
+	EQ=0, NEQ, NE, NNE,
+	GE=4, NGE, LT, NLT,	// signed, float
+	GT=8, NGT, LE, NLE,	// signed, float
+	HS=12, LO, HI, LS,	// unsigned, float abs
+	OR=16, NOR, TO, NTO,	// float ordered
+	SIN=24, FIN, CIN, RIN,	// range
+	SNaN=32, QNaN,		// float
+	MINF=34, MNOR,		// float
+	MDE=36, MZE, PZE, PDE,	// float
+	PNOR=40, NINF		// float
     };
   }
 

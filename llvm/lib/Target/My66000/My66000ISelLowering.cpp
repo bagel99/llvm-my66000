@@ -393,7 +393,7 @@ static MYCB::CondBits ISDCCtoMy66000CB(ISD:: CondCode CC) {
   case ISD::SETOGE: return MYCB::NLT;
   // float check order
   case ISD::SETO:   return MYCB::OR;
-  case ISD::SETUO:  return MYCB::UN;
+  case ISD::SETUO:  return MYCB::NOR;
   }
 }
 
@@ -402,6 +402,33 @@ static MYCC::CondCodes ISDCCtoMy66000CC(ISD:: CondCode CC, EVT VT) {
   if (VT == MVT::f64) {
     switch (CC) {
     default: llvm_unreachable("Unknown f64 condition code!");
+    // float unordered
+    case ISD::SETUEQ: return MYCC::DEQ;
+    case ISD::SETNE:		// is this correct?
+    case ISD::SETUNE: return MYCC::DNE;
+    case ISD::SETUGE: return MYCC::DGE;
+    case ISD::SETLT:
+    case ISD::SETULT: return MYCC::DLT;
+    case ISD::SETUGT: return MYCC::DGT;
+    case ISD::SETLE:
+    case ISD::SETULE: return MYCC::DLE;
+    // float ordered
+    case ISD::SETEQ:		// is this correct?
+    case ISD::SETOEQ: return MYCC::DEQ;
+    case ISD::SETONE: return MYCC::DNE;
+    case ISD::SETGE:
+    case ISD::SETOGE: return MYCC::DGE;
+    case ISD::SETOLT: return MYCC::DLT;
+    case ISD::SETGT:
+    case ISD::SETOGT: return MYCC::DGT;
+    case ISD::SETOLE: return MYCC::DLE;
+    // float check order
+    case ISD::SETO:   return MYCC::DOR;
+    case ISD::SETUO:  return MYCC::DUN;
+    }
+  } else if (VT == MVT::f32) {
+    switch (CC) {
+    default: llvm_unreachable("Unknown f32 condition code!");
     // float unordered
     case ISD::SETUEQ: return MYCC::FEQ;
     case ISD::SETNE:		// is this correct?
@@ -425,33 +452,6 @@ static MYCC::CondCodes ISDCCtoMy66000CC(ISD:: CondCode CC, EVT VT) {
     // float check order
     case ISD::SETO:   return MYCC::FOR;
     case ISD::SETUO:  return MYCC::FUN;
-    }
-  } else if (VT == MVT::f32) {
-    switch (CC) {
-    default: llvm_unreachable("Unknown f32 condition code!");
-    // float unordered
-    case ISD::SETUEQ: return MYCC::FEQF;
-    case ISD::SETNE:		// is this correct?
-    case ISD::SETUNE: return MYCC::FNEF;
-    case ISD::SETUGE: return MYCC::FGEF;
-    case ISD::SETLT:
-    case ISD::SETULT: return MYCC::FLTF;
-    case ISD::SETUGT: return MYCC::FGTF;
-    case ISD::SETLE:
-    case ISD::SETULE: return MYCC::FLEF;
-    // float ordered
-    case ISD::SETEQ:		// is this correct?
-    case ISD::SETOEQ: return MYCC::FEQF;
-    case ISD::SETONE: return MYCC::FNEF;
-    case ISD::SETGE:
-    case ISD::SETOGE: return MYCC::FGEF;
-    case ISD::SETOLT: return MYCC::FLTF;
-    case ISD::SETGT:
-    case ISD::SETOGT: return MYCC::FGTF;
-    case ISD::SETOLE: return MYCC::FLEF;
-    // float check order
-    case ISD::SETO:   return MYCC::FORF;
-    case ISD::SETUO:  return MYCC::FUNF;
     }
   } else {	// assume integer
     switch (CC) {

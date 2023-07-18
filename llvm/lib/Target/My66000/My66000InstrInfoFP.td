@@ -278,37 +278,40 @@ def CVTds : CVT<0b100000, 0b00000,
 	[(set (i64 GRegs:$rd), (fp_to_sint (f64 GRegs:$rs1)))]>;
 def CVTdsni : CVT<0b100111, 0b00000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtdsni\t$rd,$rs1",
+	"cvtds\t$rd,$rs1,#7",
 	[(set (i64 GRegs:$rd), (fp_to_sint (ffloor (f64 GRegs:$rs1))))]>;
 def CVTdspi : CVT<0b100110, 0b00000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtdspi\t$rd,$rs1",
+	"cvtds\t$rd,$rs1,#6",
 	[(set (i64 GRegs:$rd), (fp_to_sint (fceil (f64 GRegs:$rs1))))]>;
 def CVTdstz : CVT<0b100101, 0b00000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtdstz\t$rd,$rs1",
+	"cvtds\t$rd,$rs1,#5",
 	[(set (i64 GRegs:$rd), (fp_to_sint (ftrunc (f64 GRegs:$rs1))))]>;
 def CVTdsaz : CVT<0b100100, 0b00000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtdsaz\t$rd,$rs1",
+	"cvtds\t$rd,$rs1,#4",
 	[(set (i64 GRegs:$rd), (fp_to_sint (fround (f64 GRegs:$rs1))))]>;
+def CVTdsrm : CVT<0b100100, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs1),
+	"cvtds\t$rd,$rs1,#2",
+	[(set (i64 GRegs:$rd), (fp_to_sint (fnearbyint (f64 GRegs:$rs1))))]>;
 
 // Rounds
-multiclass RNDrr<string OpName, bits<5>OpC, bits<5>OpF,
-	    SDPatternOperator OpNode> {
-    def rr : RND<OpC, OpF,
+multiclass RNDrr<string mode, SDPatternOperator OpNode> {
+    def rr : RND<0b10010, 0b00000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	!strconcat(OpName, "\t$rd,$rs1"),
+	!strconcat("rnd\t$rd,$rs1,#", mode),
 	[(set (f64 GRegs:$rd), (OpNode (f64 GRegs:$rs1)))]>;
 }
-defm RNDRM : RNDrr<"rndrm", 0b00001, 0b00000, fnearbyint>;
-defm RNDAZ : RNDrr<"rndaz", 0b00100, 0b00000, fround>;
-defm RNDTZ : RNDrr<"rndtz", 0b00101, 0b00000, ftrunc>;
-defm RNDPI : RNDrr<"rndpi", 0b00110, 0b00000, fceil>;
-defm RNDNI : RNDrr<"rndni", 0b00111, 0b00000, ffloor>;
-def RNDNE : RND<0b00000, 0b00000,
+defm RNDRM : RNDrr<"2", fnearbyint>;
+defm RNDAZ : RNDrr<"4", fround>;
+defm RNDTZ : RNDrr<"5", ftrunc>;
+defm RNDPI : RNDrr<"6", fceil>;
+defm RNDNI : RNDrr<"7", ffloor>;
+def  RNDNE : RND<0b10010, 0b00000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"rndne\t$rd,$rs1",
+	"rnd\t$rd,$rs1,#0",
 	[]>;
 
 // Patterns for rounding and conversion
@@ -618,37 +621,40 @@ def CVTfs : CVT<0b101000, 0b00000,
 	[(set (i64 GRegs:$rd), (fp_to_sint (f32 FSRegs:$rs1)))]>;
 def CVTfsni : CVT<0b101111, 0b00000,
 	(outs GRegs:$rd), (ins FSRegs:$rs1),
-	"cvtfsni\t$rd,$rs1",
+	"cvtfs\t$rd,$rs1,#7",
 	[(set (i64 GRegs:$rd), (fp_to_sint (ffloor (f32 FSRegs:$rs1))))]>;
 def CVTfspi : CVT<0b101110, 0b00000,
 	(outs GRegs:$rd), (ins FSRegs:$rs1),
-	"cvtfspi\t$rd,$rs1",
+	"cvtfs\t$rd,$rs1,#6",
 	[(set (i64 GRegs:$rd), (fp_to_sint (fceil (f32 FSRegs:$rs1))))]>;
 def CVTfstz : CVT<0b101101, 0b00000,
 	(outs GRegs:$rd), (ins FSRegs:$rs1),
-	"cvtfstz\t$rd,$rs1",
+	"cvtfs\t$rd,$rs1,#5",
 	[(set (i64 GRegs:$rd), (fp_to_sint (ftrunc (f32 FSRegs:$rs1))))]>;
 def CVTfsaz : CVT<0b101100, 0b00000,
 	(outs GRegs:$rd), (ins FSRegs:$rs1),
-	"cvtfsaz\t$rd,$rs1",
+	"cvtfs\t$rd,$rs1,#4",
 	[(set (i64 GRegs:$rd), (fp_to_sint (fround (f32 FSRegs:$rs1))))]>;
+def CVTfsrm : CVT<0b101100, 0b00000,
+	(outs GRegs:$rd), (ins FSRegs:$rs1),
+	"cvtfs\t$rd,$rs1,#2",
+	[(set (i64 GRegs:$rd), (fp_to_sint (fnearbyint (f32 FSRegs:$rs1))))]>;
 
 // Rounds
-multiclass RNDFSrr<string OpName, bits<5>OpC, bits<5>OpF,
-	    SDPatternOperator OpNode> {
-    def rr : RND<OpC, OpF,
+multiclass RNDFrr<string mode, SDPatternOperator OpNode> {
+    def rr : RND<0b10010, 0b00100,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1),
-	!strconcat(OpName, "\t$rd,$rs1"),
+	!strconcat("rndf\t$rd,$rs1,#", mode),
 	[(set (f32 FSRegs:$rd), (OpNode (f32 FSRegs:$rs1)))]>;
 }
-defm RNDRMF: RNDFSrr<"rndrmf",0b00001, 0b00100, fnearbyint>;
-defm RNDAZF: RNDFSrr<"rndazf",0b00100, 0b00100, fround>;
-defm RNDTZF: RNDFSrr<"rndtzf",0b00101, 0b00100, ftrunc>;
-defm RNDPIF: RNDFSrr<"rndpif",0b00110, 0b00100, fceil>;
-defm RNDNIF: RNDFSrr<"rndnif",0b00111, 0b00100, ffloor>;
-def RNDNEF: RND<0b00000, 0b00100,
-	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"rndnef\t$rd,$rs1",
+defm RNDRMF: RNDFrr<"2", fnearbyint>;
+defm RNDAZF: RNDFrr<"4", fround>;
+defm RNDTZF: RNDFrr<"5", ftrunc>;
+defm RNDPIF: RNDFrr<"6", fceil>;
+defm RNDNIF: RNDFrr<"7", ffloor>;
+def RNDNEF: RND<0b10010, 0b00100,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1),
+	"rndf\t$rd,$rs1,#0",
 	[]>;
 
 // transcendentals defined in LLVM

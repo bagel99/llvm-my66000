@@ -187,7 +187,8 @@ LLVM_DEBUG(dbgs() << "\tFBB=" << printMBBReference(*FBB) << '\n');
     ninstrsF = checkBlock(FBB);
 LLVM_DEBUG(dbgs() << "\tninstr=" << ninstrsT << ',' << ninstrsF << '\n');
   if (ninstrsT < 0 || ninstrsF < 0 ||	// unpredicatable instructions
-     (ninstrsT == 0 && ninstrsF == 0) || ninstrsT+ninstrsF > 8) {
+     (ninstrsT == 0 && ninstrsF == 0) ||
+      ninstrsT > 8 || ninstrsF > 8) {
 LLVM_DEBUG(dbgs() << "\tCannot convert\n");
     return false;
   }

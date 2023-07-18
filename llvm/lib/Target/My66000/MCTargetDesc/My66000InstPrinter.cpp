@@ -31,92 +31,80 @@ using namespace llvm;
 
 inline static const char *CondCodeString(unsigned CC) {
   switch (CC) {
-  case 0: return "nm";
-  case 1: return "nn";
-  case 2: return "eq0";
-  case 3: return "ne0";
-  case 4: return "ge0";
-  case 5: return "gt0";
-  case 6: return "le0";
-  case 7: return "lt0";
-  case 8: return "for";
-  case 9: return "fun";
-  case 10: return "feq";
-  case 11: return "fne";
-  case 12: return "fge";
-  case 13: return "flt";
-  case 14: return "fgt";
-  case 15: return "fle";
-  case 16: return "forf";
-  case 17: return "funf";
-  case 18: return "feqf";
-  case 19: return "fnef";
-  case 20: return "fgef";
-  case 21: return "fltf";
-  case 22: return "fgtf";
-  case 23: return "flef";
+  case MYCC::EQ0: return "eq0";
+  case MYCC::NE0: return "ne0";
+  case MYCC::GE0: return "ge0";
+  case MYCC::LT0: return "lt0";
+  case MYCC::GT0: return "gt0";
+  case MYCC::LE0: return "le0";
+  case MYCC::DEQ: return "feq";
+  case MYCC::DNE: return "fne";
+  case MYCC::DGE: return "fge";
+  case MYCC::DLT: return "flt";
+  case MYCC::DGT: return "fgt";
+  case MYCC::DLE: return "fle";
+  case MYCC::DOR: return "for";
+  case MYCC::DUN: return "fun";
+  case MYCC::FEQ: return "feqf";
+  case MYCC::FNE: return "fnef";
+  case MYCC::FGE: return "fgef";
+  case MYCC::FLT: return "fltf";
+  case MYCC::FGT: return "fgtf";
+  case MYCC::FLE: return "flef";
+  case MYCC::FOR: return "forf";
+  case MYCC::FUN: return "funf";
   default: return "???";
   }
 }
 
 inline static const char *CondBitString(unsigned CC) {
   switch (CC) {
-  case 0: return "ne";
-  case 1: return "eq";
-  case 2: return "gt";
-  case 3: return "ge";
-  case 4: return "lt";
-  case 5: return "le";
-  case 8: return "ne";
-  case 9: return "eq";
-  case 10: return "hi";
-  case 11: return "hs";
-  case 12: return "lo";
-  case 13: return "ls";
-  case 20: return "sin";
-  case 21: return "fin";
-  case 22: return "cin";
-  case 23: return "rin";
-  case 34: return "s1nm";
-  case 36: return "s1n";
-  case 38: return "s1z";
-  case 39: return "s1p";
-  case 40: return "s1sm";
-  case 41: return "s1um";
+  case MYCB::EQ: return "eq";
+  case MYCB::NE: return "ne";
+  case MYCB::GE: return "ge";
+  case MYCB::LT: return "lt";
+  case MYCB::GT: return "gt";
+  case MYCB::LE: return "le";
+  case MYCB::HS: return "hs";
+  case MYCB::LO: return "lo";
+  case MYCB::HI: return "hi";
+  case MYCB::LS: return "ls";
+  case MYCB::SIN: return "sin";
+  case MYCB::FIN: return "fin";
+  case MYCB::CIN: return "cin";
+  case MYCB::RIN: return "rin";
   default: return "???";
   }
 }
 
 inline static const char *FCondBitString(unsigned CC) {
   switch (CC) {
-  case 0: return "ne";
-  case 1: return "eq";
-  case 2: return "gt";
-  case 3: return "ge";
-  case 4: return "lt";
-  case 5: return "le";
-  case 6: return "or";
-  case 7: return "un";
-  case 8: return "nne";
-  case 9: return "neq";
-  case 10: return "ngt";
-  case 11: return "nge";
-  case 12: return "nlt";
-  case 13: return "nle";
-  case 20: return "sin";
-  case 21: return "fin";
-  case 22: return "cin";
-  case 23: return "rin";
-  case 32: return "f1s";
-  case 33: return "f1q";
-  case 34: return "f1pi";
-  case 35: return "f1pn";
-  case 36: return "f1pd";
-  case 37: return "f1pz";
-  case 38: return "f1nz";
-  case 39: return "f1nd";
-  case 40: return "f1nn";
-  case 41: return "f1ni";
+  case MYCB::EQ: return "eq";
+  case MYCB::NE: return "ne";
+  case MYCB::GE: return "ge";
+  case MYCB::LT: return "lt";
+  case MYCB::GT: return "gt";
+  case MYCB::LE: return "le";
+  case MYCB::NEQ: return "neq";
+  case MYCB::NNE: return "nne";
+  case MYCB::NGE: return "nge";
+  case MYCB::NLT: return "nlt";
+  case MYCB::NGT: return "ngt";
+  case MYCB::NLE: return "nle";
+  case MYCB::OR: return "for";
+  case MYCB::NOR: return "fnor";
+  case MYCB::TO: return "fto";
+  case MYCB::NTO: return "fnto";
+  case MYCB::SNaN: return "fsnan";
+  case MYCB::QNaN: return "fqnan";
+  case MYCB::MINF: return "fminf";
+  case MYCB::MNOR: return "fmnor";
+  case MYCB::MDE: return "fmde";
+  case MYCB::MZE: return "fmze";
+  case MYCB::PZE: return "fpze";
+  case MYCB::PDE: return "fpde";
+  case MYCB::PNOR: return "fpnor";
+  case MYCB::NINF: return "fninf";
   default: return "???";
   }
 }
@@ -151,7 +139,7 @@ static void printCarryBits(unsigned bits, raw_ostream &O) {
 
 static void printShadow(raw_ostream &OS, unsigned imm12) {
   unsigned cnt = (imm12 >> 8) & 7;
-  OS << "0,";	// FIXME - perhaps unused field in predication instrs
+
   for (unsigned i=0; i <= cnt; i++) {
     OS << (((imm12&1) == 0) ? 'F' : 'T');
     imm12 >>= 1;

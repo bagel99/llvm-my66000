@@ -61,6 +61,7 @@ private:
   bool tryRotate(SDNode *N, SDNode *NOR);
   bool tryANDOR(SDNode *N, unsigned Width);
   bool tryOR(SDNode *N);
+  bool tryAND(SDNode *N);
   bool trySex(SDNode *N);
   bool tryADDSUBCARRY(SDNode *N, bool isSub);
   bool shouldAvoidImmediate(SDNode *N) const;
@@ -338,7 +339,14 @@ bool My66000DAGToDAGISel::tryOR(SDNode *N) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
   if (tryRotate(N, N))
     return true;
-  // See if OR is trying to combine two compares that are candidates
+  return false;
+}
+
+bool My66000DAGToDAGISel::tryAND(SDNode *N) {
+LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryAND\n");
+  if (tryExtract(N, false))	// check for unsigned bitfield extract, rotate
+    return true;
+  // See if AND is trying to combine two compares that are candidates
   // for CIN, FIN, ...
   SDNode *L = N->getOperand(0).getNode();
   SDNode *R = N->getOperand(1).getNode();
@@ -353,15 +361,15 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
       uint64_t Bit;
       // FIXME - check RHS CMP arms reversed?
       if (LL->getOperand(0) == RL->getOperand(0)) {
-        LLVM_DEBUG(dbgs() << "OR(EXT(CMP(a,0),1,i),EXT(CMP(a,b),1,j): " <<
+        LLVM_DEBUG(dbgs() << "AND(EXT(CMP(a,0),1,i),EXT(CMP(a,b),1,j): " <<
 			     BitL << ", " << BitR << '\n');
-        if (BitL == 2 && BitR == 5)
+        if      (BitL == MYCB::GT && BitR == MYCB::LE)
 	  Bit = MYCB::FIN;
-        else if (BitL == 2 && BitR == 4)
+        else if (BitL == MYCB::GT && BitR == MYCB::LT)
 	  Bit = MYCB::RIN;
-        else if (BitL == 3 && BitR == 5)
+        else if (BitL == MYCB::GE && BitR == MYCB::LE)
 	  Bit = MYCB::SIN;
-        else if (BitL == 3 && BitR == 4)
+        else if (BitL == MYCB::GE && BitR == MYCB::LT)
 	  Bit = MYCB::CIN;
         else
 	  return false;
@@ -539,7 +547,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::Select " << N->getOperationName(CurDA
       return;
     break;
   case ISD::AND:
-    if (tryExtract(N, false))	// check for unsigned bitfield extract, rotate
+    if (tryAND(N))
       return;
     break;
   case ISD::SRL:

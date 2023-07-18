@@ -282,14 +282,14 @@ unsigned My66000InstrInfo::reverseBRC(MYCC::CondCodes cc) const {
   case MYCC::EQ0: return MYCC::NE0;  case MYCC::NE0: return MYCC::EQ0;
   case MYCC::GE0: return MYCC::LT0;  case MYCC::LT0: return MYCC::GE0;
   case MYCC::GT0: return MYCC::LE0;  case MYCC::LE0: return MYCC::GT0;
+  case MYCC::DEQ: return MYCC::DNE;  case MYCC::DNE: return MYCC::DEQ;
+  case MYCC::DGE: return MYCC::DLT;  case MYCC::DLT: return MYCC::DGE;
+  case MYCC::DLE: return MYCC::DGT;  case MYCC::DGT: return MYCC::DLE;
+  case MYCC::DOR: return MYCC::DUN;  case MYCC::DUN: return MYCC::DOR;
   case MYCC::FEQ: return MYCC::FNE;  case MYCC::FNE: return MYCC::FEQ;
   case MYCC::FGE: return MYCC::FLT;  case MYCC::FLT: return MYCC::FGE;
   case MYCC::FLE: return MYCC::FGT;  case MYCC::FGT: return MYCC::FLE;
   case MYCC::FOR: return MYCC::FUN;  case MYCC::FUN: return MYCC::FOR;
-  case MYCC::FEQF: return MYCC::FNEF;  case MYCC::FNEF: return MYCC::FEQF;
-  case MYCC::FGEF: return MYCC::FLTF;  case MYCC::FLTF: return MYCC::FGEF;
-  case MYCC::FLEF: return MYCC::FGTF;  case MYCC::FGTF: return MYCC::FLEF;
-  case MYCC::FORF: return MYCC::FUNF;  case MYCC::FUNF: return MYCC::FORF;
   }
 }
 
@@ -316,7 +316,8 @@ unsigned My66000InstrInfo::reverseBRFB(MYCB::CondBits cb) const {
   case MYCB::NNE: return MYCB::NEQ;  case MYCB::NEQ: return MYCB::NNE;
   case MYCB::NGE: return MYCB::NLT;  case MYCB::NLT: return MYCB::NGE;
   case MYCB::NGT: return MYCB::NLE;  case MYCB::NLE: return MYCB::NGT;
-  case MYCB::OR:  return MYCB::UN;   case MYCB::UN:  return MYCB::OR;
+  case MYCB::OR:  return MYCB::NOR;  case MYCB::NOR:  return MYCB::OR;
+  case MYCB::TO:  return MYCB::NTO;  case MYCB::NTO:  return MYCB::TO;
   }
 }
 
