@@ -318,6 +318,9 @@ unsigned My66000InstrInfo::reverseBRFB(MYCB::CondBits cb) const {
   case MYCB::NGT: return MYCB::NLE;  case MYCB::NLE: return MYCB::NGT;
   case MYCB::OR:  return MYCB::NOR;  case MYCB::NOR:  return MYCB::OR;
   case MYCB::TO:  return MYCB::NTO;  case MYCB::NTO:  return MYCB::TO;
+  // Not really sure about the following fabs compares
+  case MYCB::HI: return MYCB::LS;  case MYCB::LS: return MYCB::HI;
+  case MYCB::LO: return MYCB::HS;  case MYCB::HS: return MYCB::LO;
   }
 }
 

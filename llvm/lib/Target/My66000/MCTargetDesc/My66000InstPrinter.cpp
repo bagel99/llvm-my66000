@@ -85,26 +85,30 @@ inline static const char *FCondBitString(unsigned CC) {
   case MYCB::LT: return "lt";
   case MYCB::GT: return "gt";
   case MYCB::LE: return "le";
+  case MYCB::HS: return "hs";		// fabs range compares
+  case MYCB::LO: return "lo";		// "
+  case MYCB::HI: return "hi";		// "
+  case MYCB::LS: return "ls";		// "
   case MYCB::NEQ: return "neq";
   case MYCB::NNE: return "nne";
   case MYCB::NGE: return "nge";
   case MYCB::NLT: return "nlt";
   case MYCB::NGT: return "ngt";
   case MYCB::NLE: return "nle";
-  case MYCB::OR: return "for";
-  case MYCB::NOR: return "fnor";
-  case MYCB::TO: return "fto";
-  case MYCB::NTO: return "fnto";
-  case MYCB::SNaN: return "fsnan";
-  case MYCB::QNaN: return "fqnan";
-  case MYCB::MINF: return "fminf";
-  case MYCB::MNOR: return "fmnor";
-  case MYCB::MDE: return "fmde";
-  case MYCB::MZE: return "fmze";
-  case MYCB::PZE: return "fpze";
-  case MYCB::PDE: return "fpde";
-  case MYCB::PNOR: return "fpnor";
-  case MYCB::NINF: return "fninf";
+  case MYCB::OR: return "or";
+  case MYCB::NOR: return "nor";
+  case MYCB::TO: return "to";
+  case MYCB::NTO: return "nto";
+  case MYCB::SNaN: return "snan";
+  case MYCB::QNaN: return "qnan";
+  case MYCB::MINF: return "minf";
+  case MYCB::MNOR: return "mnor";
+  case MYCB::MDE: return "mde";
+  case MYCB::MZE: return "mze";
+  case MYCB::PZE: return "pze";
+  case MYCB::PDE: return "pde";
+  case MYCB::PNOR: return "pnor";
+  case MYCB::NINF: return "ninf";
   default: return "???";
   }
 }
@@ -137,12 +141,12 @@ static void printCarryBits(unsigned bits, raw_ostream &O) {
     O << '}';
 }
 
-static void printShadow(raw_ostream &OS, unsigned imm12) {
-  unsigned cnt = (imm12 >> 8) & 7;
+static void printShadow(raw_ostream &OS, unsigned imm32) {
+  unsigned cnt = imm32 >> 16;
 
   for (unsigned i=0; i <= cnt; i++) {
-    OS << (((imm12&1) == 0) ? 'F' : 'T');
-    imm12 >>= 1;
+    OS << (((imm32&1) == 0) ? 'F' : 'T');
+    imm32 >>= 1;
   }
 }
 

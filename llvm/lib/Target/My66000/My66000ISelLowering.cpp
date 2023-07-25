@@ -366,31 +366,43 @@ bool My66000TargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
 //  Misc Lower Operation implementation
 //===----------------------------------------------------------------------===//
 
-// Map to my condition bits
-static MYCB::CondBits ISDCCtoMy66000CB(ISD:: CondCode CC) {
+// Map to my condition bits, integer
+static MYCB::CondBits ISDCCtoMy66000CBI(ISD:: CondCode CC) {
   switch (CC) {
-  default: llvm_unreachable("Unknown condition code!");
+  default: llvm_unreachable("Unknown integer condition code!");
   case ISD::SETEQ:  return MYCB::EQ;
   case ISD::SETNE:  return MYCB::NE;
-  // signed integers and float undefined if input is a NaN
   case ISD::SETLT:  return MYCB::LT;
   case ISD::SETGT:  return MYCB::GT;
   case ISD::SETLE:  return MYCB::LE;
   case ISD::SETGE:  return MYCB::GE;
-  // unsigned integers and float unordered
-  case ISD::SETUEQ: return MYCB::EQ;
-  case ISD::SETUNE: return MYCB::NE;
   case ISD::SETULT: return MYCB::LO;
   case ISD::SETULE: return MYCB::LS;
   case ISD::SETUGT: return MYCB::HI;
   case ISD::SETUGE: return MYCB::HS;
+  }
+}
+
+// Map to my condition bits, float
+static MYCB::CondBits ISDCCtoMy66000CBF(ISD:: CondCode CC) {
+  switch (CC) {
+  default: llvm_unreachable("Unknown condition code!");
+  case ISD::SETEQ:  return MYCB::EQ;
+  case ISD::SETNE:  return MYCB::NE;
   // float ordered
-  case ISD::SETOEQ: return MYCB::NNE;
-  case ISD::SETONE: return MYCB::NEQ;
-  case ISD::SETOLT: return MYCB::NGE;
-  case ISD::SETOGT: return MYCB::NLE;
-  case ISD::SETOLE: return MYCB::NGT;
-  case ISD::SETOGE: return MYCB::NLT;
+  case ISD::SETOEQ: return MYCB::EQ;
+  case ISD::SETONE: return MYCB::NE;
+  case ISD::SETOLT: return MYCB::LT;
+  case ISD::SETOLE: return MYCB::LE;
+  case ISD::SETOGT: return MYCB::GT;
+  case ISD::SETOGE: return MYCB::GE;
+  // float unordered
+  case ISD::SETUEQ: return MYCB::NNE;
+  case ISD::SETUNE: return MYCB::NEQ;
+  case ISD::SETULT: return MYCB::NGE;
+  case ISD::SETUGT: return MYCB::NLE;
+  case ISD::SETULE: return MYCB::NGT;
+  case ISD::SETUGE: return MYCB::NLT;
   // float check order
   case ISD::SETO:   return MYCB::OR;
   case ISD::SETUO:  return MYCB::NOR;
@@ -466,6 +478,48 @@ static MYCC::CondCodes ISDCCtoMy66000CC(ISD:: CondCode CC, EVT VT) {
   }
 }
 
+/*
+ * See if a floating compare involves absolute values or an absolute value
+ * and a positive constant.  The My66000 compare bits can deal with this.
+ * If found, convert the RHS and LHS(if needed) to remove the fabs().]
+ */
+static void fabsConversion(SDValue &LHS, SDValue &RHS, MYCB::CondBits &CB,
+			   ISD::CondCode CC) {
+LLVM_DEBUG(dbgs() << "fabsConversion\n");
+    bool inrange = false;
+    bool rhsconst = false;
+    if (LHS.getNode()->getOpcode() == ISD::FABS) {
+      if (RHS.getNode()->getOpcode() == ISD::FABS) {
+	inrange = true;
+      } else if (const auto *CFP = dyn_cast<ConstantFPSDNode>(RHS)) {
+	if (!CFP->isNegative()) {
+	  rhsconst = true;
+	  inrange = true;
+	}
+      }
+      if (inrange) {
+LLVM_DEBUG(dbgs() << "Convert fabs\n");
+        switch (CC) {
+          case ISD::SETOGE: { CB = MYCB::HS; break; }
+	  case ISD::SETOLT: { CB = MYCB::LO; break; }
+	  case ISD::SETOGT: { CB = MYCB::HI; break; }
+	  case ISD::SETOLE: { CB = MYCB::LS; break; }
+          case ISD::SETUGE: { CB = MYCB::HS; break; }
+	  case ISD::SETULT: { CB = MYCB::LO; break; }
+	  case ISD::SETUGT: { CB = MYCB::HI; break; }
+	  case ISD::SETULE: { CB = MYCB::LS; break; }
+	  default: inrange = false;
+        }
+        if (inrange) {
+	  LHS = LHS.getOperand(0);
+	  if (!rhsconst)
+	    RHS = RHS.getOperand(0);
+        }
+      }
+    }
+}
+
+
 // Compare and make result into a boolean
 SDValue My66000TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   SDValue LHS = Op.getOperand(0);
@@ -473,6 +527,7 @@ SDValue My66000TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
   SDLoc dl(Op);
   unsigned inst;
+  MYCB::CondBits CB;
 LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSETCC\n");
   if (LHS.getValueType().isInteger()) {
     inst = My66000ISD::CMP;
@@ -499,10 +554,12 @@ LLVM_DEBUG(dbgs() << "Convert GT -1 into GE 0\n");
 	RHS = DAG.getConstant(0, dl, MVT::i64);
 	CC = ISD::SETGE;
     }
+    CB = ISDCCtoMy66000CBI(CC);
   } else {
     inst = My66000ISD::FCMP;
+    CB = ISDCCtoMy66000CBF(CC);
+    fabsConversion(LHS, RHS, CB, CC);
   }
-  MYCB::CondBits CB = ISDCCtoMy66000CB(CC);
   SDValue Cmp = DAG.getNode(inst, dl, MVT::i64, LHS, RHS);
   return DAG.getNode(My66000ISD::EXT, dl, MVT::i64, Cmp,
 		     DAG.getConstant(1, dl, MVT::i64),
@@ -517,6 +574,7 @@ SDValue My66000TargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) con
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
   SDLoc dl(Op);
   unsigned inst;
+  MYCB::CondBits CB;
 LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSELECT_CC\n");
   if (LHS.getValueType().isInteger()) {
     if (isNullConstant(RHS) && (CC == ISD::SETEQ || CC == ISD::SETNE)) {
@@ -530,27 +588,27 @@ LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
 	RHS = DAG.getConstant(0, dl, MVT::i64);
 	CC = ISD::SETLE;
     }
+    /* If items selected are constants that differ by 1 */
+    else if (CC == ISD::SETLT && isNullConstant(RHS) &&
+             isa<ConstantSDNode>(TVal) && isa<ConstantSDNode>(FVal)) {
+      const APInt &TrueVal = cast<ConstantSDNode>(TVal)->getAPIntValue();
+      const APInt &FalseVal = cast<ConstantSDNode>(FVal)->getAPIntValue();
+      if (TrueVal - 1 == FalseVal) {
+	SDValue Sra = DAG.getNode(ISD::SRL, dl, MVT::i64, LHS,
+				  DAG.getConstant(63, dl, MVT::i64));
+	return DAG.getNode(ISD::ADD, dl, MVT::i64, Sra, FVal);
+      }
+      if (TrueVal + 1 == FalseVal) {
+	SDValue Sra = DAG.getNode(ISD::SRA, dl, MVT::i64, LHS,
+				  DAG.getConstant(63, dl, MVT::i64));
+	return DAG.getNode(ISD::ADD, dl, MVT::i64, Sra, FVal);
+      }
+    }
+    CB = ISDCCtoMy66000CBI(CC);
   } else {
     inst = My66000ISD::FCMP;
+    CB = ISDCCtoMy66000CBF(CC);
   }
-  /* If items selected are constants that differ by 1 */
-  if (CC == ISD::SETLT && isNullConstant(RHS) &&
-      isa<ConstantSDNode>(TVal) && isa<ConstantSDNode>(FVal)) {
-    const APInt &TrueVal = cast<ConstantSDNode>(TVal)->getAPIntValue();
-    const APInt &FalseVal = cast<ConstantSDNode>(FVal)->getAPIntValue();
-    if (TrueVal - 1 == FalseVal) {
-	SDValue Sra = DAG.getNode(ISD::SRL, dl, MVT::i64, LHS,
-			    DAG.getConstant(63, dl, MVT::i64));
-        return DAG.getNode(ISD::ADD, dl, MVT::i64, Sra, FVal);
-    }
-    if (TrueVal + 1 == FalseVal) {
-	SDValue Sra = DAG.getNode(ISD::SRA, dl, MVT::i64, LHS,
-			    DAG.getConstant(63, dl, MVT::i64));
-        return DAG.getNode(ISD::ADD, dl, MVT::i64, Sra, FVal);
-    }
-
-  }
-  MYCB::CondBits CB = ISDCCtoMy66000CB(CC);
   SDValue Cmp = DAG.getNode(inst, dl, MVT::i64, LHS, RHS);
   SDValue Ext = DAG.getNode(My66000ISD::EXTS, dl, MVT::i64, Cmp,
 		     DAG.getConstant(1, dl, MVT::i64),
@@ -597,7 +655,7 @@ LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
       return DAG.getNode(My66000ISD::BRcond, dl, MVT::Other, Chain, Dest,
 		         LHS, DAG.getConstant(cc, dl, MVT::i64));
     }
-    MYCB::CondBits cb = ISDCCtoMy66000CB(CC);
+    MYCB::CondBits cb = ISDCCtoMy66000CBI(CC);
     SDValue Cmp = DAG.getNode(My66000ISD::CMP, dl, MVT::i64, LHS, RHS);
     return DAG.getNode(My66000ISD::BRcc, dl, MVT::Other, Chain, Dest, Cmp,
                        DAG.getConstant(cb, dl, MVT::i64));
@@ -607,7 +665,8 @@ LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
       return DAG.getNode(My66000ISD::BRcond, dl, MVT::Other, Chain, Dest,
 		         LHS, DAG.getConstant(cc, dl, MVT::i64));
     }
-    MYCB::CondBits cb = ISDCCtoMy66000CB(CC);
+    MYCB::CondBits cb = ISDCCtoMy66000CBF(CC);
+    fabsConversion(RHS, LHS, cb, CC);
     SDValue Cmp = DAG.getNode(My66000ISD::FCMP, dl, MVT::i64, LHS, RHS);
     return DAG.getNode(My66000ISD::BRfcc, dl, MVT::Other, Chain, Dest, Cmp,
                        DAG.getConstant(cb, dl, MVT::i64));

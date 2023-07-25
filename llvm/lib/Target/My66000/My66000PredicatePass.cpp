@@ -161,7 +161,6 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
   }
 }
 
-
 bool My66000PredBlock::Convert(MachineBasicBlock *Head,
 			MachineBasicBlock *Succ0, MachineBasicBlock *Succ1,
 			MachineBasicBlock *Tail) {
@@ -206,7 +205,7 @@ LLVM_DEBUG(dbgs() << "\tCannot convert\n");
   MachineInstrBuilder MIB = BuildMI(*Head, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT+ninstrsF-1)<<8) | ((1 << ninstrsT)-1));
+  MIB.addImm(((ninstrsT+ninstrsF-1)<<16) | ((1 << ninstrsT)-1));
 
   // Move all instructions into Head, except for the terminators.
   if (TBB != Tail)
@@ -312,7 +311,7 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   MachineInstrBuilder MIB = BuildMI(*Head1, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT1+ninstrsF1-1)<<8) | M1);
+  MIB.addImm(((ninstrsT1+ninstrsF1-1)<<16) | M1);
   // Move all instructions into Head1, except for the terminators
   if (Succ0 != Tail) {
     Head1->splice(IP, Succ0, Succ0->begin(), Succ0->getFirstTerminator());
@@ -337,7 +336,7 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   MIB = BuildMI(*Head0, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT0+ninstrsT1+ninstrsF1-1)<<8) | M0);
+  MIB.addImm(((ninstrsT0+ninstrsT1+ninstrsF1-1)<<16) | M0);
   // Move all instructions into Head0, except for the terminators
   Head0->splice(IP, Head1, Head1->begin(), Head1->getFirstTerminator());
   Head0->removeSuccessor(Head1, true);
@@ -411,7 +410,7 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   MachineInstrBuilder MIB = BuildMI(*Head1, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT1+ninstrsF1-1)<<8) | M1);
+  MIB.addImm(((ninstrsT1+ninstrsF1-1)<<16) | M1);
   // Move all instructions into Head1, except for the terminators
   Head1->splice(IP, Succ0, Succ0->begin(), Succ0->getFirstTerminator());
   Head1->removeSuccessor(Succ0);
@@ -430,7 +429,7 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   MIB = BuildMI(*Head0, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT0+ninstrsT1+ninstrsF1-1)<<8) | M0);
+  MIB.addImm(((ninstrsT0+ninstrsT1+ninstrsF1-1)<<16) | M0);
   // Move all instructions into Head0, except for the terminators
   Head0->splice(IP, Head1, Head1->begin(), Head1->getFirstTerminator());
   Head0->removeSuccessor(Head1, true);
