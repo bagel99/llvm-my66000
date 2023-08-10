@@ -107,7 +107,11 @@ static void parseCondBranch(MachineInstr &LastInst, MachineBasicBlock *&Target,
     case My66000::LOOP1ri:
     case My66000::LOOP1ir:
     case My66000::LOOP1ii:
-      Target = LastInst.getOperand(5).getMBB();
+    case My66000::LOOP2ri:
+    case My66000::LOOP2ii:
+    case My66000::LOOP3ri:
+    case My66000::LOOP3ii:
+     Target = LastInst.getOperand(5).getMBB();
       Cond.push_back(MachineOperand::CreateImm(LastInst.getOpcode()));
       Cond.push_back(LastInst.getOperand(0));	// cond code/bits
       Cond.push_back(LastInst.getOperand(1));	// register
@@ -232,6 +236,10 @@ LLVM_DEBUG(dbgs() << "\tconditional " << Opc << "\n");
     case My66000::LOOP1ri:
     case My66000::LOOP1ir:
     case My66000::LOOP1ii:
+    case My66000::LOOP2ri:
+    case My66000::LOOP2ii:
+    case My66000::LOOP3ri:
+    case My66000::LOOP3ii:
       BuildMI(&MBB, DL, get(Opc)).add(Cond[1]).add(Cond[2]).add(Cond[3])
 	    .add(Cond[4]).add(Cond[5]).addMBB(TBB);
       break;

@@ -254,6 +254,23 @@ class PB<bits<5> major, dag outs, dag ins, string asmstr,
   let Inst{11-0}  = imm;
 }
 
+class LOOP_RRR<bits<2> kind, bits<4> flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> cnd;		// condition
+  bits<5> rs1;		// src1 register
+  bits<5> rs2;		// src2 register
+  bits<5> rs3;		// src3 register
+  let Opcode = 0b010101;
+  let Inst{25-21} = cnd;
+  let Inst{20-16} = rs1;
+  let Inst{15-12} = flags;
+  let Inst{11-10} = kind;
+  let Inst{9-5}   = rs3;
+  let Inst{4-0}   = rs2;
+  let Size = 4;
+}
+
 class HR<bits<5> minor, bits<2> rw, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {

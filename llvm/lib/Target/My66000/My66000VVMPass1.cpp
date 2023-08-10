@@ -248,19 +248,19 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     break;
   }
   case 2: {
-    if (AMI == nullptr) {	// no increment
+    if (AMI == nullptr) {	// no increment use LOOP1
       LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
 	      .addImm(BCnd)
 	      .addReg(BReg)
 	      .addImm(0)
 	      .addImm(0);
-      LLVM_DEBUG(dbgs() << " type200\n");
+      LLVM_DEBUG(dbgs() << " type100\n");
     } else {
       if (AMI->getOperand(2).isReg()) {
-	Opc = My66000::LOOP1ri;
+	Opc = My66000::LOOP2ri;
 	LLVM_DEBUG(dbgs() << " type2ri\n");
       } else {
-	Opc = My66000::LOOP1ii;
+	Opc = My66000::LOOP2ii;
 	LLVM_DEBUG(dbgs() << " type2ii\n");
       }
       LIB = BuildMI(*TB, E, DL, TII.get(Opc))
@@ -273,10 +273,10 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
    }
    case 3: {
       if (CMI->getOperand(2).isReg()) {
-	Opc = My66000::LOOP1ri;
+	Opc = My66000::LOOP3ri;
 	LLVM_DEBUG(dbgs() << " type3ri\n");
       } else {
-	Opc = My66000::LOOP1ii;
+	Opc = My66000::LOOP3ii;
 	LLVM_DEBUG(dbgs() << " type3ii\n");
       }
       LIB = BuildMI(*TB, E, DL, TII.get(Opc))

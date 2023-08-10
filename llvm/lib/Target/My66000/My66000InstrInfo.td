@@ -945,41 +945,48 @@ def VEC : VECF<0b111101,
 	(outs GRegs:$rd), (ins i16imm:$imm),
 	"vec\t$rd,$imm",
 	[]>;
+// FIXME - ALU_RRR is wrong
 let isBranch = 1, isTerminator = 1 in {
 def LOOP1rr : ALU_RRR<0b111, 0b000,
 	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, GRegs:$rb,
 		 GRegs:$ra, brtarget:$adr),
-	"loop\t$cnd,$rt,$ri,$rb",
+	"loop1\t$cnd,$rt,$ri,$rb",
 	[]>;
 def LOOP1ri : ALU_RRR<0b111, 0b000,
 	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop\t$cnd,$rt,$ri,#$ib",
+	"loop1\t$cnd,$rt,$ri,#$ib",
 	[]>;
 def LOOP1ir : ALU_RRR<0b111, 0b000,
 	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, GRegs:$rb,
 		 GRegs:$ra, brtarget:$adr),
-	"loop\t$cnd,$rt,#$ii,$rb",
+	"loop1\t$cnd,$rt,#$ii,$rb",
 	[]>;
 def LOOP1ii : ALU_RRR<0b111, 0b000,
 	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop\t$cnd,$rt,#$ii,#$ib",
+	"loop1\t$cnd,$rt,#$ii,#$ib",
 	[]>;
-/*
-def LOOP2 : ALU_RRR<0b111, 0b000,
-	(outs), (ins CCOp:$cnd, GRegs:$rt, GRegs:$ra),
-	"loop\t$cnd,$rt",
+def LOOP2ri : ALU_RRR<0b111, 0b000,
+	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, i16imm:$ib,
+		 GRegs:$ra, brtarget:$adr),
+	"loop2\t$cnd,$rt,$ri,#$ib",
 	[]>;
-def LOOP2i : ALU_RRR<0b111, 0b000,
-	(outs), (ins CCOp:$cnd, GRegs:$rt, i16imm:$ii, GRegs:$ra),
-	"loop\t$cnd,$rt,#$ii",
+def LOOP2ii : ALU_RRR<0b111, 0b000,
+	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, i16imm:$ib,
+		 GRegs:$ra, brtarget:$adr),
+	"loop2\t$cnd,$rt,#$ii,#$ib",
 	[]>;
-def LOOP2r : ALU_RRR<0b111, 0b000,
-	(outs), (ins CCOp:$cnd, GRegs:$rt, GRegs:$ri, GRegs:$ra),
-	"loop\t$cnd,$rt,$ri",
+def LOOP3ri : ALU_RRR<0b111, 0b000,
+	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, i16imm:$ib,
+		 GRegs:$ra, brtarget:$adr),
+	"loop3\t$cnd,$rt,$ri,#$ib",
 	[]>;
-*/
+def LOOP3ii : ALU_RRR<0b111, 0b000,
+	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, i16imm:$ib,
+		 GRegs:$ra, brtarget:$adr),
+	"loop3\t$cnd,$rt,#$ii,#$ib",
+	[]>;
 }
 
 //
