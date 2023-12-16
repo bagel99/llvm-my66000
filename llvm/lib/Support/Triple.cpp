@@ -1369,6 +1369,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::msp430:
   case Triple::systemz:
   case Triple::ve:
+  case Triple::my66000:
     T.setArch(UnknownArch);
     break;
 
