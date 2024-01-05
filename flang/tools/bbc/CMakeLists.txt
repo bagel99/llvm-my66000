@@ -13,10 +13,11 @@ FIRTransforms
 FIRBuilder
 ${dialect_libs}
 MLIRAffineToStandard
-MLIRSCFToStandard
+MLIRSCFToControlFlow
 FortranCommon
 FortranParser
 FortranEvaluate
 FortranSemantics
 FortranLower
+LLVMPasses
 )

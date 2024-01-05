@@ -17,8 +17,7 @@
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Utils/StructuredOpsUtils.h"
 
 #include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
@@ -250,20 +249,21 @@ createFullPartialLinalgCopy(RewriterBase &b, vector::TransferReadOp xferOp,
                             MemRefType compatibleMemRefType, Value alloc) {
   Location loc = xferOp.getLoc();
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
-  Value memref = xferOp.source();
+  Value memref = xferOp.getSource();
   return b.create<scf::IfOp>(
       loc, returnTypes, inBoundsCond,
       [&](OpBuilder &b, Location loc) {
         Value res = memref;
         if (compatibleMemRefType != xferOp.getShapedType())
-          res = b.create<memref::CastOp>(loc, memref, compatibleMemRefType);
+          res = b.create<memref::CastOp>(loc, compatibleMemRefType, memref);
         scf::ValueVector viewAndIndices{res};
-        viewAndIndices.insert(viewAndIndices.end(), xferOp.indices().begin(),
-                              xferOp.indices().end());
+        viewAndIndices.insert(viewAndIndices.end(), xferOp.getIndices().begin(),
+                              xferOp.getIndices().end());
         b.create<scf::YieldOp>(loc, viewAndIndices);
       },
       [&](OpBuilder &b, Location loc) {
-        b.create<linalg::FillOp>(loc, xferOp.padding(), alloc);
+        b.create<linalg::FillOp>(loc, ValueRange{xferOp.getPadding()},
+                                 ValueRange{alloc});
         // Take partial subview of memref which guarantees no dimension
         // overflows.
         IRRewriter rewriter(b);
@@ -272,7 +272,7 @@ createFullPartialLinalgCopy(RewriterBase &b, vector::TransferReadOp xferOp,
             alloc);
         b.create<memref::CopyOp>(loc, copyArgs.first, copyArgs.second);
         Value casted =
-            b.create<memref::CastOp>(loc, alloc, compatibleMemRefType);
+            b.create<memref::CastOp>(loc, compatibleMemRefType, alloc);
         scf::ValueVector viewAndIndices{casted};
         viewAndIndices.insert(viewAndIndices.end(), xferOp.getTransferRank(),
                               zero);
@@ -304,16 +304,16 @@ static scf::IfOp createFullPartialVectorTransferRead(
   Location loc = xferOp.getLoc();
   scf::IfOp fullPartialIfOp;
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
-  Value memref = xferOp.source();
+  Value memref = xferOp.getSource();
   return b.create<scf::IfOp>(
       loc, returnTypes, inBoundsCond,
       [&](OpBuilder &b, Location loc) {
         Value res = memref;
         if (compatibleMemRefType != xferOp.getShapedType())
-          res = b.create<memref::CastOp>(loc, memref, compatibleMemRefType);
+          res = b.create<memref::CastOp>(loc, compatibleMemRefType, memref);
         scf::ValueVector viewAndIndices{res};
-        viewAndIndices.insert(viewAndIndices.end(), xferOp.indices().begin(),
-                              xferOp.indices().end());
+        viewAndIndices.insert(viewAndIndices.end(), xferOp.getIndices().begin(),
+                              xferOp.getIndices().end());
         b.create<scf::YieldOp>(loc, viewAndIndices);
       },
       [&](OpBuilder &b, Location loc) {
@@ -325,7 +325,7 @@ static scf::IfOp createFullPartialVectorTransferRead(
                 loc, MemRefType::get({}, vector.getType()), alloc));
 
         Value casted =
-            b.create<memref::CastOp>(loc, alloc, compatibleMemRefType);
+            b.create<memref::CastOp>(loc, compatibleMemRefType, alloc);
         scf::ValueVector viewAndIndices{casted};
         viewAndIndices.insert(viewAndIndices.end(), xferOp.getTransferRank(),
                               zero);
@@ -354,23 +354,23 @@ getLocationToWriteFullVec(RewriterBase &b, vector::TransferWriteOp xferOp,
                           MemRefType compatibleMemRefType, Value alloc) {
   Location loc = xferOp.getLoc();
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
-  Value memref = xferOp.source();
+  Value memref = xferOp.getSource();
   return b
       .create<scf::IfOp>(
           loc, returnTypes, inBoundsCond,
           [&](OpBuilder &b, Location loc) {
             Value res = memref;
             if (compatibleMemRefType != xferOp.getShapedType())
-              res = b.create<memref::CastOp>(loc, memref, compatibleMemRefType);
+              res = b.create<memref::CastOp>(loc, compatibleMemRefType, memref);
             scf::ValueVector viewAndIndices{res};
             viewAndIndices.insert(viewAndIndices.end(),
-                                  xferOp.indices().begin(),
-                                  xferOp.indices().end());
+                                  xferOp.getIndices().begin(),
+                                  xferOp.getIndices().end());
             b.create<scf::YieldOp>(loc, viewAndIndices);
           },
           [&](OpBuilder &b, Location loc) {
             Value casted =
-                b.create<memref::CastOp>(loc, alloc, compatibleMemRefType);
+                b.create<memref::CastOp>(loc, compatibleMemRefType, alloc);
             scf::ValueVector viewAndIndices{casted};
             viewAndIndices.insert(viewAndIndices.end(),
                                   xferOp.getTransferRank(), zero);
@@ -430,12 +430,30 @@ static void createFullPartialVectorTransferWrite(RewriterBase &b,
   b.create<scf::IfOp>(loc, notInBounds, [&](OpBuilder &b, Location loc) {
     BlockAndValueMapping mapping;
     Value load = b.create<memref::LoadOp>(
-        loc, b.create<vector::TypeCastOp>(
-                 loc, MemRefType::get({}, xferOp.vector().getType()), alloc));
-    mapping.map(xferOp.vector(), load);
+        loc,
+        b.create<vector::TypeCastOp>(
+            loc, MemRefType::get({}, xferOp.getVector().getType()), alloc));
+    mapping.map(xferOp.getVector(), load);
     b.clone(*xferOp.getOperation(), mapping);
     b.create<scf::YieldOp>(loc, ValueRange{});
   });
+}
+
+// TODO: Parallelism and threadlocal considerations with a ParallelScope trait.
+static Operation *getAutomaticAllocationScope(Operation *op) {
+  // Find the closest surrounding allocation scope that is not a known looping
+  // construct (putting alloca's in loops doesn't always lower to deallocation
+  // until the end of the loop).
+  Operation *scope = nullptr;
+  for (Operation *parent = op->getParentOp(); parent != nullptr;
+       parent = parent->getParentOp()) {
+    if (parent->hasTrait<OpTrait::AutomaticAllocationScope>())
+      scope = parent;
+    if (!isa<scf::ForOp, AffineForOp>(parent))
+      break;
+  }
+  assert(scope && "Expected op to be inside automatic allocation scope");
+  return scope;
 }
 
 /// Split a vector.transfer operation into an in-bounds (i.e., no out-of-bounds
@@ -507,7 +525,7 @@ LogicalResult mlir::vector::splitFullAndPartialTransfer(
   SmallVector<bool, 4> bools(xferOp.getTransferRank(), true);
   auto inBoundsAttr = b.getBoolArrayAttr(bools);
   if (options.vectorTransferSplit == VectorTransferSplit::ForceInBounds) {
-    xferOp->setAttr(xferOp.getInBoundsAttrName(), inBoundsAttr);
+    xferOp->setAttr(xferOp.getInBoundsAttrStrName(), inBoundsAttr);
     return success();
   }
 
@@ -522,9 +540,9 @@ LogicalResult mlir::vector::splitFullAndPartialTransfer(
 
     if (!(xferReadOp || xferWriteOp))
       return failure();
-    if (xferWriteOp && xferWriteOp.mask())
+    if (xferWriteOp && xferWriteOp.getMask())
       return failure();
-    if (xferReadOp && xferReadOp.mask())
+    if (xferReadOp && xferReadOp.getMask())
       return failure();
   }
 
@@ -538,12 +556,14 @@ LogicalResult mlir::vector::splitFullAndPartialTransfer(
   // Top of the function `alloc` for transient storage.
   Value alloc;
   {
-    FuncOp funcOp = xferOp->getParentOfType<FuncOp>();
     RewriterBase::InsertionGuard guard(b);
-    b.setInsertionPointToStart(&funcOp.getRegion().front());
+    Operation *scope = getAutomaticAllocationScope(xferOp);
+    assert(scope->getNumRegions() == 1 &&
+           "AutomaticAllocationScope with >1 regions");
+    b.setInsertionPointToStart(&scope->getRegion(0).front());
     auto shape = xferOp.getVectorType().getShape();
     Type elementType = xferOp.getVectorType().getElementType();
-    alloc = b.create<memref::AllocaOp>(funcOp.getLoc(),
+    alloc = b.create<memref::AllocaOp>(scope->getLoc(),
                                        MemRefType::get(shape, elementType),
                                        ValueRange{}, b.getI64IntegerAttr(32));
   }
@@ -576,7 +596,7 @@ LogicalResult mlir::vector::splitFullAndPartialTransfer(
     for (unsigned i = 0, e = returnTypes.size(); i != e; ++i)
       xferReadOp.setOperand(i, fullPartialIfOp.getResult(i));
 
-    xferOp->setAttr(xferOp.getInBoundsAttrName(), inBoundsAttr);
+    xferOp->setAttr(xferOp.getInBoundsAttrStrName(), inBoundsAttr);
 
     return success();
   }
@@ -591,8 +611,8 @@ LogicalResult mlir::vector::splitFullAndPartialTransfer(
   // The operation is cloned to prevent deleting information needed for the
   // later IR creation.
   BlockAndValueMapping mapping;
-  mapping.map(xferWriteOp.source(), memrefAndIndices.front());
-  mapping.map(xferWriteOp.indices(), memrefAndIndices.drop_front());
+  mapping.map(xferWriteOp.getSource(), memrefAndIndices.front());
+  mapping.map(xferWriteOp.getIndices(), memrefAndIndices.drop_front());
   auto *clone = b.clone(*xferWriteOp, mapping);
   clone->setAttr(xferWriteOp.getInBoundsAttrName(), inBoundsAttr);
 

@@ -16,10 +16,15 @@ define i32 @foo1() {
 
 ; TEST 2
 define i32 @scc1_foo() {
-; CHECK: Function Attrs: nofree norecurse nosync nounwind readnone willreturn
-; CHECK-LABEL: define {{[^@]+}}@scc1_foo
-; CHECK-SAME: () #[[ATTR0]] {
-; CHECK-NEXT:    ret i32 1
+; NOT_CGSCC_NPM: Function Attrs: nofree nosync nounwind readnone willreturn
+; NOT_CGSCC_NPM-LABEL: define {{[^@]+}}@scc1_foo
+; NOT_CGSCC_NPM-SAME: () #[[ATTR1:[0-9]+]] {
+; NOT_CGSCC_NPM-NEXT:    ret i32 1
+;
+; IS__CGSCC_NPM: Function Attrs: nofree norecurse nosync nounwind readnone willreturn
+; IS__CGSCC_NPM-LABEL: define {{[^@]+}}@scc1_foo
+; IS__CGSCC_NPM-SAME: () #[[ATTR0]] {
+; IS__CGSCC_NPM-NEXT:    ret i32 1
 ;
   %1 = call i32 @scc1_bar()
   ret i32 1
@@ -28,10 +33,15 @@ define i32 @scc1_foo() {
 
 ; TEST 3
 define i32 @scc1_bar() {
-; CHECK: Function Attrs: nofree norecurse nosync nounwind readnone willreturn
-; CHECK-LABEL: define {{[^@]+}}@scc1_bar
-; CHECK-SAME: () #[[ATTR0]] {
-; CHECK-NEXT:    ret i32 1
+; NOT_CGSCC_NPM: Function Attrs: nofree nosync nounwind readnone willreturn
+; NOT_CGSCC_NPM-LABEL: define {{[^@]+}}@scc1_bar
+; NOT_CGSCC_NPM-SAME: () #[[ATTR1]] {
+; NOT_CGSCC_NPM-NEXT:    ret i32 1
+;
+; IS__CGSCC_NPM: Function Attrs: nofree norecurse nosync nounwind readnone willreturn
+; IS__CGSCC_NPM-LABEL: define {{[^@]+}}@scc1_bar
+; IS__CGSCC_NPM-SAME: () #[[ATTR0]] {
+; IS__CGSCC_NPM-NEXT:    ret i32 1
 ;
   %1 = call i32 @scc1_foo()
   ret i32 1
@@ -118,9 +128,13 @@ define i32 @catch_thing() personality i8* bitcast (i32 (...)* @__gxx_personality
 }
 
 define i32 @catch_thing_user() {
-; CHECK-LABEL: define {{[^@]+}}@catch_thing_user() {
-; CHECK-NEXT:    [[CATCH_THING_CALL:%.*]] = call i32 @catch_thing()
-; CHECK-NEXT:    ret i32 -1
+; IS__TUNIT____-LABEL: define {{[^@]+}}@catch_thing_user() {
+; IS__TUNIT____-NEXT:    [[CATCH_THING_CALL:%.*]] = call i32 @catch_thing()
+; IS__TUNIT____-NEXT:    ret i32 -1
+;
+; IS__CGSCC____-LABEL: define {{[^@]+}}@catch_thing_user() {
+; IS__CGSCC____-NEXT:    [[CATCH_THING_CALL:%.*]] = call noundef i32 @catch_thing()
+; IS__CGSCC____-NEXT:    ret i32 [[CATCH_THING_CALL]]
 ;
   %catch_thing_call = call i32 @catch_thing()
   ret i32 %catch_thing_call
@@ -133,5 +147,8 @@ declare i8* @__cxa_begin_catch(i8*)
 
 declare void @__cxa_end_catch()
 ;.
-; CHECK: attributes #[[ATTR0]] = { nofree norecurse nosync nounwind readnone willreturn }
+; NOT_CGSCC_NPM: attributes #[[ATTR0]] = { nofree norecurse nosync nounwind readnone willreturn }
+; NOT_CGSCC_NPM: attributes #[[ATTR1]] = { nofree nosync nounwind readnone willreturn }
+;.
+; IS__CGSCC_NPM: attributes #[[ATTR0]] = { nofree norecurse nosync nounwind readnone willreturn }
 ;.

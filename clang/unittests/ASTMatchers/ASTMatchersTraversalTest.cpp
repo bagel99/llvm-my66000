@@ -4675,6 +4675,9 @@ TEST(UsingDeclaration, ThroughUsingDeclaration) {
   EXPECT_TRUE(notMatches(
     "namespace a { void f(); } using a::f; void g() { a::f(); }",
     declRefExpr(throughUsingDecl(anything()))));
+  EXPECT_TRUE(matches("struct S {}; namespace a { int operator+(S s1, S s2); } "
+                      "using a::operator+; int g() { return S() + S(); }",
+                      declRefExpr(throughUsingDecl(anything()))));
 }
 
 TEST(SingleDecl, IsSingleDecl) {
@@ -4969,6 +4972,62 @@ TEST(ForEachDescendant, BindsCombinations) {
     compoundStmt(forEachDescendant(ifStmt().bind("if")),
                  forEachDescendant(whileStmt().bind("while"))),
     std::make_unique<VerifyIdIsBoundTo<IfStmt>>("if", 6)));
+}
+
+TEST(ForEachTemplateArgument, OnFunctionDecl) {
+  const std::string Code = R"(
+template <typename T, typename U> void f(T, U) {}
+void test() {
+  int I = 1;
+  bool B = false;
+  f(I, B);
+})";
+  EXPECT_TRUE(matches(
+      Code, functionDecl(forEachTemplateArgument(refersToType(builtinType()))),
+      langCxx11OrLater()));
+  auto matcher =
+      functionDecl(forEachTemplateArgument(
+                       templateArgument(refersToType(builtinType().bind("BT")))
+                           .bind("TA")))
+          .bind("FN");
+
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      Code, matcher,
+      std::make_unique<VerifyIdIsBoundTo<FunctionDecl>>("FN", 2)));
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      Code, matcher,
+      std::make_unique<VerifyIdIsBoundTo<TemplateArgument>>("TA", 2)));
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      Code, matcher,
+      std::make_unique<VerifyIdIsBoundTo<BuiltinType>>("BT", 2)));
+}
+
+TEST(ForEachTemplateArgument, OnClassTemplateSpecialization) {
+  const std::string Code = R"(
+template <typename T, unsigned N, unsigned M>
+struct Matrix {};
+
+static constexpr unsigned R = 2;
+
+Matrix<int, R * 2, R * 4> M;
+)";
+  EXPECT_TRUE(matches(
+      Code, templateSpecializationType(forEachTemplateArgument(isExpr(expr()))),
+      langCxx11OrLater()));
+  auto matcher = templateSpecializationType(
+                     forEachTemplateArgument(
+                         templateArgument(isExpr(expr().bind("E"))).bind("TA")))
+                     .bind("TST");
+
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      Code, matcher,
+      std::make_unique<VerifyIdIsBoundTo<TemplateSpecializationType>>("TST",
+                                                                      2)));
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      Code, matcher,
+      std::make_unique<VerifyIdIsBoundTo<TemplateArgument>>("TA", 2)));
+  EXPECT_TRUE(matchAndVerifyResultTrue(
+      Code, matcher, std::make_unique<VerifyIdIsBoundTo<Expr>>("E", 2)));
 }
 
 TEST(Has, DoesNotDeleteBindings) {

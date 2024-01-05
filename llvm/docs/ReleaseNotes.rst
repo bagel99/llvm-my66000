@@ -42,18 +42,10 @@ Non-comprehensive list of changes in this release
    functionality, or simply have a lot to talk about), see the `NOTE` below
    for adding a new subsection.
 
-
-.. NOTE
-   If you would like to document a larger change, then you can add a
-   subsection about it right here. You can copy the following boilerplate
-   and un-indent it (the indentation causes it to be inside this comment).
-
-   Special New Feature
-   -------------------
-
-   Makes programs 10x faster by doing Special New Thing.
-
 * ...
+
+Update on required toolchains to build LLVM
+-------------------------------------------
 
 Changes to the LLVM IR
 ----------------------
@@ -67,43 +59,45 @@ Changes to TableGen
 Changes to the AArch64 Backend
 ------------------------------
 
+Changes to the AMDGPU Backend
+-----------------------------
+
 Changes to the ARM Backend
 --------------------------
 
-Changes to the MIPS Target
+Changes to the AVR Backend
 --------------------------
-
-During this release ...
-
-Changes to the Hexagon Target
------------------------------
 
 * ...
 
-Changes to the PowerPC Target
+Changes to the DirectX Backend
+------------------------------
+
+Changes to the Hexagon Backend
+------------------------------
+
+* ...
+
+Changes to the MIPS Backend
+---------------------------
+
+* ...
+
+Changes to the PowerPC Backend
+------------------------------
+
+* ...
+
+Changes to the RISC-V Backend
 -----------------------------
 
-During this release ...
+Changes to the WebAssembly Backend
+----------------------------------
 
-Changes to the X86 Target
--------------------------
+* ...
 
-During this release ...
-
-Changes to the AMDGPU Target
------------------------------
-
-During this release ...
-
-Changes to the AVR Target
------------------------------
-
-During this release ...
-
-Changes to the WebAssembly Target
----------------------------------
-
-During this release ...
+Changes to the X86 Backend
+--------------------------
 
 Changes to the OCaml bindings
 -----------------------------
@@ -125,6 +119,12 @@ Changes to the DAG infrastructure
 ---------------------------------
 
 
+Changes to the Metadata Info
+---------------------------------
+
+* Add Module Flags Metadata ``stack-protector-guard-symbol`` which specify a
+  symbol for addressing the stack-protector guard.
+
 Changes to the Debug Info
 ---------------------------------
 
@@ -138,6 +138,10 @@ Changes to LLDB
 
 Changes to Sanitizers
 ---------------------
+
+
+Other Changes
+-------------
 
 External Open Source Projects Using LLVM 15
 ===========================================

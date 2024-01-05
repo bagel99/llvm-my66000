@@ -65,6 +65,15 @@ SmallVector<OpFoldResult> getAsOpFoldResult(ArrayRef<Value> values) {
       llvm::map_range(values, [](Value v) { return getAsOpFoldResult(v); }));
 }
 
+/// Convert `arrayAttr` to a vector of OpFoldResult.
+SmallVector<OpFoldResult> getAsOpFoldResult(ArrayAttr arrayAttr) {
+  SmallVector<OpFoldResult> res;
+  res.reserve(arrayAttr.size());
+  for (Attribute a : arrayAttr)
+    res.push_back(a);
+  return res;
+}
+
 /// If ofr is a constant integer or an IntegerAttr, return the integer.
 Optional<int64_t> getConstantIntValue(OpFoldResult ofr) {
   // Case 1: Check for Constant integer.
@@ -79,6 +88,12 @@ Optional<int64_t> getConstantIntValue(OpFoldResult ofr) {
   if (auto intAttr = attr.dyn_cast_or_null<IntegerAttr>())
     return intAttr.getValue().getSExtValue();
   return llvm::None;
+}
+
+/// Return true if `ofr` is constant integer equal to `value`.
+bool isConstantIntValue(OpFoldResult ofr, int64_t value) {
+  auto val = getConstantIntValue(ofr);
+  return val && *val == value;
 }
 
 /// Return true if ofr1 and ofr2 are the same integer constant attribute values

@@ -12,7 +12,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.src.math.cosf
-    libc.src.__support.CPP.standalone_cpp
+    libc.src.__support.CPP.array
     libc.src.__support.FPUtil.fputil
 )
 
@@ -40,7 +40,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.src.math.sinf
-    libc.src.__support.CPP.standalone_cpp
+    libc.src.__support.CPP.array
     libc.src.__support.FPUtil.fputil
 )
 
@@ -68,7 +68,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.src.math.sincosf
-    libc.src.__support.CPP.standalone_cpp
+    libc.src.__support.CPP.array
     libc.src.__support.FPUtil.fputil
 )
 
@@ -309,7 +309,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.include.math
-    libc.src.errno.__errno_location
+    libc.src.errno.errno
     libc.src.fenv.feclearexcept
     libc.src.fenv.feraiseexcept
     libc.src.fenv.fetestexcept
@@ -329,7 +329,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.include.math
-    libc.src.errno.__errno_location
+    libc.src.errno.errno
     libc.src.fenv.feclearexcept
     libc.src.fenv.feraiseexcept
     libc.src.fenv.fetestexcept
@@ -349,7 +349,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.include.math
-    libc.src.errno.__errno_location
+    libc.src.errno.errno
     libc.src.fenv.feclearexcept
     libc.src.fenv.feraiseexcept
     libc.src.fenv.fetestexcept
@@ -369,7 +369,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.include.math
-    libc.src.errno.__errno_location
+    libc.src.errno.errno
     libc.src.fenv.feclearexcept
     libc.src.fenv.feraiseexcept
     libc.src.fenv.fetestexcept
@@ -389,7 +389,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.include.math
-    libc.src.errno.__errno_location
+    libc.src.errno.errno
     libc.src.fenv.feclearexcept
     libc.src.fenv.feraiseexcept
     libc.src.fenv.fetestexcept
@@ -409,7 +409,7 @@ add_fp_unittest(
   DEPENDS
     libc.include.errno
     libc.include.math
-    libc.src.errno.__errno_location
+    libc.src.errno.errno
     libc.src.fenv.feclearexcept
     libc.src.fenv.feraiseexcept
     libc.src.fenv.fetestexcept
@@ -1004,11 +1004,11 @@ add_fp_unittest(
   SRCS
     generic_sqrtf_test.cpp
   DEPENDS
+    libc.src.math.sqrtf
     libc.src.__support.FPUtil.fputil
     libc.src.__support.FPUtil.generic.sqrt
   COMPILE_OPTIONS
     -O3
-    -Wno-c++17-extensions
 )
 
 add_fp_unittest(
@@ -1019,11 +1019,11 @@ add_fp_unittest(
   SRCS
     generic_sqrt_test.cpp
   DEPENDS
+    libc.src.math.sqrt
     libc.src.__support.FPUtil.fputil
     libc.src.__support.FPUtil.generic.sqrt
   COMPILE_OPTIONS
     -O3
-    -Wno-c++17-extensions
 )
 
 add_fp_unittest(
@@ -1034,11 +1034,11 @@ add_fp_unittest(
   SRCS
     generic_sqrtl_test.cpp
   DEPENDS
+    libc.src.math.sqrtl
     libc.src.__support.FPUtil.fputil
     libc.src.__support.FPUtil.generic.sqrt
   COMPILE_OPTIONS
     -O3
-    -Wno-c++17-extensions
 )
 
 add_fp_unittest(
@@ -1097,8 +1097,6 @@ add_fp_unittest(
     libc.include.math
     libc.src.math.hypotf
     libc.src.__support.FPUtil.fputil
-  COMPILE_OPTIONS
-    -Wno-c++17-extensions
 )
 
 add_fp_unittest(
@@ -1112,8 +1110,6 @@ add_fp_unittest(
     libc.include.math
     libc.src.math.hypot
     libc.src.__support.FPUtil.fputil
-  COMPILE_OPTIONS
-    -Wno-c++17-extensions
 )
 
 add_fp_unittest(
@@ -1158,6 +1154,8 @@ add_fp_unittest(
     libc.src.__support.FPUtil.fputil
 )
 
+# TODO(lntue): The current implementation of fputil::general::fma<float> is only
+# correctly rounded for the default rounding mode round-to-nearest tie-to-even.
 add_fp_unittest(
   fmaf_test
   NEED_MPFR
@@ -1169,6 +1167,8 @@ add_fp_unittest(
     libc.include.math
     libc.src.math.fmaf
     libc.src.__support.FPUtil.fputil
+  FLAGS
+    FMA_OPT__ONLY
 )
 
 add_fp_unittest(
@@ -1258,6 +1258,47 @@ add_fp_unittest(
   DEPENDS
     libc.include.math
     libc.src.math.log10f
+    libc.src.__support.FPUtil.fputil
+)
+
+add_fp_unittest(
+  log1pf_test
+  NEED_MPFR
+  SUITE
+    libc_math_unittests
+  SRCS
+    log1pf_test.cpp
+  DEPENDS
+    libc.include.math
+    libc.src.math.log1pf
+    libc.src.__support.FPUtil.fputil
+)
+
+add_fp_unittest(
+  fmodf_test
+  SUITE
+    libc_math_unittests
+  SRCS
+    fmodf_test.cpp
+  HDRS
+    FModTest.h
+  DEPENDS
+    libc.include.math
+    libc.src.math.fmodf
+    libc.src.__support.FPUtil.fputil
+)
+
+add_fp_unittest(
+  fmod_test
+  SUITE
+    libc_math_unittests
+  SRCS
+    fmod_test.cpp
+  HDRS
+    FModTest.h
+  DEPENDS
+    libc.include.math
+    libc.src.math.fmod
     libc.src.__support.FPUtil.fputil
 )
 

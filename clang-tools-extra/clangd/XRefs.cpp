@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 #include "XRefs.h"
 #include "AST.h"
-#include "CodeCompletionStrings.h"
 #include "FindSymbols.h"
 #include "FindTarget.h"
+#include "HeuristicResolver.h"
 #include "ParsedAST.h"
 #include "Protocol.h"
 #include "Quality.h"
@@ -19,6 +19,7 @@
 #include "index/Index.h"
 #include "index/Merge.h"
 #include "index/Relation.h"
+#include "index/SymbolID.h"
 #include "index/SymbolLocation.h"
 #include "support/Logger.h"
 #include "clang/AST/ASTContext.h"
@@ -31,13 +32,11 @@
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/DeclVisitor.h"
 #include "clang/AST/ExprCXX.h"
-#include "clang/AST/ExternalASTSource.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/Stmt.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/AST/Type.h"
-#include "clang/Basic/CharInfo.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SourceLocation.h"
@@ -50,16 +49,15 @@
 #include "clang/Index/USRGeneration.h"
 #include "clang/Tooling/Syntax/Tokens.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallSet.h"
-#include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Error.h"
-#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -85,32 +83,20 @@ const NamedDecl *getDefinition(const NamedDecl *D) {
   if (const auto *CTD = dyn_cast<ClassTemplateDecl>(D))
     if (const auto *RD = CTD->getTemplatedDecl())
       return RD->getDefinition();
-  // Objective-C classes can have three types of declarations:
-  //
-  // - forward declaration: @class MyClass;
-  // - true declaration (interface definition): @interface MyClass ... @end
-  // - true definition (implementation): @implementation MyClass ... @end
-  //
-  // Objective-C categories are extensions are on classes:
-  //
-  // - declaration: @interface MyClass (Ext) ... @end
-  // - definition: @implementation MyClass (Ext) ... @end
-  //
-  // With one special case, a class extension, which is normally used to keep
-  // some declarations internal to a file without exposing them in a header.
-  //
-  // - class extension declaration: @interface MyClass () ... @end
-  // - which really links to class definition: @implementation MyClass ... @end
-  if (const auto *ID = dyn_cast<ObjCInterfaceDecl>(D))
-    return ID->getImplementation();
-  if (const auto *CD = dyn_cast<ObjCCategoryDecl>(D)) {
-    if (CD->IsClassExtension()) {
-      if (const auto *ID = CD->getClassInterface())
-        return ID->getImplementation();
+  if (const auto *MD = dyn_cast<ObjCMethodDecl>(D)) {
+    if (MD->isThisDeclarationADefinition())
+      return MD;
+    // Look for the method definition inside the implementation decl.
+    auto *DeclCtx = cast<Decl>(MD->getDeclContext());
+    if (DeclCtx->isInvalidDecl())
       return nullptr;
-    }
-    return CD->getImplementation();
+
+    if (const auto *CD = dyn_cast<ObjCContainerDecl>(DeclCtx))
+      if (const auto *Impl = getCorrespondingObjCImpl(CD))
+        return Impl->getMethod(MD->getSelector(), MD->isInstanceMethod());
   }
+  if (const auto *CD = dyn_cast<ObjCContainerDecl>(D))
+    return getCorrespondingObjCImpl(CD);
   // Only a single declaration is allowed.
   if (isa<ValueDecl>(D) || isa<TemplateTypeParmDecl>(D) ||
       isa<TemplateTemplateParmDecl>(D)) // except cases above
@@ -403,8 +389,8 @@ locateASTReferent(SourceLocation CurLoc, const syntax::Token *TouchedIdentifier,
         }
       }
       // Special case: void foo() ^override: jump to the overridden method.
-    if (NodeKind.isSame(ASTNodeKind::getFromNodeKind<OverrideAttr>()) ||
-        NodeKind.isSame(ASTNodeKind::getFromNodeKind<FinalAttr>())) {
+      if (NodeKind.isSame(ASTNodeKind::getFromNodeKind<OverrideAttr>()) ||
+          NodeKind.isSame(ASTNodeKind::getFromNodeKind<FinalAttr>())) {
         // We may be overridding multiple methods - offer them all.
         for (const NamedDecl *ND : CMD->overridden_methods())
           AddResultDecl(ND);
@@ -893,8 +879,13 @@ public:
   };
 
   ReferenceFinder(const ParsedAST &AST,
-                  const llvm::DenseSet<SymbolID> &TargetIDs, bool PerToken)
-      : PerToken(PerToken), AST(AST), TargetIDs(TargetIDs) {}
+                  const llvm::ArrayRef<const NamedDecl *> Targets, bool PerToken)
+      : PerToken(PerToken), AST(AST) {
+    for (const NamedDecl *ND : Targets) {
+      const Decl *CD = ND->getCanonicalDecl();
+      TargetDeclToID[CD] = getSymbolID(CD);
+    }
+  }
 
   std::vector<Reference> take() && {
     llvm::sort(References, [](const Reference &L, const Reference &R) {
@@ -919,11 +910,11 @@ public:
                        llvm::ArrayRef<index::SymbolRelation> Relations,
                        SourceLocation Loc,
                        index::IndexDataConsumer::ASTNodeInfo ASTNode) override {
+    auto DeclID = TargetDeclToID.find(D->getCanonicalDecl());
+    if (DeclID == TargetDeclToID.end())
+      return true;
     const SourceManager &SM = AST.getSourceManager();
     if (!isInsideMainFile(Loc, SM))
-      return true;
-    SymbolID ID = getSymbolID(D);
-    if (!TargetIDs.contains(ID))
       return true;
     const auto &TB = AST.getTokens();
 
@@ -948,7 +939,7 @@ public:
     for (SourceLocation L : Locs) {
       L = SM.getFileLoc(L);
       if (const auto *Tok = TB.spelledTokenAt(L))
-        References.push_back({*Tok, Roles, ID});
+        References.push_back({*Tok, Roles, DeclID->getSecond()});
     }
     return true;
   }
@@ -957,12 +948,13 @@ private:
   bool PerToken; // If true, report 3 references for split ObjC selector names.
   std::vector<Reference> References;
   const ParsedAST &AST;
-  const llvm::DenseSet<SymbolID> &TargetIDs;
+  llvm::DenseMap<const Decl *, SymbolID> TargetDeclToID;
 };
 
 std::vector<ReferenceFinder::Reference>
-findRefs(const llvm::DenseSet<SymbolID> &IDs, ParsedAST &AST, bool PerToken) {
-  ReferenceFinder RefFinder(AST, IDs, PerToken);
+findRefs(const llvm::ArrayRef<const NamedDecl*> TargetDecls, ParsedAST &AST,
+         bool PerToken) {
+  ReferenceFinder RefFinder(AST, TargetDecls, PerToken);
   index::IndexingOptions IndexOpts;
   IndexOpts.SystemSymbolFilter =
       index::IndexingOptions::SystemSymbolFilterKind::All;
@@ -1248,16 +1240,12 @@ std::vector<DocumentHighlight> findDocumentHighlights(ParsedAST &AST,
     if (const SelectionTree::Node *N = ST.commonAncestor()) {
       DeclRelationSet Relations =
           DeclRelation::TemplatePattern | DeclRelation::Alias;
-      auto Decls =
-          targetDecl(N->ASTNode, Relations, AST.getHeuristicResolver());
-      if (!Decls.empty()) {
+      auto TargetDecls=
+           targetDecl(N->ASTNode, Relations, AST.getHeuristicResolver());
+      if (!TargetDecls.empty()) {
         // FIXME: we may get multiple DocumentHighlights with the same location
         // and different kinds, deduplicate them.
-        llvm::DenseSet<SymbolID> Targets;
-        for (const NamedDecl *ND : Decls)
-          if (auto ID = getSymbolID(ND))
-            Targets.insert(ID);
-        for (const auto &Ref : findRefs(Targets, AST, /*PerToken=*/true))
+        for (const auto &Ref : findRefs(TargetDecls, AST, /*PerToken=*/true))
           Result.push_back(toHighlight(Ref, SM));
         return true;
       }
@@ -1383,12 +1371,12 @@ ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
         DeclRelation::TemplatePattern | DeclRelation::Alias;
     std::vector<const NamedDecl *> Decls =
         getDeclAtPosition(AST, *CurLoc, Relations);
-    llvm::DenseSet<SymbolID> TargetsInMainFile;
+    llvm::SmallVector<const NamedDecl *> TargetsInMainFile;
     for (const NamedDecl *D : Decls) {
       auto ID = getSymbolID(D);
       if (!ID)
         continue;
-      TargetsInMainFile.insert(ID);
+      TargetsInMainFile.push_back(D);
       // Not all symbols can be referenced from outside (e.g. function-locals).
       // TODO: we could skip TU-scoped symbols here (e.g. static functions) if
       // we know this file isn't a header. The details might be tricky.
@@ -1908,37 +1896,53 @@ static QualType typeForNode(const SelectionTree::Node *N) {
   return QualType();
 }
 
-// Given a type targeted by the cursor, return a type that's more interesting
+// Given a type targeted by the cursor, return one or more types that are more interesting
 // to target.
-static QualType unwrapFindType(QualType T) {
+static void unwrapFindType(
+    QualType T, const HeuristicResolver* H, llvm::SmallVector<QualType>& Out) {
   if (T.isNull())
-    return T;
+    return;
 
   // If there's a specific type alias, point at that rather than unwrapping.
   if (const auto* TDT = T->getAs<TypedefType>())
-    return QualType(TDT, 0);
+    return Out.push_back(QualType(TDT, 0));
 
   // Pointers etc => pointee type.
   if (const auto *PT = T->getAs<PointerType>())
-    return unwrapFindType(PT->getPointeeType());
+    return unwrapFindType(PT->getPointeeType(), H, Out);
   if (const auto *RT = T->getAs<ReferenceType>())
-    return unwrapFindType(RT->getPointeeType());
+    return unwrapFindType(RT->getPointeeType(), H, Out);
   if (const auto *AT = T->getAsArrayTypeUnsafe())
-    return unwrapFindType(AT->getElementType());
-  // FIXME: use HeuristicResolver to unwrap smart pointers?
+    return unwrapFindType(AT->getElementType(), H, Out);
 
   // Function type => return type.
-  if (auto FT = T->getAs<FunctionType>())
-    return unwrapFindType(FT->getReturnType());
-  if (auto CRD = T->getAsCXXRecordDecl()) {
+  if (auto *FT = T->getAs<FunctionType>())
+    return unwrapFindType(FT->getReturnType(), H, Out);
+  if (auto *CRD = T->getAsCXXRecordDecl()) {
     if (CRD->isLambda())
-      return unwrapFindType(CRD->getLambdaCallOperator()->getReturnType());
+      return unwrapFindType(CRD->getLambdaCallOperator()->getReturnType(), H, Out);
     // FIXME: more cases we'd prefer the return type of the call operator?
     //        std::function etc?
   }
 
-  return T;
+  // For smart pointer types, add the underlying type
+  if (H)
+    if (const auto* PointeeType = H->getPointeeType(T.getNonReferenceType().getTypePtr())) {
+        unwrapFindType(QualType(PointeeType, 0), H, Out);
+        return Out.push_back(T);
+    }
+
+  return Out.push_back(T);
 }
+
+// Convenience overload, to allow calling this without the out-parameter
+static llvm::SmallVector<QualType> unwrapFindType(
+    QualType T, const HeuristicResolver* H) {
+    llvm::SmallVector<QualType> Result;
+    unwrapFindType(T, H, Result);
+    return Result;
+}
+
 
 std::vector<LocatedSymbol> findType(ParsedAST &AST, Position Pos) {
   const SourceManager &SM = AST.getSourceManager();
@@ -1952,10 +1956,16 @@ std::vector<LocatedSymbol> findType(ParsedAST &AST, Position Pos) {
   // The general scheme is: position -> AST node -> type -> declaration.
   auto SymbolsFromNode =
       [&AST](const SelectionTree::Node *N) -> std::vector<LocatedSymbol> {
-    QualType Type = unwrapFindType(typeForNode(N));
-    if (Type.isNull())
-      return {};
-    return locateSymbolForType(AST, Type);
+    std::vector<LocatedSymbol> LocatedSymbols;
+
+    // NOTE: unwrapFindType might return duplicates for something like
+    // unique_ptr<unique_ptr<T>>. Let's *not* remove them, because it gives you some
+    // information about the type you may have not known before
+    // (since unique_ptr<unique_ptr<T>> != unique_ptr<T>).
+    for (const QualType& Type : unwrapFindType(typeForNode(N), AST.getHeuristicResolver()))
+        llvm::copy(locateSymbolForType(AST, Type), std::back_inserter(LocatedSymbols));
+
+    return LocatedSymbols;
   };
   SelectionTree::createEach(AST.getASTContext(), AST.getTokens(), *Offset,
                             *Offset, [&](SelectionTree ST) {
@@ -2113,6 +2123,7 @@ incomingCalls(const CallHierarchyItem &Item, const SymbolIndex *Index) {
   // FIXME: Consider also using AST information when feasible.
   RefsRequest Request;
   Request.IDs.insert(*ID);
+  Request.WantContainer = true;
   // We could restrict more specifically to calls by introducing a new RefKind,
   // but non-call references (such as address-of-function) can still be
   // interesting as they can indicate indirect calls.

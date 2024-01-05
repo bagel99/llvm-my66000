@@ -29,8 +29,6 @@ ELF Improvements
 Breaking changes
 ----------------
 
-* ...
-
 COFF Improvements
 -----------------
 
@@ -43,8 +41,6 @@ MinGW Improvements
 
 MachO Improvements
 ------------------
-
-* Item 1.
 
 WebAssembly Improvements
 ------------------------

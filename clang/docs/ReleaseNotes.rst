@@ -47,7 +47,8 @@ sections with improvements to Clang's support for those languages.
 Major New Features
 ------------------
 
--  ...
+Bug Fixes
+---------
 
 Improvements to Clang's diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -69,7 +70,6 @@ Removed Compiler Flags
 
 New Pragmas in Clang
 --------------------
-
 - ...
 
 Attribute Changes in Clang
@@ -78,13 +78,17 @@ Attribute Changes in Clang
 Windows Support
 ---------------
 
+AIX Support
+-----------
+
 C Language Changes in Clang
 ---------------------------
 
+C2x Feature Support
+-------------------
+
 C++ Language Changes in Clang
 -----------------------------
-
-- ...
 
 C++20 Feature Support
 ^^^^^^^^^^^^^^^^^^^^^
@@ -92,8 +96,8 @@ C++20 Feature Support
 C++2b Feature Support
 ^^^^^^^^^^^^^^^^^^^^^
 
-CUDA Language Changes in Clang
-------------------------------
+CUDA/HIP Language Changes in Clang
+----------------------------------
 
 Objective-C Language Changes in Clang
 -------------------------------------
@@ -108,6 +112,8 @@ ABI Changes in Clang
 
 OpenMP Support in Clang
 -----------------------
+
+...
 
 CUDA Support in Clang
 ---------------------
@@ -138,15 +144,14 @@ AST Matchers
 clang-format
 ------------
 
+clang-extdef-mapping
+--------------------
+
 libclang
 --------
 
-- ...
-
 Static Analyzer
 ---------------
-
-- ...
 
 .. _release-notes-ubsan:
 
@@ -184,5 +189,5 @@ this release by going into the "``clang/docs/``" directory in the Clang
 tree.
 
 If you have any questions or comments about Clang, please feel free to
-contact us via the `mailing
-list <https://lists.llvm.org/mailman/listinfo/cfe-dev>`_.
+contact us on the Discourse forums (Clang Frontend category)
+<https://discourse.llvm.org/c/clang/6>`_.
