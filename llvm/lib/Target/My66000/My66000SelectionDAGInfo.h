@@ -23,8 +23,8 @@ class My66000SelectionDAGInfo : public SelectionDAGTargetInfo {
 public:
   SDValue EmitTargetCodeForMemcpy(SelectionDAG &DAG, const SDLoc &dl,
                                   SDValue Chain, SDValue Dst, SDValue Src,
-                                  SDValue Size, Align Alignment, bool isVolatile,
-                                  bool AlwaysInline,
+                                  SDValue Size, Align Alignment,
+				  bool isVolatile, bool AlwaysInline,
                                   MachinePointerInfo DstPtrInfo,
                                   MachinePointerInfo SrcPtrInfo) const override;
   SDValue EmitTargetCodeForMemmove(SelectionDAG &DAG, const SDLoc &dl,
@@ -34,7 +34,8 @@ public:
                                   MachinePointerInfo SrcPtrInfo) const override;
   SDValue EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl,
                                   SDValue Chain, SDValue Dst, SDValue Src,
-                                  SDValue Size, Align Alignment, bool isVolatile,
+                                  SDValue Size, Align Alignment,
+				  bool isVolatile, bool AlwaysInline,
                                   MachinePointerInfo DstPtrInfo) const override;
 };
 

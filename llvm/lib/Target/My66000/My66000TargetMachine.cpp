@@ -118,6 +118,6 @@ extern "C" void LLVMInitializeMy66000Target() {
 }
 
 TargetTransformInfo
-My66000TargetMachine::getTargetTransformInfo(const Function &F) {
+My66000TargetMachine::getTargetTransformInfo(const Function &F) const {
   return TargetTransformInfo(My66000TTIImpl(this, F));
 }

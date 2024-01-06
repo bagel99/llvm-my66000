@@ -11586,7 +11586,8 @@ Address My66000ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // Empty records are ignored for parameter passing purposes.
   if (isEmptyRecord(getContext(), Ty, true)) {
-    Address Addr(CGF.Builder.CreateLoad(VAListAddr), SlotSize);
+    Address Addr = Address(CGF.Builder.CreateLoad(VAListAddr),
+                           getVAListElementType(CGF), SlotSize);
     Addr = CGF.Builder.CreateElementBitCast(Addr, CGF.ConvertTypeForMem(Ty));
     return Addr;
   }

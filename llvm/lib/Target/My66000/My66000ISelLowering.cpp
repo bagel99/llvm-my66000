@@ -1467,7 +1467,7 @@ LLVM_DEBUG(dbgs() << "found FirstCarry n=" << n << " old=" << old << '\n');
   if (n > 8) return false;
   reg = I->getOperand(0).getReg();
   // Replace the immediate operand(1). Is there a better way to do this?
-  I->RemoveOperand(1);
+  I->removeOperand(1);
   I->addOperand(MachineOperand::CreateImm(chg));
   return true;
 }

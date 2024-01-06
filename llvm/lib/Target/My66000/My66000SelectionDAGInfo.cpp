@@ -37,7 +37,7 @@ LLVM_DEBUG(dbgs() << "EmitTargetCodeForMemmove\n");
 
 SDValue My66000SelectionDAGInfo::EmitTargetCodeForMemset(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
-    SDValue Size, Align Alignment, bool isVolatile,
+    SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
     MachinePointerInfo DstPtrInfo) const {
 LLVM_DEBUG(dbgs() << "EmitTargetCodeForMemset\n");
   // Ignore Align

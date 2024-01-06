@@ -110,7 +110,7 @@ LLVM_DEBUG(dbgs() << "  livein=  " << Livein.to_string() << '\n');
     Modified &= Livein;
 LLVM_DEBUG(dbgs() << "  bits=    " << Modified.to_string() << '\n');
     bits = Modified.to_ulong();
-    I->RemoveOperand(1);
+    I->removeOperand(1);
     I->addOperand(MachineOperand::CreateImm(bits>>1));
   }
 

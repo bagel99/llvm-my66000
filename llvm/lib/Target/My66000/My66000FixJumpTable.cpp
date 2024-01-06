@@ -95,7 +95,7 @@ MachineBasicBlock *FixJumpTable(MachineInstr &MI, MachineBasicBlock *MBB,
            "Expected jump or fallthrough to br_table block");
 
     // Remove the dummy default target and install the real one.
-    MI.RemoveOperand(MI.getNumExplicitOperands() - 1);
+    MI.removeOperand(MI.getNumExplicitOperands() - 1);
     MI.addOperand(MF, MachineOperand::CreateMBB(TBB));
   }
   // Remove any branches from the header and splice in the jump table instead

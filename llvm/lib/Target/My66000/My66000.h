@@ -22,22 +22,23 @@ namespace llvm {
   class ModulePass;
   class TargetMachine;
   class My66000TargetMachine;
+  class PassRegistry;
   class formatted_raw_ostream;
 
-  void initializeMy66000LowerThreadLocalPass(PassRegistry &p);
+  void initializeMy66000LowerThreadLocalPass(PassRegistry &);
 
   FunctionPass *createMy66000FrameToArgsOffsetEliminationPass();
   FunctionPass *createMy66000ISelDag(My66000TargetMachine &TM,
                                    CodeGenOpt::Level OptLevel);
   ModulePass *createMy66000LowerThreadLocalPass();
   FunctionPass *createMy66000PredBlockPass();
-  void initializeMy66000PredBlockPass(PassRegistry &p);
+  void initializeMy66000PredBlockPass(PassRegistry &);
   FunctionPass *createMy66000FixJumpTablePass();
-  void initializeMy66000FixJumpTablePass(PassRegistry &p);
+  void initializeMy66000FixJumpTablePass(PassRegistry &);
   FunctionPass *createMy66000VVMLoopPass();
-  void initializeMy66000VVMLoopPass(PassRegistry &p);
+  void initializeMy66000VVMLoopPass(PassRegistry &);
   FunctionPass *createMy66000VVMFixupPass();
-  void initializeMy66000VVMFixupPass(PassRegistry &p);
+  void initializeMy66000VVMFixupPass(PassRegistry &);
 
   extern char &My66000VVMLoopID;
   extern char &My66000PredBlockID;
