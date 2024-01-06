@@ -369,7 +369,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("renderscript32", renderscript32)
     .Case("renderscript64", renderscript64)
     .Case("ve", ve)
-    .Case("csky", csky)<<<<<<< HEAD
+    .Case("csky", csky)
     .Case("my66000", my66000)
     .Case("loongarch32", loongarch32)
     .Case("loongarch64", loongarch64)
