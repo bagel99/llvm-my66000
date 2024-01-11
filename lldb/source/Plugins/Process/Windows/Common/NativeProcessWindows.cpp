@@ -295,11 +295,11 @@ NativeProcessWindows::GetSoftwareBreakpointTrapOpcode(size_t size_hint) {
 
   switch (GetArchitecture().GetMachine()) {
   case llvm::Triple::aarch64:
-    return llvm::makeArrayRef(g_aarch64_opcode);
+    return llvm::ArrayRef(g_aarch64_opcode);
 
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
-    return llvm::makeArrayRef(g_thumb_opcode);
+    return llvm::ArrayRef(g_thumb_opcode);
 
   default:
     return NativeProcessProtocol::GetSoftwareBreakpointTrapOpcode(size_hint);
@@ -378,7 +378,7 @@ Status NativeProcessWindows::GetLoadedModuleFileSpec(const char *module_path,
     }
   }
   return Status("Module (%s) not found in process %" PRIu64 "!",
-                module_file_spec.GetCString(), GetID());
+                module_file_spec.GetPath().c_str(), GetID());
 }
 
 Status
@@ -398,7 +398,7 @@ NativeProcessWindows::GetFileLoadAddress(const llvm::StringRef &file_name,
     }
   }
   return Status("Can't get loaded address of file (%s) in process %" PRIu64 "!",
-                file_spec.GetCString(), GetID());
+                file_spec.GetPath().c_str(), GetID());
 }
 
 void NativeProcessWindows::OnExitProcess(uint32_t exit_code) {
@@ -528,7 +528,7 @@ NativeProcessWindows::OnDebugException(bool first_chance,
       return ExceptionResult::BreakInDebugger;
     }
 
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   default:
     LLDB_LOG(log,
              "Debugger thread reported exception {0:x} at address {1:x} "

@@ -12,7 +12,8 @@
 #include "FEnvImpl.h"
 #include "FPBits.h"
 
-#include "src/__support/CPP/TypeTraits.h"
+#include "src/__support/CPP/type_traits.h"
+#include "src/__support/common.h"
 
 #include <errno.h>
 #include <math.h>
@@ -20,9 +21,8 @@
 namespace __llvm_libc {
 namespace fputil {
 
-template <typename T,
-          cpp::EnableIfType<cpp::IsFloatingPointType<T>::Value, int> = 0>
-static inline T trunc(T x) {
+template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
+LIBC_INLINE T trunc(T x) {
   FPBits<T> bits(x);
 
   // If x is infinity or NaN, return it.
@@ -52,9 +52,8 @@ static inline T trunc(T x) {
   return T(bits);
 }
 
-template <typename T,
-          cpp::EnableIfType<cpp::IsFloatingPointType<T>::Value, int> = 0>
-static inline T ceil(T x) {
+template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
+LIBC_INLINE T ceil(T x) {
   FPBits<T> bits(x);
 
   // If x is infinity NaN or zero, return it.
@@ -91,9 +90,8 @@ static inline T ceil(T x) {
   return trunc_value + T(1.0);
 }
 
-template <typename T,
-          cpp::EnableIfType<cpp::IsFloatingPointType<T>::Value, int> = 0>
-static inline T floor(T x) {
+template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
+LIBC_INLINE T floor(T x) {
   FPBits<T> bits(x);
   if (bits.get_sign()) {
     return -ceil(-x);
@@ -102,9 +100,8 @@ static inline T floor(T x) {
   }
 }
 
-template <typename T,
-          cpp::EnableIfType<cpp::IsFloatingPointType<T>::Value, int> = 0>
-static inline T round(T x) {
+template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
+LIBC_INLINE T round(T x) {
   using UIntType = typename FPBits<T>::UIntType;
   FPBits<T> bits(x);
 
@@ -154,9 +151,8 @@ static inline T round(T x) {
   }
 }
 
-template <typename T,
-          cpp::EnableIfType<cpp::IsFloatingPointType<T>::Value, int> = 0>
-static inline T round_using_current_rounding_mode(T x) {
+template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
+LIBC_INLINE T round_using_current_rounding_mode(T x) {
   using UIntType = typename FPBits<T>::UIntType;
   FPBits<T> bits(x);
 
@@ -235,10 +231,9 @@ static inline T round_using_current_rounding_mode(T x) {
 namespace internal {
 
 template <typename F, typename I,
-          cpp::EnableIfType<cpp::IsFloatingPointType<F>::Value &&
-                                cpp::IsIntegral<I>::Value,
-                            int> = 0>
-static inline I rounded_float_to_signed_integer(F x) {
+          cpp::enable_if_t<cpp::is_floating_point_v<F> && cpp::is_integral_v<I>,
+                           int> = 0>
+LIBC_INLINE I rounded_float_to_signed_integer(F x) {
   constexpr I INTEGER_MIN = (I(1) << (sizeof(I) * 8 - 1));
   constexpr I INTEGER_MAX = -(INTEGER_MIN + 1);
   FPBits<F> bits(x);
@@ -277,18 +272,16 @@ static inline I rounded_float_to_signed_integer(F x) {
 } // namespace internal
 
 template <typename F, typename I,
-          cpp::EnableIfType<cpp::IsFloatingPointType<F>::Value &&
-                                cpp::IsIntegral<I>::Value,
-                            int> = 0>
-static inline I round_to_signed_integer(F x) {
+          cpp::enable_if_t<cpp::is_floating_point_v<F> && cpp::is_integral_v<I>,
+                           int> = 0>
+LIBC_INLINE I round_to_signed_integer(F x) {
   return internal::rounded_float_to_signed_integer<F, I>(round(x));
 }
 
 template <typename F, typename I,
-          cpp::EnableIfType<cpp::IsFloatingPointType<F>::Value &&
-                                cpp::IsIntegral<I>::Value,
-                            int> = 0>
-static inline I round_to_signed_integer_using_current_rounding_mode(F x) {
+          cpp::enable_if_t<cpp::is_floating_point_v<F> && cpp::is_integral_v<I>,
+                           int> = 0>
+LIBC_INLINE I round_to_signed_integer_using_current_rounding_mode(F x) {
   return internal::rounded_float_to_signed_integer<F, I>(
       round_using_current_rounding_mode(x));
 }

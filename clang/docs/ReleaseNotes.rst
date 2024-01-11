@@ -36,9 +36,14 @@ main Clang web page, this document applies to the *next* release, not
 the current one. To see the release notes for a specific release, please
 see the `releases page <https://llvm.org/releases/>`_.
 
+Potentially Breaking Changes
+============================
+These changes are ones which we think may surprise users when upgrading to
+Clang |release| because of the opportunity they pose for disruption to existing
+code bases.
+
 What's New in Clang |release|?
 ==============================
-
 Some of the major new features and improvements to Clang are listed
 here. Generic improvements to Clang as a whole or to its underlying
 infrastructure are described first, followed by language-specific
@@ -118,10 +123,17 @@ OpenMP Support in Clang
 CUDA Support in Clang
 ---------------------
 
-- ...
+LoongArch Support in Clang
+--------------------------
+
+RISC-V Support in Clang
+-----------------------
 
 X86 Support in Clang
 --------------------
+
+WebAssembly Support in Clang
+----------------------------
 
 DWARF Support in Clang
 ----------------------
@@ -153,10 +165,10 @@ libclang
 Static Analyzer
 ---------------
 
-.. _release-notes-ubsan:
+.. _release-notes-sanitizers:
 
-Undefined Behavior Sanitizer (UBSan)
-------------------------------------
+Sanitizers
+----------
 
 Core Analysis Improvements
 ==========================

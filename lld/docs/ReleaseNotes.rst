@@ -32,12 +32,8 @@ Breaking changes
 COFF Improvements
 -----------------
 
-* ...
-
 MinGW Improvements
 ------------------
-
-* ...
 
 MachO Improvements
 ------------------

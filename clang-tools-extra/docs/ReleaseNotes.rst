@@ -81,8 +81,6 @@ Miscellaneous
 Improvements to clang-doc
 -------------------------
 
-The improvements are...
-
 Improvements to clang-query
 ---------------------------
 

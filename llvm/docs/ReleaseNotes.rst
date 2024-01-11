@@ -24,8 +24,8 @@ from the `LLVM releases web site <https://llvm.org/releases/>`_.
 
 For more information about LLVM, including information about the latest
 release, please check out the `main LLVM web site <https://llvm.org/>`_.  If you
-have questions or comments, the `LLVM Developer's Mailing List
-<https://lists.llvm.org/mailman/listinfo/llvm-dev>`_ is a good place to send
+have questions or comments, the `Discourse forums
+<https://discourse.llvm.org>`_ is a good place to ask
 them.
 
 Note that if you are reading this file from a Git checkout or the main
@@ -56,6 +56,9 @@ Changes to building LLVM
 Changes to TableGen
 -------------------
 
+Changes to Interprocedural Optimizations
+----------------------------------------
+
 Changes to the AArch64 Backend
 ------------------------------
 
@@ -78,6 +81,9 @@ Changes to the Hexagon Backend
 
 * ...
 
+Changes to the LoongArch Backend
+--------------------------------
+
 Changes to the MIPS Backend
 ---------------------------
 
@@ -96,6 +102,9 @@ Changes to the WebAssembly Backend
 
 * ...
 
+Changes to the Windows Target
+-----------------------------
+
 Changes to the X86 Backend
 --------------------------
 
@@ -105,10 +114,6 @@ Changes to the OCaml bindings
 
 Changes to the C API
 --------------------
-
-Changes to the Go bindings
---------------------------
-
 
 Changes to the FastISel infrastructure
 --------------------------------------
@@ -122,13 +127,8 @@ Changes to the DAG infrastructure
 Changes to the Metadata Info
 ---------------------------------
 
-* Add Module Flags Metadata ``stack-protector-guard-symbol`` which specify a
-  symbol for addressing the stack-protector guard.
-
 Changes to the Debug Info
 ---------------------------------
-
-During this release ...
 
 Changes to the LLVM tools
 ---------------------------------
@@ -138,7 +138,6 @@ Changes to LLDB
 
 Changes to Sanitizers
 ---------------------
-
 
 Other Changes
 -------------
@@ -159,4 +158,4 @@ code.  You can access versions of these documents specific to this release by
 going into the ``llvm/docs/`` directory in the LLVM tree.
 
 If you have any questions or comments about LLVM, please feel free to contact
-us via the `mailing lists <https://llvm.org/docs/#mailing-lists>`_.
+us via the `Discourse forums <https://discourse.llvm.org>`_.
