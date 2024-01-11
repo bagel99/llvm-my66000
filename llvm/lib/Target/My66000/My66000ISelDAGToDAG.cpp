@@ -41,8 +41,10 @@ namespace {
 
 class My66000DAGToDAGISel : public SelectionDAGISel {
 public:
+  static char ID;
+
   My66000DAGToDAGISel(My66000TargetMachine &TM, CodeGenOpt::Level OptLevel)
-      : SelectionDAGISel(TM, OptLevel) {}
+      : SelectionDAGISel(ID, TM, OptLevel) {}
 
   void Select(SDNode *N) override;
 
@@ -71,6 +73,8 @@ private:
 };
 
 } // end anonymous namespace
+
+char My66000DAGToDAGISel::ID;
 
 /// This pass converts a legalized DAG into a My66000-specific DAG, ready for
 /// instruction scheduling.
@@ -240,7 +244,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 	  Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
 	}
 	ConstantSDNode *CN;
-	if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
+	if ((CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1)))) {
           Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
 					     MVT::i64);
 	  LLVM_DEBUG(dbgs() << "\tmatch 3\n");
@@ -248,14 +252,14 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 	} else {
 	  if (getShift(Addr.getOperand(1), Index, Shift)) {
 	    Base = Addr.getOperand(0).getOperand(0);
-	    if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(0).getOperand(1))) {
+	    if ((CN = dyn_cast<ConstantSDNode>(Addr.getOperand(0).getOperand(1)))) {
 	      Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
 					     MVT::i64);
 	      LLVM_DEBUG(dbgs() << "\tmatch 7\n");
 	      return true;
 	    }
 	  }
-	  if (CN = dyn_cast<ConstantSDNode>(Addr.getOperand(0).getOperand(1))) {
+	  if ((CN = dyn_cast<ConstantSDNode>(Addr.getOperand(0).getOperand(1)))) {
 	    Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
 					       MVT::i64);
 	    Index  = Addr.getOperand(1);

@@ -15,6 +15,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCRegister.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -113,8 +114,8 @@ inline static const char *FCondBitString(unsigned CC) {
   }
 }
 
-void My66000InstPrinter::printRegName(raw_ostream &OS, unsigned RegNo) const {
-  OS << StringRef(getRegisterName(RegNo)).lower();
+void My66000InstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
+  OS << StringRef(getRegisterName(Reg)).lower();
 }
 
 static void printCarryBits(unsigned bits, raw_ostream &O) {

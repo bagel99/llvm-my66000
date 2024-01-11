@@ -82,7 +82,7 @@ class My66000TargetLowering : public TargetLowering {
   bool allowsMisalignedMemoryAccesses(
       EVT VT, unsigned AddrSpace = 0, Align Alignment = Align(1),
       MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
-      bool *Fast = nullptr) const override;
+      unsigned *Fast = nullptr) const override;
 
   ConstraintType getConstraintType(StringRef Constraint) const override;
 

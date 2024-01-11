@@ -92,7 +92,7 @@ My66000RegisterInfo::useFPForScavengingIndex(const MachineFunction &MF) const {
   return false;
 }
 
-void
+bool
 My66000RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                        int SPAdj, unsigned FIOperandNum,
                                        RegScavenger *RS) const {
@@ -119,6 +119,8 @@ LLVM_DEBUG(dbgs() << "My66000RegisterInfo::eliminateFrameIndex\n");
   MI.getOperand(FIOperandNum)
       .ChangeToRegister(FrameReg, false, false, FrameRegIsKill);
   MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
+
+  return false;		// FIXME - what is this?
 }
 
 

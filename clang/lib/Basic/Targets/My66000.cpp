@@ -21,7 +21,7 @@ using namespace clang::targets;
 
 ArrayRef<Builtin::Info> My66000TargetInfo::getTargetBuiltins() const {
   // FIXME: someday we might need target specific builtins
-  return None;
+  return std::nullopt;
 }
 
 void My66000TargetInfo::getTargetDefines(const LangOptions &Opts,

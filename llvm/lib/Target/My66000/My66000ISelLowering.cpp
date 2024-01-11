@@ -315,10 +315,10 @@ bool My66000TargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF
 
 bool My66000TargetLowering::allowsMisalignedMemoryAccesses(
     EVT VT, unsigned AddrSpace, Align Alignment,
-    MachineMemOperand::Flags Flags, bool *Fast) const {
+    MachineMemOperand::Flags Flags, unsigned *Fast) const {
 
     if (Fast != nullptr)
-      *Fast = true;
+      *Fast = 0;
     return true;
 }
 
@@ -924,7 +924,7 @@ struct ArgDataPair {
 
 } // end anonymous namespace
 
-static const MCPhysReg ArgRegs[] = {
+static const MCPhysReg ArgGPRs[] = {
   My66000::R1, My66000::R2, My66000::R3, My66000::R4,
   My66000::R5, My66000::R6, My66000::R7, My66000::R8
 };
@@ -949,7 +949,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
 
   CCInfo.AnalyzeFormalArguments(Ins, CC_My66000);
 
-  unsigned StackSlotSize = 8;
+//  unsigned StackSlotSize = 8;
 
   if (!IsVarArg)
     AFI->setReturnStackOffset(CCInfo.getNextStackOffset());
@@ -1009,14 +1009,15 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
   // CopyFromReg vararg registers.
   if (IsVarArg) {
     // Argument registers
+    ArrayRef<MCPhysReg> ArgRegs = ArrayRef(ArgGPRs);
     auto *XFI = MF.getInfo<My66000FunctionInfo>();
-    unsigned FirstVAReg = CCInfo.getFirstUnallocated(ArgRegs);
+    unsigned FirstVAReg = CCInfo.getFirstUnallocated(ArgGPRs);
     LLVM_DEBUG(dbgs() << "\tIsVarArg FirstVAReg=" << FirstVAReg << '\n');
     LLVM_DEBUG(dbgs() << "\tFirstVAReg=" << FirstVAReg << '\n');
     LLVM_DEBUG(dbgs() << "\tlengthof(ArgRegs)=" << array_lengthof(ArgRegs) << '\n');
     // Save remaining registers possibly containing varags.
     int Offset;
-    int VaSaveSize = (array_lengthof(ArgRegs) - FirstVAReg) * 8;
+    int VaSaveSize = (ArgRegs.size() - FirstVAReg) * 8;
     if (VaSaveSize == 0)
       Offset = CCInfo.getNextStackOffset();
     else
@@ -1027,7 +1028,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
     XFI->setVarArgsFrameIndex(VaFI);
     if (VaSaveSize > 0) {
       // FIXME - use STM if more than one
-      for (unsigned i = FirstVAReg; i < array_lengthof(ArgRegs); i++) {
+      for (unsigned i = FirstVAReg; i < ArgRegs.size(); i++) {
         // Move argument from phys reg -> virt reg
         unsigned VReg = RegInfo.createVirtualRegister(&My66000::GRegsRegClass);
         RegInfo.addLiveIn(ArgRegs[i], VReg);
