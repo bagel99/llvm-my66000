@@ -40,7 +40,7 @@ def shfinx: Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 0 && Imm <= 3; }]>;
 def gbladr : Operand<iPTR>;
 def brtarget : Operand<OtherVT>;
-def calltarget : Operand<OtherVT>;
+def calltarget : Operand<iPTR>;
 def ccode : Operand<i64>;
 
 // Operand definitions for machine instructions
@@ -91,10 +91,10 @@ def myJT8 :	    SDNode<"My66000ISD::JT8", SDT_BR_JT, [SDNPHasChain]>;
 def myJT16 :	    SDNode<"My66000ISD::JT16", SDT_BR_JT, [SDNPHasChain]>;
 def myJT32 :	    SDNode<"My66000ISD::JT32", SDT_BR_JT, [SDNPHasChain]>;
 def myCALL :        SDNode<"My66000ISD::CALL",
-                        SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>,
+                        SDTypeProfile<0, 1, [SDTCisVT<0, iPTR>]>,
 			[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def myTAIL:	    SDNode<"My66000ISD::TAIL",
-                        SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>,
+                        SDTypeProfile<0, 1, [SDTCisVT<0, iPTR>]>,
 			[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def myCALLI :	    SDNode<"My66000ISD::CALLI", SDT_CALL,
 			[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
