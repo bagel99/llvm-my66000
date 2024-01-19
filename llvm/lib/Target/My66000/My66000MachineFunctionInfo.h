@@ -29,8 +29,10 @@ namespace llvm {
 /// My66000FunctionInfo - This class is derived from MachineFunction private
 /// My66000 target-specific information for each MachineFunction.
 class My66000FunctionInfo : public MachineFunctionInfo {
-  unsigned ReturnStackOffset;
-  bool ReturnStackOffsetSet = false;
+  virtual void anchor();
+
+  unsigned ReturnStackOffset = false;
+  bool ReturnStackOffsetSet;
   int VarArgsFrameIndex = 0;
   int VarArgsSaveSize = 0;
   mutable int CachedEStackSize = -1;
@@ -39,14 +41,17 @@ class My66000FunctionInfo : public MachineFunctionInfo {
   unsigned LoSavedReg;
   unsigned HiSavedReg;
 
-  virtual void anchor();
 
 public:
-  My66000FunctionInfo() = default;
+  My66000FunctionInfo(const Function &F, const TargetSubtargetInfo *STI)
+      : ReturnStackOffset(false), VarArgsFrameIndex(0), VarArgsSaveSize(0) {}
 
-  explicit My66000FunctionInfo(MachineFunction &MF) {}
+  ~My66000FunctionInfo() {}
 
-  ~My66000FunctionInfo() override = default;
+  MachineFunctionInfo *
+  clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,
+        const DenseMap<MachineBasicBlock *, MachineBasicBlock *> &Src2DstMBB)
+      const override;
 
   void setVarArgsFrameIndex(int off) { VarArgsFrameIndex = off; }
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }

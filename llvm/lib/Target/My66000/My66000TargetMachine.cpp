@@ -13,6 +13,7 @@
 #include "MCTargetDesc/My66000MCTargetDesc.h"
 #include "TargetInfo/My66000TargetInfo.h"
 #include "My66000.h"
+#include "My66000MachineFunctionInfo.h"
 #include "My66000TargetObjectFile.h"
 #include "My66000TargetTransformInfo.h"
 #include "llvm/ADT/Optional.h"
@@ -84,6 +85,12 @@ public:
 
 TargetPassConfig *My66000TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new My66000PassConfig(*this, PM);
+}
+
+MachineFunctionInfo *My66000TargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return My66000FunctionInfo::create<My66000FunctionInfo>(Allocator, F, STI);
 }
 
 void My66000PassConfig::addIRPasses() {

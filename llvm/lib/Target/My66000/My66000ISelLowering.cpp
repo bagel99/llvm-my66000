@@ -940,19 +940,18 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
-  auto *AFI = MF.getInfo<My66000FunctionInfo>();
+  My66000FunctionInfo *FI = MF.getInfo<My66000FunctionInfo>();
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
                  *DAG.getContext());
-
   CCInfo.AnalyzeFormalArguments(Ins, CC_My66000);
 
-//  unsigned StackSlotSize = 8;
+  unsigned StackSlotSize = 8;
 
   if (!IsVarArg)
-    AFI->setReturnStackOffset(CCInfo.getNextStackOffset());
+    FI->setReturnStackOffset(CCInfo.getNextStackOffset());
 
   // All getCopyFromReg ops must precede any getMemcpys to prevent the
   // scheduler clobbering a register before it has been copied.
@@ -1014,7 +1013,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
     unsigned FirstVAReg = CCInfo.getFirstUnallocated(ArgGPRs);
     LLVM_DEBUG(dbgs() << "\tIsVarArg FirstVAReg=" << FirstVAReg << '\n');
     LLVM_DEBUG(dbgs() << "\tFirstVAReg=" << FirstVAReg << '\n');
-    LLVM_DEBUG(dbgs() << "\tlengthof(ArgRegs)=" << array_lengthof(ArgRegs) << '\n');
+    LLVM_DEBUG(dbgs() << "\tlengthof(ArgRegs)=" << ArgRegs.size() << '\n');
     // Save remaining registers possibly containing varags.
     int Offset;
     int VaSaveSize = (ArgRegs.size() - FirstVAReg) * 8;
