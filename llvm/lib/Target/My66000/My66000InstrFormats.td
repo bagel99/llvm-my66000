@@ -171,6 +171,22 @@ class SHF_RI<bits<4> minor, dag outs, dag ins, string asmstr, list<dag> pattern>
   let Size = 4;
 }
 
+class SHF_RR<bits<4> minor, dag outs, dag ins, string asmstr, list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src1 register
+  bits<5> rs2;		// src2 register
+  bits<6> w;
+  let Opcode = 0b000111;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = rs1;
+  let Inst{15-12} = minor;
+  let Inst{11-6} = w;
+  let Inst{5} = 0;
+  let Inst{4-0} = rs1;
+  let Size = 4;
+}
+
 class LDST_BD<bits<6> major, dag outs, dag ins, string asmstr, list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {
   bits<5> rd;		// dst register

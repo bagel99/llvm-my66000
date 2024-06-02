@@ -323,16 +323,11 @@ LLVM_DEBUG(dbgs() << "Shift operands not the same, proceeding anyway!\n");
 LLVM_DEBUG(dbgs() << "Not a rotate?\n");
 	return false;
     }
-    SDValue Ops1[] = { OpL.getNode()->getOperand(0),
-		       OpR.getNode()->getOperand(0),
-		       CurDAG->getTargetConstant(Width, dl, MVT::i32),
-		       CurDAG->getTargetConstant(Width, dl, MVT::i32) };
-    SDNode *INS = CurDAG->getMachineNode(My66000::INSrrw, dl, MVT::i64, Ops1);
-    SDValue Ops2[] = { SDValue(INS, 0),
+    SDValue Ops[] = {  OpR.getNode()->getOperand(0),
 		       CurDAG->getTargetConstant(Width, dl, MVT::i32),
                        CurDAG->getTargetConstant(Shrimm, dl, MVT::i64) };
-    SDNode *SHL = CurDAG->getMachineNode(My66000::SRLri, dl, MVT::i64, Ops2);
-    ReplaceNode(N, SHL);
+    SDNode *ROT = CurDAG->getMachineNode(My66000::RORri, dl, MVT::i64, Ops);
+    ReplaceNode(N, ROT);
     return true;
   }
   return false;
@@ -413,6 +408,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryExtract " << N->getOperationName(0
       if (Andimm & (Andimm + 1))
         return false;
       unsigned Width = countTrailingOnes(Andimm);
+LLVM_DEBUG(dbgs() << "\tw=" << Width << "\n");
       if (isOpcWithIntImmediate(N->getOperand(0).getNode(), ISD::SRL, Shfimm)) {
         assert(Shfimm > 0 && Shfimm < 64 && "bad amount in shift node!");
         // Mask off the unnecessary bits of the AND immediate; normally
@@ -420,11 +416,21 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryExtract " << N->getOperationName(0
         // targetShrinkDemandedConstant chooses a different immediate.
         Andimm &= -1U >> Shfimm;
         unsigned Offset = Shfimm;
-LLVM_DEBUG(dbgs() << "\tunsigned extract pattern #1: w=" << Width << " o=" << Offset << "\n");
+LLVM_DEBUG(dbgs() << "\tstatic extract #1: o=" << Offset << "\n");
         SDValue Ops[] = { N->getOperand(0).getOperand(0),
                           CurDAG->getTargetConstant(Width, dl, MVT::i64),
                           CurDAG->getTargetConstant(Offset, dl, MVT::i64) };
         CurDAG->SelectNodeTo(N, My66000::SRLri, MVT::i64, Ops);
+        return true;
+      }
+      else if (N->getOperand(0).getNode()->getOpcode() == ISD::SRL) {
+	// dynamic extract
+LLVM_DEBUG(dbgs() << "\tdynamic extract #2\n");
+       SDNode *N2 = N->getOperand(0).getNode();
+       SDValue Ops[] = { N->getOperand(0).getOperand(0),
+			 CurDAG->getTargetConstant(Width, dl, MVT::i64),
+			 N->getOperand(0).getOperand(1) };
+        CurDAG->SelectNodeTo(N, My66000::SRLrr, MVT::i64, Ops);
         return true;
       }
       else if (N->getOperand(0).getNode()->getOpcode() == ISD::OR) {
@@ -434,7 +440,7 @@ LLVM_DEBUG(dbgs() << "\tunsigned extract pattern #1: w=" << Width << " o=" << Of
       // We have AND with a mask.
       if (Width > 15)
       { // A large mask is better done by SRLri than AND imm
-LLVM_DEBUG(dbgs() << "\tunsigned extract pattern #2: w=" << Width <<  "\n");
+LLVM_DEBUG(dbgs() << "\textract pattern #3\n");
 	SDValue Ops[] = { N->getOperand(0),
 			  CurDAG->getTargetConstant(Width, dl, MVT::i64),
 			  CurDAG->getTargetConstant(0, dl, MVT::i64) };
@@ -447,14 +453,8 @@ LLVM_DEBUG(dbgs() << "\tunsigned extract pattern #2: w=" << Width <<  "\n");
       if (N1->getOpcode() == ISD::ROTL &&
 	  isIntImmediate(N1->getOperand(0).getNode(), Shfimm) &&
 	  Shfimm == uint64_t(-2)) {
-LLVM_DEBUG(dbgs() << "\tbit clear idiom\n");
-	SDNode *NShf = CurDAG->getMachineNode(My66000::SLLwr, dl, MVT::i64,
-			    CurDAG->getTargetConstant(1, dl, MVT::i64),
-			    N1->getOperand(1));
-	CurDAG->SelectNodeTo(N, My66000::ANDrn, MVT::i64,
-			    N->getOperand(0),
-			    SDValue(NShf, 0));
-        return true;
+LLVM_DEBUG(dbgs() << "\tbit clear idiom not implemented\n");
+        return false;
       }
     }
   } else if (isOpcWithIntImmediate(N, ISD::SRA, Shfimm)) {
