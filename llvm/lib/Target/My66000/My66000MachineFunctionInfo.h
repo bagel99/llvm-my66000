@@ -31,8 +31,8 @@ namespace llvm {
 class My66000FunctionInfo : public MachineFunctionInfo {
   virtual void anchor();
 
-  unsigned ReturnStackOffset = false;
-  bool ReturnStackOffsetSet;
+  unsigned ReturnStackOffset;
+  bool ReturnStackOffsetSet = false;
   int VarArgsFrameIndex = 0;
   int VarArgsSaveSize = 0;
   mutable int CachedEStackSize = -1;

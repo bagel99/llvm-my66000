@@ -1364,10 +1364,24 @@ SDValue My66000TargetLowering::lowerRETURNADDR(SDValue Op,
   return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::i64);
 }
 
+static bool CanShrinkToI5(APFloat FPVal, int64_t &imm) {
+APSInt IVal(64, false);
+bool isExact;
+FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
+LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
+    ", IVal=" << IVal << '\n');
+  if (isExact) {
+    imm = IVal.getExtValue();
+    if (imm >= -31 && imm <= 31)
+      return true;
+  }
+  return false;
+}
+
 /*
  * Convert all 64-bit floating point constants that have a 32-bit
  * exact representation to 32-bit constant extended.  We will have patterns to
- * match this.
+ * match this.  In addition, attempt to shrink to IMM5.
  */
 SDValue My66000TargetLowering::LowerConstantFP(SDValue Op,
 						SelectionDAG &DAG) const {
@@ -1376,7 +1390,12 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerConstantFP\n");
   SDLoc DL(Op);
   ConstantFPSDNode *CFP = cast<ConstantFPSDNode>(Op);
   APFloat FPVal = CFP->getValueAPF();
+  int64_t imm;
   if (VT == MVT::f64) {
+    if (CanShrinkToI5(FPVal, imm)) {
+      return DAG.getNode(My66000ISD::F64I5, DL, MVT::f64,
+			     DAG.getConstant(imm, DL, MVT::i64));
+    }
     APFloat FPVal2 = FPVal;	// convert clobbers it
     bool losesInfo;
     // The following copied from ConstantFP::isValueValidForType()
@@ -1384,35 +1403,15 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerConstantFP\n");
 LLVM_DEBUG(dbgs() << "\tAttempt shrink to f32: " << losesInfo << '\n');
     if (!losesInfo) {
       // FPVal can be represented by a f32
-      APSInt IVal(64, false);
-      bool isExact;
-      FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
-LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
-    " , IVal=" << IVal << '\n');
-      if (isExact) {
-	int64_t imm = IVal.getExtValue();
-        if (imm >= -16 && imm <= 15) {
-	  return DAG.getNode(My66000ISD::F64I5, DL, MVT::f64,
-			     DAG.getConstant(imm, DL, MVT::i64));
-	}
-      }
       return DAG.getNode(My66000ISD::SHRUNK, DL, MVT::f64,
 			 DAG.getConstantFP(FPVal2, DL, MVT::f32));
     }
   }
   else if (VT == MVT::f32) {
-      APSInt IVal(64, false);
-      bool isExact;
-      FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
-LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
-    " , IVal=" << IVal << '\n');
-      if (isExact) {
-	int64_t imm = IVal.getExtValue();
-        if (imm >= -16 && imm <= 15) {
-	  return DAG.getNode(My66000ISD::F32I5, DL, MVT::f32,
+    if (CanShrinkToI5(FPVal, imm)) {
+      return DAG.getNode(My66000ISD::F32I5, DL, MVT::f32,
 			     DAG.getConstant(imm, DL, MVT::i64));
-	}
-      }
+    }
   }
   return DAG.getConstantFP(FPVal, DL, VT);
 }
