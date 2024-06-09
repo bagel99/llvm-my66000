@@ -60,9 +60,9 @@ private:
   bool getShift(SDValue Addr, SDValue &Index, SDValue &Shift);
   bool tryExtract(SDNode *N, bool isSigned);
   bool tryInsert(SDNode *N, EVT VT);
-  bool tryRotate(SDNode *N, SDNode *NOR);
-  bool tryANDOR(SDNode *N, unsigned Width);
-  bool tryOR(SDNode *N);
+  bool tryRotateI(SDNode *N, SDNode *NOR, unsigned Width);
+  bool tryRotateR(SDNode *N, SDNode *NOR, unsigned Width);
+  bool trySLLmask(SDNode *N, uint64_t Imm);
   bool tryAND(SDNode *N);
   bool trySex(SDNode *N);
   bool tryADDSUBCARRY(SDNode *N, bool isSub);
@@ -128,6 +128,21 @@ static bool isIntImmediate(SDNode *N, uint64_t &Imm) {
 static bool isOpcWithIntImmediate(const SDNode *N, unsigned Opc, uint64_t &Imm) {
   return N->getOpcode() == Opc
          && isIntImmediate(N->getOperand(1).getNode(), Imm);
+}
+
+static bool isMask(uint64_t imm, unsigned &Width) {
+  if (imm & (imm + 1))
+    return false;
+  Width = countTrailingOnes(imm);
+  return true;
+}
+
+static bool isANDMask(const SDNode *N, unsigned &Width) {
+  uint64_t Imm;
+  if (isOpcWithIntImmediate(N, ISD::AND, Imm)) {
+    return isMask(Imm, Width);
+  }
+  return false;
 }
 
 // isExtractBit - This tests if the node is an EXT of a single bit
@@ -298,8 +313,74 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
   return false;
 }
 
-bool My66000DAGToDAGISel::tryRotate(SDNode *N,		/* the node to replace */
-				    SDNode *NOR) {	/* the OR node */
+static bool isRotDiff(SDNode *N, unsigned Width, SDValue Op) {
+  uint64_t Subimm;
+  if (N->getOpcode() == ISD::SUB &&
+      isIntImmediate(N->getOperand(0).getNode(), Subimm)) {
+LLVM_DEBUG(dbgs() << "\tgot SUB imm=" << Subimm << " w=" << Width << '\n');
+    if (Subimm == Width) {
+LLVM_DEBUG(dbgs() << "\twidths match\n");
+      if (N->getOperand(1) == Op) {
+LLVM_DEBUG(dbgs() << "\toperands match\n");
+        return true;
+      }
+      else {
+	LLVM_DEBUG(N->getOperand(1).dump());
+	LLVM_DEBUG(Op.dump());
+      }
+    }
+  }
+  return false;
+}
+
+bool My66000DAGToDAGISel::tryRotateR(SDNode *N,	 /* the node to replace */
+				     SDNode *NOR,	/* the OR node */
+				     unsigned MWidth) {	/* mask width */
+LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotateR\n");
+  SDLoc dl(N);
+  SDValue OpL = NOR->getOperand(0);
+  SDValue OpR = NOR->getOperand(1);
+  unsigned WhichOp;
+
+  if (OpL->getOpcode() == ISD::SHL && OpR->getOpcode() == ISD::SRL)
+    WhichOp = My66000::RORrr;
+  else if (OpL->getOpcode() == ISD::SRL && OpR->getOpcode() == ISD::SHL)
+    WhichOp = My66000::ROLrr;
+  else
+    return false;	// not a rotate
+LLVM_DEBUG(dbgs() << "\tshifts are good\n");
+  if (OpL.getNode()->getOperand(0) == OpR.getNode()->getOperand(0)) {
+    KnownBits Known = CurDAG->computeKnownBits(OpL.getNode()->getOperand(0));
+    unsigned Width = 64 - Known.countMinLeadingZeros();
+LLVM_DEBUG(dbgs() << "\toperands match good w=" << Width << " mw=" << MWidth << '\n');
+    SDValue LR = OpL.getNode()->getOperand(1);
+    SDValue RR = OpR.getNode()->getOperand(1);
+    unsigned LWidth;
+    // ignore any masking of the counts
+    if (isANDMask(LR.getNode(), LWidth)) {
+LLVM_DEBUG(dbgs() << "\telided left mask\n");
+	LR = LR->getOperand(0);
+    }
+    if (isANDMask(RR.getNode(), LWidth)) {
+LLVM_DEBUG(dbgs() << "\telided right mask\n");
+	RR = RR->getOperand(0);
+    }
+    if (isRotDiff(LR.getNode(), MWidth, RR)) {
+LLVM_DEBUG(dbgs() << "\tgot good shift expressions\n");
+	SDValue Ops[] = { OpR.getNode()->getOperand(0),
+			  CurDAG->getTargetConstant(MWidth, dl, MVT::i32),
+			  RR };
+	SDNode *ROT = CurDAG->getMachineNode(WhichOp, dl, MVT::i64, Ops);
+	ReplaceNode(N, ROT);
+	return true;
+    }
+  }
+  return false;
+}
+
+bool My66000DAGToDAGISel::tryRotateI(SDNode *N,	 /* the node to replace */
+				     SDNode *NOR,	/* the OR node */
+				     unsigned MWidth) {	/* mask width */
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotate\n");
   SDLoc dl(N);
   uint64_t Shlimm = 0;
@@ -330,14 +411,6 @@ LLVM_DEBUG(dbgs() << "Not a rotate?\n");
     ReplaceNode(N, ROT);
     return true;
   }
-  return false;
-}
-
-// Try to match (OR SHL, SHR)
-bool My66000DAGToDAGISel::tryOR(SDNode *N) {
-LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
-  if (tryRotate(N, N))
-    return true;
   return false;
 }
 
@@ -385,13 +458,37 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryAND\n");
   return false;
 }
 
-// Try to match (AND (OR ...) mask)
-// We already know that N->getOpcode == ISD::AND
-// and N->getOperand(0).getNode()->getOpcode == ISD::OR
-bool My66000DAGToDAGISel::tryANDOR(SDNode *N, unsigned Width) {
-LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryANDOR\n");
-  SDNode *NOR = N->getOperand(0).getNode();
-  return tryRotate(N, NOR);
+// Try to match (AND (SLL ...) mask
+// For static shifts the mask low order bits may be clear
+bool My66000DAGToDAGISel::trySLLmask(SDNode *N, uint64_t Andimm) {
+  SDLoc dl(N);
+  uint64_t Shfimm = 0;
+  unsigned Width;
+
+LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::trySLLmask\n");
+  if (isIntImmediate(N->getOperand(0).getOperand(1).getNode(), Shfimm)) {
+    Andimm >>= Shfimm;
+    if (!isMask(Andimm, Width))
+      return false;
+    Width += Shfimm;
+LLVM_DEBUG(dbgs() << "\tmasked static shift left w=" << Width << " o=" << Shfimm << '\n');
+    SDValue Ops[] = { N->getOperand(0).getOperand(0),
+		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
+		      CurDAG->getTargetConstant(Shfimm, dl, MVT::i64) };
+    CurDAG->SelectNodeTo(N, My66000::SLLri, MVT::i64, Ops);
+    return true;
+  }
+  else {
+    if (!isMask(Andimm, Width))
+      return false;
+LLVM_DEBUG(dbgs() << "\tmasked dynamic shift left w=" << Width << '\n');
+    SDValue Ops[] = { N->getOperand(0).getOperand(0),
+		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
+		      N->getOperand(0).getOperand(1) };
+    CurDAG->SelectNodeTo(N, My66000::SLLrr, MVT::i64, Ops);
+    return true;
+  }
+  return false;
 }
 
 // Found an AND, could be an extract or a bit clear
@@ -399,15 +496,18 @@ bool My66000DAGToDAGISel::tryExtract(SDNode *N, bool isSigned) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryExtract " << N->getOperationName(0) << "\n");
   SDLoc dl(N);
 
-  // look for idiom AND of a SRL => unsigned extract
+  // look for idiom AND of a SRL => unsigned extract, or AND of a SHL
   uint64_t Andimm = 0;
   uint64_t Shfimm = 0;
   if (N->getOpcode() == ISD::AND) {
     if (isOpcWithIntImmediate(N, ISD::AND, Andimm)) {
-      // The immediate is a mask of the low bits iff imm & (imm+1) == 0
-      if (Andimm & (Andimm + 1))
-        return false;
+      if (N->getOperand(0).getNode()->getOpcode() == ISD::SHL) {
+	if (trySLLmask(N, Andimm))
+	  return true;
+      }
       unsigned Width = countTrailingOnes(Andimm);
+      if (!isMask(Andimm, Width))
+        return false;
 LLVM_DEBUG(dbgs() << "\tw=" << Width << "\n");
       if (isOpcWithIntImmediate(N->getOperand(0).getNode(), ISD::SRL, Shfimm)) {
         assert(Shfimm > 0 && Shfimm < 64 && "bad amount in shift node!");
@@ -426,7 +526,6 @@ LLVM_DEBUG(dbgs() << "\tstatic extract #1: o=" << Offset << "\n");
       else if (N->getOperand(0).getNode()->getOpcode() == ISD::SRL) {
 	// dynamic extract
 LLVM_DEBUG(dbgs() << "\tdynamic extract #2\n");
-       SDNode *N2 = N->getOperand(0).getNode();
        SDValue Ops[] = { N->getOperand(0).getOperand(0),
 			 CurDAG->getTargetConstant(Width, dl, MVT::i64),
 			 N->getOperand(0).getOperand(1) };
@@ -434,7 +533,9 @@ LLVM_DEBUG(dbgs() << "\tdynamic extract #2\n");
         return true;
       }
       else if (N->getOperand(0).getNode()->getOpcode() == ISD::OR) {
-	if (tryANDOR(N, Width))
+	if (tryRotateI(N, N->getOperand(0).getNode(), Width))
+	  return true;
+	if (tryRotateR(N, N->getOperand(0).getNode(), Width))
 	  return true;
       }
       // We have AND with a mask.
@@ -546,10 +647,6 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::Select " << N->getOperationName(CurDA
     ReplaceNode(N, CurDAG->getMachineNode(My66000::ADDri, dl, VT, TFI, Imm));
     return;
   }
-  case ISD::OR:
-    if (tryOR(N))
-      return;
-    break;
   case ISD::AND:
     if (tryAND(N))
       return;
