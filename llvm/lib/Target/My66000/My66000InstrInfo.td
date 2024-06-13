@@ -390,6 +390,10 @@ def SLLri : SHF_RI<0b1010,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$w, i64imm:$o),
 	"sll\t$rd,$rs1,#$o,#$w",
 	[]>;
+def SLAri : SHF_RI<0b1011,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$w, i64imm:$o),
+	"sla\t$rd,$rs1,#$o,#$w",
+	[]>;
 def SRLri : SHF_RI<0b1000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$w, i64imm:$o),
 	"srl\t$rd,$rs1,#$o,#$w",
@@ -428,6 +432,10 @@ def : Pat<(myEXTS GRegs:$rs1, shfamt:$imm1, shfamt:$imm2),
 def SLLrr : SHF_RR<0b1010,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$w, GRegs:$rs2),
 	"sll\t$rd,$rs1,$rs2,#$w",
+	[]>;
+def SLArr : SHF_RR<0b1011,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$w, GRegs:$rs2),
+	"sla\t$rd,$rs1,$rs2,#$w",
 	[]>;
 def SRLrr : SHF_RR<0b1000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$w, GRegs:$rs2),

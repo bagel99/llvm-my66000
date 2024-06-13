@@ -63,6 +63,8 @@ private:
   bool tryRotateI(SDNode *N, SDNode *NOR, unsigned Width);
   bool tryRotateR(SDNode *N, SDNode *NOR, unsigned Width);
   bool trySLLmask(SDNode *N, uint64_t Imm);
+  bool trySLA(SDNode *N, unsigned Width);
+  bool tryOR(SDNode *N);
   bool tryAND(SDNode *N);
   bool trySex(SDNode *N);
   bool tryADDSUBCARRY(SDNode *N, bool isSub);
@@ -381,7 +383,7 @@ LLVM_DEBUG(dbgs() << "\tgot good shift expressions\n");
 bool My66000DAGToDAGISel::tryRotateI(SDNode *N,	 /* the node to replace */
 				     SDNode *NOR,	/* the OR node */
 				     unsigned MWidth) {	/* mask width */
-LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotate\n");
+LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotateI\n");
   SDLoc dl(N);
   uint64_t Shlimm = 0;
   uint64_t Shrimm = 0;
@@ -411,6 +413,16 @@ LLVM_DEBUG(dbgs() << "Not a rotate?\n");
     ReplaceNode(N, ROT);
     return true;
   }
+  return false;
+}
+
+// Try to match (OR SHL, SHR)
+bool My66000DAGToDAGISel::tryOR(SDNode *N) {
+LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
+    if (tryRotateI(N, N, 0))
+      return true;
+//    if (tryRotateR(N, N, 0))
+//      return true;
   return false;
 }
 
@@ -477,8 +489,7 @@ LLVM_DEBUG(dbgs() << "\tmasked static shift left w=" << Width << " o=" << Shfimm
 		      CurDAG->getTargetConstant(Shfimm, dl, MVT::i64) };
     CurDAG->SelectNodeTo(N, My66000::SLLri, MVT::i64, Ops);
     return true;
-  }
-  else {
+  } else {
     if (!isMask(Andimm, Width))
       return false;
 LLVM_DEBUG(dbgs() << "\tmasked dynamic shift left w=" << Width << '\n');
@@ -486,6 +497,29 @@ LLVM_DEBUG(dbgs() << "\tmasked dynamic shift left w=" << Width << '\n');
 		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
 		      N->getOperand(0).getOperand(1) };
     CurDAG->SelectNodeTo(N, My66000::SLLrr, MVT::i64, Ops);
+    return true;
+  }
+  return false;
+}
+
+// Found SexReg(SLL(..))
+bool My66000DAGToDAGISel::trySLA(SDNode *N, unsigned Width) {
+  SDLoc dl(N);
+  uint64_t Shfimm = 0;
+LLVM_DEBUG(dbgs() << "Possible SLA\n");
+  if (isIntImmediate(N->getOperand(0).getOperand(1).getNode(), Shfimm)) {
+LLVM_DEBUG(dbgs() << "\tstatic shift left arith w=" << Width << " o=" << Shfimm << '\n');
+    SDValue Ops[] = { N->getOperand(0).getOperand(0),
+		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
+		      CurDAG->getTargetConstant(Shfimm, dl, MVT::i64) };
+    CurDAG->SelectNodeTo(N, My66000::SLAri, MVT::i64, Ops);
+    return true;
+  } else {
+LLVM_DEBUG(dbgs() << "\tdynamic shift left arith w=" << Width << '\n');
+    SDValue Ops[] = { N->getOperand(0).getOperand(0),
+		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
+		      N->getOperand(0).getOperand(1) };
+    CurDAG->SelectNodeTo(N, My66000::SLArr, MVT::i64, Ops);
     return true;
   }
   return false;
@@ -621,7 +655,11 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryInsert " << N->getOperationName(0)
 bool My66000DAGToDAGISel::trySex(SDNode *N) {
   SDLoc dl(N);
   unsigned Width = cast<VTSDNode>(N->getOperand(1))->getVT().getSizeInBits();
-//dbgs() << "\tsign extend pattern: w=" << Width << "\n";
+  if (N->getOperand(0).getOpcode() == ISD::SHL) {
+    if (trySLA(N, Width))
+      return true;
+  }
+LLVM_DEBUG(dbgs() << "Sign extend pattern: w=" << Width << "\n");
   SDValue Ops[] = { N->getOperand(0),
 		    CurDAG->getTargetConstant(Width, dl, MVT::i64),
 		    CurDAG->getTargetConstant(0, dl, MVT::i64) };
@@ -647,6 +685,10 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::Select " << N->getOperationName(CurDA
     ReplaceNode(N, CurDAG->getMachineNode(My66000::ADDri, dl, VT, TFI, Imm));
     return;
   }
+  case ISD::OR:
+    if (tryOR(N))
+      return;
+    break;
   case ISD::AND:
     if (tryAND(N))
       return;
