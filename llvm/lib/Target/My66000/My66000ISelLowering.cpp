@@ -71,6 +71,7 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::MEMCPY: return "My66000ISD::MEMCPY";
   case My66000ISD::MEMSET: return "My66000ISD: MEMSET";
   case My66000ISD::WRAPPER: return "My66000ISD::WRAPPER";
+  case My66000ISD::FDIVREM: return "My66000ISD::FDIVREM";
   case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
   case My66000ISD::F64I5: return "My66000ISD::F64I5";
   case My66000ISD::F32I5: return "My66000ISD::F32I5";
@@ -245,6 +246,10 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SETCC, MVT::f64, Custom);
   setOperationAction(ISD::BR_CC, MVT::f64, Custom);
   setOperationAction(ISD::SELECT, MVT::f64, Expand);
+  if (!EnableCarry)
+    setOperationAction(ISD::FREM, MVT::f64, Expand);
+  else
+    setOperationAction(ISD::FREM, MVT::f64, Custom);
 
   // 32-bit floating point
   setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Expand);
@@ -278,6 +283,10 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SETCC, MVT::f32, Custom);
   setOperationAction(ISD::BR_CC, MVT::f32, Custom);
   setOperationAction(ISD::SELECT, MVT::f32, Expand);
+  if (!EnableCarry)
+    setOperationAction(ISD::FREM, MVT::f32, Expand);
+  else
+    setOperationAction(ISD::FREM, MVT::f32, Custom);
 
   setOperationAction(ISD::ConstantFP, MVT::f64, Custom);
   setOperationAction(ISD::ConstantFP, MVT::f32, Custom);
@@ -1364,6 +1373,17 @@ SDValue My66000TargetLowering::lowerRETURNADDR(SDValue Op,
   return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::i64);
 }
 
+SDValue My66000TargetLowering::lowerFREM(SDValue Op,
+				         SelectionDAG &DAG) const {
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFREM\n");
+  EVT VT = Op.getValueType();
+  SDLoc DL(Op);
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  SDVTList VTs = DAG.getVTList(VT, VT);
+  return DAG.getNode(My66000ISD::FDIVREM, DL, VTs, LHS, RHS).getValue(1);
+}
+
 static bool CanShrinkToI5(APFloat FPVal, int64_t &imm) {
 APSInt IVal(64, false);
 bool isExact;
@@ -1431,6 +1451,7 @@ LLVM_DEBUG(Op.dump());
   case ISD::FRAMEADDR:			return lowerFRAMEADDR(Op, DAG);
   case ISD::RETURNADDR:			return lowerRETURNADDR(Op, DAG);
   case ISD::ConstantFP:			return LowerConstantFP(Op, DAG);
+  case ISD::FREM:			return lowerFREM(Op, DAG);
   default:
     llvm_unreachable("unimplemented operand");
   }
@@ -1571,6 +1592,30 @@ LLVM_DEBUG(dbgs() << "emitUDIVREM\n" << MI << '\n');
   return BB;
 }
 
+static MachineBasicBlock *emitFREM(MachineInstr &MI,
+				   MachineBasicBlock *BB, unsigned inst) {
+  MachineFunction &MF = *BB->getParent();
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+  unsigned DIV = MI.getOperand(0).getReg();
+  unsigned REM = MI.getOperand(1).getReg();
+
+  unsigned CO;
+  MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
+  MachineInstr *Div;
+LLVM_DEBUG(dbgs() << "emitFREM\n" << MI << '\n');
+  CO = MRI.createVirtualRegister(&My66000::GRegsRegClass);
+  BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CO).addImm(2);	// Out
+  Div = BuildMI(*BB, MI, DL, TII.get(inst), DIV)
+	.add(MI.getOperand(2)).add(MI.getOperand(3));
+    Div->addOperand(MachineOperand::CreateReg(CO, false, true));
+    Div->addOperand(MachineOperand::CreateReg(REM, true, true));
+    Div->tieOperands(4, 3);
+  MI.eraseFromParent(); // The pseudo instruction is gone now.
+  return BB;
+}
+
+
 // Double length shifts using CARRY
 static MachineBasicBlock *emitSHF2(MachineInstr &MI,
                                        MachineBasicBlock *BB, unsigned inst) {
@@ -1585,31 +1630,6 @@ static MachineBasicBlock *emitSHF2(MachineInstr &MI,
   BuildMI(*BB, MI, DL, TII.get(My66000::CARRYio), RESHI)
 	.addReg(INHI).addImm(3); //In/Out
   BuildMI(*BB, MI, DL, TII.get(inst), RESLO).addReg(INLO).add(MI.getOperand(4));
-  MI.eraseFromParent(); // The pseudo instruction is gone now.
-  return BB;
-}
-
-static MachineBasicBlock *emitROTx(MachineInstr &MI,
-                                       MachineBasicBlock *BB, unsigned inst) {
-  MachineFunction &MF = *BB->getParent();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  DebugLoc DL = MI.getDebugLoc();
-  unsigned ROT = MI.getOperand(0).getReg();
-  unsigned LHS = MI.getOperand(1).getReg();
-  MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
-LLVM_DEBUG(dbgs() << "emitROTx\n" << MI << '\n');
-  unsigned CI = MRI.createVirtualRegister(&My66000::GRegsRegClass);
-  BuildMI(*BB, MI, DL, TII.get(My66000::CARRYio), CI)
-	.addReg(LHS).addImm(1);	// In
-  if (inst == My66000::SLLrr || inst == My66000::SRLrr) {
-    unsigned RHS = MI.getOperand(2).getReg();
-    BuildMI(*BB, MI, DL, TII.get(inst), ROT)
-	    .addReg(CI).addReg(RHS);
-  } else {	// assume SxLri
-    unsigned RHS = MI.getOperand(2).getImm();
-    BuildMI(*BB, MI, DL, TII.get(inst), ROT)
-	    .addReg(CI).addImm(0).addImm(RHS);
-  }
   MI.eraseFromParent(); // The pseudo instruction is gone now.
   return BB;
 }
@@ -1652,13 +1672,21 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   case My66000::SDIVREMwr:	return emitDIVREM(MI, BB, My66000::SDIVwr);
   case My66000::SDIVREMrd:	return emitDIVREM(MI, BB, My66000::SDIVrd);
   case My66000::SDIVREMdr:	return emitDIVREM(MI, BB, My66000::SDIVdr);
-  case My66000::ROTLri:		return emitROTx(MI, BB, My66000::SLLri);
-  case My66000::ROTLrr:		return emitROTx(MI, BB, My66000::SLLrr);
-  case My66000::ROTRri:		return emitROTx(MI, BB, My66000::SRLri);
-  case My66000::ROTRrr:		return emitROTx(MI, BB, My66000::SRLrr);
   case My66000::SRL2rr:		return emitSHF2(MI, BB, My66000::SRLrr);
   case My66000::SLL2rr:		return emitSHF2(MI, BB, My66000::SLLrr);
   case My66000::SRA2rr:		return emitSHF2(MI, BB, My66000::SRArr);
+  case My66000::FREMrr:		return emitFREM(MI, BB, My66000::FDIVrr);
+  case My66000::FREMrd:		return emitFREM(MI, BB, My66000::FDIVrd);
+  case My66000::FREMrf:		return emitFREM(MI, BB, My66000::FDIVrf);
+  case My66000::FREMrk:		return emitFREM(MI, BB, My66000::FDIVrk);
+  case My66000::FREMdr:		return emitFREM(MI, BB, My66000::FDIVdr);
+  case My66000::FREMfr:		return emitFREM(MI, BB, My66000::FDIVfr);
+  case My66000::FREMkr:		return emitFREM(MI, BB, My66000::FDIVkr);
+  case My66000::FREMFrr:	return emitFREM(MI, BB, My66000::FDIVFrr);
+  case My66000::FREMFrf:	return emitFREM(MI, BB, My66000::FDIVFrf);
+  case My66000::FREMFrk:	return emitFREM(MI, BB, My66000::FDIVFrk);
+  case My66000::FREMFfr:	return emitFREM(MI, BB, My66000::FDIVFfr);
+  case My66000::FREMFkr:	return emitFREM(MI, BB, My66000::FDIVFkr);
   }
 }
 

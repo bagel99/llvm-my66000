@@ -18,12 +18,16 @@ def fpimm1 : PatLeaf<(fpimm), [{ return N->isExactlyValue(+1.0); }]>;
 //
 // My66000 specific FP DAG Nodes.
 //
+def SDTFPBinHiLoOp : SDTypeProfile<2, 2,
+    [ SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisSameAs<0, 3>,SDTCisFP<0>]>;
+
 def myFCMP : SDNode<"My66000ISD::FCMP",
 			SDTypeProfile<1, 2, [SDTCisVT<0, i64>,
 			    SDTCisSameAs<1, 2>]>,
 			[]>;
 def myBRfcc :	    SDNode<"My66000ISD::BRfcc", SDT_BRcc,
 			[SDNPHasChain]>;
+def myFDIVREM :	    SDNode<"My66000ISD::FDIVREM", SDTFPBinHiLoOp>;
 def mySHRUNK:	    SDNode<"My66000ISD::SHRUNK",
 			SDTypeProfile<1, 1,
 			  [SDTCisVT<0, f64>, SDTCisVT<1, f32>]>,
@@ -451,7 +455,7 @@ def FABSF : ABS<0b000101, 0b00001, 0b00100,
 
 multiclass FPUrs<string OpName, bits<6>OpC, bits<5>Flags,
 		   SDPatternOperator OpNode> {
-  def rs : ALU_RW<OpC, Flags,
+  def rf : ALU_RW<OpC, Flags,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), fpimm32:$imm))]>;
@@ -486,7 +490,7 @@ def FSUBFkr : ALU_DR<0b110001, 0b10101,
 	(outs FSRegs:$rd), (ins i64imm:$imm, FSRegs:$rs2),
 	"faddf\t$rd,#$imm,-$rs2",
 	[(set FSRegs:$rd, (fsub (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs2)))]>;
-def FDIVFsr: ALU_WR<0b110011, 0b10010,
+def FDIVFfr: ALU_WR<0b110011, 0b10010,
 	(outs FSRegs:$rd), (ins fpimm32:$imm, FSRegs:$rs1),
 	"fdivf\t$rd,#$imm,$rs1",
 	[(set FSRegs:$rd, (fdiv fpimm32:$imm, (f32 FSRegs:$rs1)))]>;
@@ -657,6 +661,67 @@ def RNDNEF: RND<0b10010, 0b00100,
 	"rndf\t$rd,$rs1,#0",
 	[]>;
 
+//
+// Requires CARRY instruction
+//
+let usesCustomInserter = 1 in {
+// FP64 remainder
+def FREMrr : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
+	"# FREMrr",
+	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, GRegs:$rhs))]>;
+def FREMrd : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, fpimm64:$rhs),
+	"# FREMrd",
+	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, fpimm64:$rhs))]>;
+def FREMrf : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, fpimm32:$imm),
+	"# FREMrf",
+	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, (mySHRUNK (fpimm32:$imm))))]>;
+def FREMrk : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$imm),
+	"# FREMrk",
+	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, (myF64I5 (simm5:$imm))))]>;
+def FREMdr : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins fpimm64:$lhs, GRegs:$rhs),
+	"# FREMdr",
+	[(set GRegs:$div, GRegs:$rem, (myFDIVREM fpimm64:$lhs, GRegs:$rhs))]>;
+def FREMfr : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins fpimm32:$imm, GRegs:$rhs),
+	"# FREMwr",
+	[(set GRegs:$div, GRegs:$rem, (myFDIVREM (mySHRUNK (fpimm32:$imm)), GRegs:$rhs))]>;
+def FREMkr : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$imm, GRegs:$rhs),
+	"# FREMkr",
+	[(set GRegs:$div, GRegs:$rem, (myFDIVREM (myF64I5 (simm5:$imm)), GRegs:$rhs))]>;
+// FP32 remainder
+def FREMFrr : Pseudo<
+	(outs FSRegs:$div, FSRegs:$rem), (ins FSRegs:$lhs, FSRegs:$rhs),
+	"# FREMFrr",
+	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
+	    (myFDIVREM (f32 FSRegs:$lhs), (f32 FSRegs:$rhs)))]>;
+def FREMFrf : Pseudo<
+	(outs FSRegs:$div, FSRegs:$rem), (ins FSRegs:$lhs, fpimm32:$imm),
+	"# FREMFrf",
+	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
+	    (myFDIVREM (f32 FSRegs:$lhs), fpimm32:$imm))]>;
+def FREMFrk : Pseudo<
+	(outs FSRegs:$div, FSRegs:$rem), (ins FSRegs:$lhs, i64imm:$imm),
+	"# FREMFrk",
+	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
+	    (myFDIVREM (f32 FSRegs:$lhs), (myF32I5 (simm5:$imm))))]>;
+def FREMFfr : Pseudo<
+	(outs FSRegs:$div, FSRegs:$rem), (ins fpimm32:$imm, FSRegs:$rhs),
+	"# FREMFwr",
+	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
+	    (myFDIVREM fpimm32:$imm, (f32 FSRegs:$rhs)))]>;
+def FREMFkr : Pseudo<
+	(outs FSRegs:$div, FSRegs:$rem), (ins i64imm:$imm, FSRegs:$rhs),
+	"# FREMFkr",
+	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
+	    (myFDIVREM (myF32I5 (simm5:$imm)), (f32 FSRegs:$rhs)))]>;
+}
+
 // transcendentals defined in LLVM
 multiclass FSTRAN<string OpName,  bits<6>OpC, bits<5>Flags,
 		   SDPatternOperator OpNode> {
@@ -695,7 +760,7 @@ def : Pat<(fdiv fpimm1, (fsqrt (f32 FSRegs:$bot))),
 def : Pat<(fdiv (myF32I5 (simm5:$top)), (fsqrt (f32 FSRegs:$bot))),
 	(FMULFrk (RSQRTFu (f32 FSRegs:$bot)),(simm5:$top))>;
 def : Pat<(fdiv fpimm32:$top, (fsqrt (f32 FSRegs:$bot))),
-	(FMULFrs (RSQRTFu (f32 FSRegs:$bot)), fpimm32:$top)>;
+	(FMULFrf (RSQRTFu (f32 FSRegs:$bot)), fpimm32:$top)>;
 def : Pat<(fdiv (f32 FSRegs:$top), (fsqrt (f32 FSRegs:$bot))),
 	(FMULFrr (f32 FSRegs:$top), (RSQRTFu (f32 FSRegs:$bot)))>;
 

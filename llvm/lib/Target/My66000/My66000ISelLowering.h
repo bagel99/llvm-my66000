@@ -50,6 +50,7 @@ enum NodeType : unsigned {
   MEMCPY,	// Memory copy
   MEMSET,	// Memory set
   WRAPPER,	// prefix for global address
+  FDIVREM,	// floating point div and rem (used only for rem)
   SHRUNK,	// wrapper for F64 constants shrunk to F32
   F64I5,	// wrapper for F64 constants that fit in I5
   F32I5		// wrapper for F32 constants that fit in I5
@@ -125,6 +126,7 @@ class My66000TargetLowering : public TargetLowering {
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerFREM(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerConstantFP(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
