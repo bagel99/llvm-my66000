@@ -38,6 +38,7 @@ namespace {
 class My66000VVMLoop: public MachineFunctionPass {
 public:
   static char ID; // Pass identification, replacement for typeid
+  const My66000InstrInfo *TII;
 
   My66000VVMLoop() : MachineFunctionPass(ID) {}
 
@@ -107,6 +108,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     EB = MI->getOperand(0).getMBB();
     if (EB == TB) CondIsExit = true;	// it is the loop branch
     LLVM_DEBUG(dbgs() << " skip unconditional branch to " << printMBBReference(*EB) << '\n');
+    LLVM_DEBUG(dbgs() << " CondIsExit=" << CondIsExit << '\n');
     UMI = MI;	// remember we need to delete this
     --E;
   }
@@ -125,6 +127,8 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   // Make sure this conditional branch goes to top of the loop
   // or else its the exit from the loop followed by an
   // unconditional branch to the top.
+  BReg = BMI->getOperand(1).getReg();
+  BCnd = BMI->getOperand(2).getImm();
   CB = BMI->getOperand(0).getMBB();
   if (CB != TB) {
     if (!CondIsExit) {
@@ -132,12 +136,13 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
       return false;
     } else {
       LLVM_DEBUG(dbgs() << " exit was conditional to " << printMBBReference(*CB) << '\n');
+      if (Type == 1)
+	BCnd = TII->reverseBRIB(static_cast<MYCB::CondBits>(BCnd));
+      else
+	BCnd = TII->reverseBRC(static_cast<MYCC::CondCodes>(BCnd));
       EB = CB;
     }
   }
-//dbgs() << *BMI;
-  BReg = BMI->getOperand(1).getReg();
-  BCnd = BMI->getOperand(2).getImm();
   --E;
   // Now scan to top of loop looking for interesting stuff
   // FIXME - should count instructions, VVM has a limitation
@@ -303,6 +308,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
 }
 
 bool My66000VVMLoop::runOnMachineFunction(MachineFunction &MF) {
+  TII = MF.getSubtarget<My66000Subtarget>().getInstrInfo();
   bool Changed = false;
 
   if (!EnableVVM) return false;
