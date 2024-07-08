@@ -62,6 +62,8 @@ public:
   const My66000RegisterInfo *getRegisterInfo() const override {
     return &RegInfo;
   }
+  bool usePredication() const;
+  bool useVVM() const;
 };
 } // End llvm namespace
 

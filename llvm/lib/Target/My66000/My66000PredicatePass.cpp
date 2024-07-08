@@ -11,6 +11,7 @@
 
 #include "My66000.h"
 #include "My66000MachineFunctionInfo.h"
+#include "My66000TargetMachine.h"
 #include "My66000Subtarget.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -26,8 +27,6 @@ using namespace llvm;
 #define DEBUG_TYPE "my66000-predicate"
 #define PASS_NAME "My66000 predicate transform pass"
 
-static cl::opt<bool> EnablePred("enable-predication", cl::Hidden,
-  cl::desc("Enable predication instructions"));
 static cl::opt<bool> EnablePred2("enable-predication2", cl::Hidden,
   cl::desc("Enable double predication instructions"));
 
@@ -557,7 +556,7 @@ bool My66000PredBlock::onePass(MachineFunction &MF) {
 bool My66000PredBlock::runOnMachineFunction(MachineFunction &MF) {
   TII = MF.getSubtarget<My66000Subtarget>().getInstrInfo();
 
-  if (!EnablePred) return false;
+  if (!MF.getSubtarget<My66000Subtarget>().usePredication()) return false;
 LLVM_DEBUG(dbgs() << "My66000PredBlock::runOnMachineFunction\n");
 // begin debug
 LLVM_DEBUG(dbgs() << "*** Original basic blocks ***\n");

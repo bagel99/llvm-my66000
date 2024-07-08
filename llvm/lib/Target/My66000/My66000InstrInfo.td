@@ -14,6 +14,11 @@ include "My66000InstrFormats.td"
 def imm_su : PatLeaf<(imm), [{ return !shouldAvoidImmediate(N); }]>;
 def imm1 : Operand<i64>, ImmLeaf<i64,
 		[{ return Imm == 1; }]>;
+def uimm8 : Operand<i64>, ImmLeaf<i64,
+		[{ return Imm >= 0 && Imm <= 255; }]>;
+def kimm8 : Operand<i64>, ImmLeaf<i64,
+		[{ return (Imm >= 0 && Imm <= 0x0F) ||
+			  (Imm >= 0xF0 && Imm <= 0xFF); }]>;
 def uimm16 : Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 0 && Imm <= 65535; }]>;
 def uimm32 : Operand<i64>, ImmLeaf<i64,
@@ -652,14 +657,54 @@ def STM : LDST_BD<0b010100,
 	[]>;
 
 // Memory to memory copy, memory set
-def MEMCPY : ALU_RRM<0b101, 0b000,
+def MEMCPYr : ALU_RRM<0b101, 0b000,
 	(outs), (ins GRegs:$dst, GRegs:$src, GRegs:$len),
-	"mm\t$len,$src,$dst",
+	"mm\t$dst,$src,$len",
 	[(myMEMCPY GRegs:$dst, GRegs:$src, GRegs:$len)]>;
-def MEMSET: ALU_RRM<0b110, 0b000,
+def MEMCPYw : ALU_RRM<0b101, 0b000,
+	(outs), (ins GRegs:$dst, GRegs:$src, i64imm:$len),
+	"mm\t$dst,$src,#$len",
+	[(myMEMCPY GRegs:$dst, GRegs:$src, simm32:$len)]>;
+def MEMCPYd : ALU_RRM<0b101, 0b000,
+	(outs), (ins GRegs:$dst, GRegs:$src, i64imm:$len),
+	"mm\t$dst,$src,#$len",
+	[(myMEMCPY GRegs:$dst, GRegs:$src, sneed64:$len)]>;
+def MEMSETrr: ALU_RRM<0b110, 0b000,
 	(outs), (ins GRegs:$dst, GRegs:$src, GRegs:$len),
-	"ms\t$len,$src,$dst",
+	"ms\t$dst,$src,$len",
 	[(myMEMSET GRegs:$dst, GRegs:$src, GRegs:$len)]>;
+def MEMSETrw: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, GRegs:$src, i64imm:$len),
+	"ms\t$dst,$src,#$len",
+	[(myMEMSET GRegs:$dst, GRegs:$src, simm32:$len)]>;
+def MEMSETrd: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, GRegs:$src, i64imm:$len),
+	"ms\t$dst,$src,#$len",
+	[(myMEMSET GRegs:$dst, GRegs:$src, sneed64:$len)]>;
+def MEMSETkr: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, i64imm:$src, GRegs:$len),
+	"ms\t$dst,#$src,$len",
+	[(myMEMSET GRegs:$dst, kimm8:$src, GRegs:$len)]>;
+def MEMSETkw: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
+	"ms\t$dst,#$src,#$len",
+	[(myMEMSET GRegs:$dst, kimm8:$src, simm32:$len)]>;
+def MEMSETkd: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
+	"ms\t$dst,#$src,#$len",
+	[(myMEMSET GRegs:$dst, kimm8:$src, sneed64:$len)]>;
+def MEMSETbr: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, i64imm:$src, GRegs:$len),
+	"ms\t$dst,#$src,$len",
+	[(myMEMSET GRegs:$dst, uimm8:$src, GRegs:$len)]>;
+def MEMSETbw: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
+	"ms\t$dst,#$src,#$len",
+	[(myMEMSET GRegs:$dst, uimm8:$src, simm32:$len)]>;
+def MEMSETbd: ALU_RRM<0b110, 0b000,
+	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
+	"ms\t$dst,#$src,#$len",
+	[(myMEMSET GRegs:$dst, uimm8:$src, sneed64:$len)]>;
 
 // ENTER/EXIT
 let mayStore = 1 in {

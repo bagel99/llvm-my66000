@@ -13,6 +13,7 @@
 
 #include "My66000.h"
 #include "My66000MachineFunctionInfo.h"
+#include "My66000TargetMachine.h"
 #include "My66000Subtarget.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
 
@@ -120,7 +121,7 @@ LLVM_DEBUG(dbgs() << "  bits=    " << Modified.to_string() << '\n');
 bool My66000VVMFixup::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
 
-//  if (!EnableVVM) return false;
+  if (!MF.getSubtarget<My66000Subtarget>().useVVM()) return false;
 LLVM_DEBUG(dbgs() << "VVMFixupPass: " << MF.getName() << '\n');
 
   MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();

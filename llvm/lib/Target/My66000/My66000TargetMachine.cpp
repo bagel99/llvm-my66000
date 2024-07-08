@@ -105,6 +105,7 @@ bool My66000PassConfig::addInstSelector() {
   return false;
 }
 
+// Really would like to run Predicate before VVM
 void My66000PassConfig::addPreRegAlloc() {
   initializeMy66000VVMLoopPass(*PassRegistry::getPassRegistry());
   insertPass(&RegisterCoalescerID, &My66000VVMLoopID);

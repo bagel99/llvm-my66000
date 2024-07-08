@@ -13,6 +13,7 @@
 
 #include "My66000.h"
 #include "My66000MachineFunctionInfo.h"
+#include "My66000TargetMachine.h"
 #include "My66000Subtarget.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -28,8 +29,6 @@ using namespace llvm;
 #define DEBUG_TYPE "VVM loop pass"
 #define PASS_NAME "My66000 VVM Loop Analysis"
 
-static cl::opt<bool> EnableVVM("enable-vvm", cl::Hidden,
-  cl::desc("Enable VVM Loop Mode"));
 static cl::opt<unsigned> MaxVVMInstr("max-inst-vvm", cl::Hidden,
   cl::desc("Maximum number of instructions in VVM loop"), cl::init(16));
 
@@ -311,7 +310,7 @@ bool My66000VVMLoop::runOnMachineFunction(MachineFunction &MF) {
   TII = MF.getSubtarget<My66000Subtarget>().getInstrInfo();
   bool Changed = false;
 
-  if (!EnableVVM) return false;
+  if (!MF.getSubtarget<My66000Subtarget>().useVVM()) return false;
 LLVM_DEBUG(dbgs() << "VVMLoopPass: " << MF.getName() << '\n');
   MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
   SmallVector<MachineLoop *, 4> Loops(MLI.begin(), MLI.end());
