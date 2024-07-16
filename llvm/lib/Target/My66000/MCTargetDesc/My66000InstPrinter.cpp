@@ -38,22 +38,22 @@ inline static const char *CondCodeString(unsigned CC) {
   case MYCC::LT0: return "lt0";
   case MYCC::GT0: return "gt0";
   case MYCC::LE0: return "le0";
-  case MYCC::DEQ: return "feq";
-  case MYCC::DNE: return "fne";
-  case MYCC::DGE: return "fge";
-  case MYCC::DLT: return "flt";
-  case MYCC::DGT: return "fgt";
-  case MYCC::DLE: return "fle";
-  case MYCC::DOR: return "for";
-  case MYCC::DUN: return "fun";
-  case MYCC::FEQ: return "feqf";
-  case MYCC::FNE: return "fnef";
-  case MYCC::FGE: return "fgef";
-  case MYCC::FLT: return "fltf";
-  case MYCC::FGT: return "fgtf";
-  case MYCC::FLE: return "flef";
-  case MYCC::FOR: return "forf";
-  case MYCC::FUN: return "funf";
+  case MYCC::DEQ: return "deq";
+  case MYCC::DNE: return "dne";
+  case MYCC::DGE: return "dge";
+  case MYCC::DLT: return "dlt";
+  case MYCC::DGT: return "dgt";
+  case MYCC::DLE: return "dle";
+  case MYCC::DOR: return "dor";
+  case MYCC::DUN: return "dun";
+  case MYCC::FEQ: return "feq";
+  case MYCC::FNE: return "fne";
+  case MYCC::FGE: return "fge";
+  case MYCC::FLT: return "flt";
+  case MYCC::FGT: return "fgt";
+  case MYCC::FLE: return "fle";
+  case MYCC::FOR: return "for";
+  case MYCC::FUN: return "fun";
   default: return "???";
   }
 }
