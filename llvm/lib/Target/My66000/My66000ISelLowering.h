@@ -51,6 +51,8 @@ enum NodeType : unsigned {
   MEMSET,	// Memory set
   WRAPPER,	// prefix for global address
   FDIVREM,	// floating point div and rem (used only for rem)
+  COPYFMFS,	// bitcast from f32
+  COPYTOFS,	// bitcast to f32
   SHRUNK,	// wrapper for F64 constants shrunk to F32
   F64I5,	// wrapper for F64 constants that fit in I5
   F32I5		// wrapper for F32 constants that fit in I5
@@ -70,6 +72,8 @@ class My66000TargetLowering : public TargetLowering {
 
   /// Provide custom lowering hooks for some operations.
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+  void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
+                          SelectionDAG &DAG) const override;
 
   // getTargetNodeName - This method returns the name of a target specific DAG node.
   const char *getTargetNodeName(unsigned Opcode) const override;
@@ -128,6 +132,7 @@ class My66000TargetLowering : public TargetLowering {
   SDValue lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFREM(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerConstantFP(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerBITCAST(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 

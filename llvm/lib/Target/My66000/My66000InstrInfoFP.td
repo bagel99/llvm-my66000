@@ -40,6 +40,14 @@ def myF32I5:	    SDNode<"My66000ISD::F32I5",
 			SDTypeProfile<1, 1,
 			  [SDTCisVT<0, f32>, SDTCisVT<1, i64>]>,
 			[]>;
+def myCOPYFMFS:     SDNode<"My66000ISD::COPYFMFS",
+			SDTypeProfile<1, 1,
+			  [SDTCisVT<0, i64>, SDTCisVT<1, f32>]>,
+			[]>;
+def myCOPYTOFS:     SDNode<"My66000ISD::COPYTOFS",
+			SDTypeProfile<1, 1,
+			  [SDTCisVT<0, f32>, SDTCisVT<1, i64>]>,
+			[]>;
 
 //
 // 64-bit floating point shares the GRegs with integers
@@ -763,6 +771,24 @@ def : Pat<(fdiv fpimm32:$top, (fsqrt (f32 FSRegs:$bot))),
 	(FMULFrf (RSQRTFu (f32 FSRegs:$bot)), fpimm32:$top)>;
 def : Pat<(fdiv (f32 FSRegs:$top), (fsqrt (f32 FSRegs:$bot))),
 	(FMULFrr (f32 FSRegs:$top), (RSQRTFu (f32 FSRegs:$bot)))>;
+
+let usesCustomInserter = 1 in {
+def CPFMFS : Pseudo<
+	(outs GRegs:$rd), (ins FSRegs:$rs),
+	"# CPFMFS",
+	[(set (i64 GRegs:$rd), (myCOPYFMFS (f32 FSRegs:$rs)))]>;
+def CPTOFS : Pseudo<
+	(outs FSRegs:$rd), (ins GRegs:$rs),
+	"# CPTOFS",
+	[(set (f32 FSRegs:$rd), (myCOPYTOFS GRegs:$rs))]>;
+}
+/*
+// These bitcasts are NOPs
+def       : Pat<(myCOPYFMF32 FSRegs:$rs),
+		(CPFMF32 GRegs:$rs)>;
+def       : Pat<(myCOPYTOF32 GRegs:$rs),
+		(CPTOF32 FSRegs:$rs)>;
+*/
 
 // Loads and Stores
 multiclass LoadFS<string OpName, bits<6>OpCri, bits<6>OpCrr,

@@ -72,6 +72,8 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::MEMSET: return "My66000ISD: MEMSET";
   case My66000ISD::WRAPPER: return "My66000ISD::WRAPPER";
   case My66000ISD::FDIVREM: return "My66000ISD::FDIVREM";
+  case My66000ISD::COPYFMFS: return "My66000ISD::COPYFMFS";
+  case My66000ISD::COPYTOFS: return "My66000ISD::COPYTOFS";
   case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
   case My66000ISD::F64I5: return "My66000ISD::F64I5";
   case My66000ISD::F32I5: return "My66000ISD::F32I5";
@@ -254,7 +256,6 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   // 32-bit floating point
   setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Expand);
   setTruncStoreAction(MVT::f64, MVT::f32, Expand);
-  setOperationAction(ISD::BITCAST, MVT::f32, Legal);
   setOperationAction(ISD::FP_EXTEND, MVT::f64, Legal);
   setOperationAction(ISD::ConstantFP, MVT::f32, Legal);
   setOperationAction(ISD::FADD, MVT::f32, Legal);
@@ -283,6 +284,8 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SETCC, MVT::f32, Custom);
   setOperationAction(ISD::BR_CC, MVT::f32, Custom);
   setOperationAction(ISD::SELECT, MVT::f32, Expand);
+  setOperationAction(ISD::BITCAST, MVT::f32, Custom);
+  setOperationAction(ISD::BITCAST, MVT::i32, Custom);
   if (!EnableCarry)
     setOperationAction(ISD::FREM, MVT::f32, Expand);
   else
@@ -1515,6 +1518,19 @@ LLVM_DEBUG(dbgs() << "\tAttempt shrink to f32: " << losesInfo << '\n');
   return DAG.getConstantFP(FPVal, DL, VT);
 }
 
+SDValue My66000TargetLowering::lowerBITCAST(SDValue Op,
+					    SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  EVT VT = Op.getValueType();
+  SDValue Op0 = Op.getOperand(0);
+  EVT Op0VT = Op0.getValueType();
+  if (VT == MVT::f32 && Op0VT == MVT::i32) {
+    SDValue Ext = DAG.getNode(ISD::ANY_EXTEND, DL, MVT::i64, Op0);
+    return DAG.getNode(My66000ISD::COPYTOFS, DL, MVT::f32, Ext);
+  }
+  return Op;
+}
+
 SDValue My66000TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
 LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation: ");
 LLVM_DEBUG(Op.dump());
@@ -1531,10 +1547,28 @@ LLVM_DEBUG(Op.dump());
   case ISD::RETURNADDR:			return lowerRETURNADDR(Op, DAG);
   case ISD::ConstantFP:			return LowerConstantFP(Op, DAG);
   case ISD::FREM:			return lowerFREM(Op, DAG);
+  case ISD::BITCAST:			return lowerBITCAST(Op, DAG);
   default:
     llvm_unreachable("unimplemented operand");
   }
 }
+
+void My66000TargetLowering::ReplaceNodeResults(SDNode *N,
+					       SmallVectorImpl<SDValue> &Results,
+		                               SelectionDAG &DAG) const {
+  SDLoc DL(N);
+  if (N->getOpcode() == ISD::BITCAST) {
+    EVT VT = N->getValueType(0);
+    SDValue Op0 = N->getOperand(0);
+    EVT Op0VT = Op0.getValueType();
+    if (VT == MVT::i32 && Op0VT == MVT::f32) {
+//      Results.push_back(DAG.getNode(My66000ISD::COPYFMFS, DL, MVT::i64, Op0));
+      SDValue Copy = DAG.getNode(My66000ISD::COPYFMFS, DL, MVT::i64, Op0);
+      Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Copy));
+    }
+  }
+}
+
 
 //===----------------------------------------------------------------------===//
 //  Custom instruction emit
@@ -1713,6 +1747,18 @@ static MachineBasicBlock *emitSHF2(MachineInstr &MI,
   return BB;
 }
 
+// Copies between FSRegs and GRegs should be NOPs
+static MachineBasicBlock *emitCPFS(MachineInstr &MI, MachineBasicBlock *BB) {
+  MachineFunction &MF = *BB->getParent();
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+  unsigned TO = MI.getOperand(0).getReg();
+  unsigned FM = MI.getOperand(1).getReg();
+  BuildMI(*BB, MI, DL, TII.get(TargetOpcode::COPY), TO)
+	.addReg(FM);
+  MI.eraseFromParent(); // The pseudo instruction is gone now.
+  return BB;
+}
 
 MachineBasicBlock *My66000TargetLowering::EmitInstrWithCustomInserter(
 			MachineInstr &MI,
@@ -1766,6 +1812,8 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   case My66000::FREMFrk:	return emitFREM(MI, BB, My66000::FDIVFrk);
   case My66000::FREMFfr:	return emitFREM(MI, BB, My66000::FDIVFfr);
   case My66000::FREMFkr:	return emitFREM(MI, BB, My66000::FDIVFkr);
+  case My66000::CPFMFS:		return emitCPFS(MI, BB);
+  case My66000::CPTOFS:		return emitCPFS(MI, BB);
   }
 }
 
