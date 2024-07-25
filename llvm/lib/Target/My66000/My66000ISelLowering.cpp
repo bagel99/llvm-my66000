@@ -375,6 +375,40 @@ bool My66000TargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
 //  Misc Lower Operation implementation
 //===----------------------------------------------------------------------===//
 
+// For debug statements
+static const char *getCCName(ISD:: CondCode CC) {
+    switch (CC) {
+    default: return "???";
+    case ISD::SETEQ:                    return "eq";
+    case ISD::SETGT:                    return "gt";
+    case ISD::SETGE:                    return "ge";
+    case ISD::SETLT:                    return "lt";
+    case ISD::SETLE:                    return "le";
+    case ISD::SETNE:                    return "ne";
+
+    case ISD::SETOEQ:                   return "oeq";
+    case ISD::SETOGT:                   return "ogt";
+    case ISD::SETOGE:                   return "oge";
+    case ISD::SETOLT:                   return "olt";
+    case ISD::SETOLE:                   return "ole";
+    case ISD::SETONE:                   return "one";
+
+    case ISD::SETO:                     return "o";
+    case ISD::SETUO:                    return "uo";
+    case ISD::SETUEQ:                   return "ueq";
+    case ISD::SETUGT:                   return "ugt";
+    case ISD::SETUGE:                   return "uge";
+    case ISD::SETULT:                   return "ult";
+    case ISD::SETULE:                   return "ule";
+    case ISD::SETUNE:                   return "une";
+
+    case ISD::SETTRUE:                  return "true";
+    case ISD::SETTRUE2:                 return "true2";
+    case ISD::SETFALSE:                 return "false";
+    case ISD::SETFALSE2:                return "false2";
+    }
+}
+
 // Map to my condition bits, integer
 static MYCB::CondBits ISDCCtoMy66000CBI(ISD:: CondCode CC) {
   switch (CC) {
@@ -528,6 +562,67 @@ LLVM_DEBUG(dbgs() << "Convert fabs\n");
     }
 }
 
+// isIntImmediate - This method tests to see if the node is a constant
+// operand. If so Imm will receive the value.
+static bool isIntImmediate(const SDNode *N, uint64_t &Imm) {
+  if (const ConstantSDNode *C = dyn_cast<const ConstantSDNode>(N)) {
+    Imm = C->getZExtValue();
+    return true;
+  }
+  return false;
+}
+
+// Optimize a compare when the RHS is an immediate, particularly when
+// the LHS is not full width load and the compare is EQ or NE.
+// Return updated LHS, RHS and condition code
+static ISD::CondCode optimizeIntCmp(SDValue &LHS, SDValue &RHS,
+				    ISD::CondCode oldCC,
+				    SelectionDAG &DAG, const SDLoc &dl) {
+LLVM_DEBUG(dbgs() << "optimizeIntCmp\n");
+  ISD::CondCode CC = oldCC;
+  uint64_t imm;
+  if (isIntImmediate(RHS.getNode(), imm)) {
+    if (isa<LoadSDNode>(LHS) &&
+        cast<LoadSDNode>(LHS)->getExtensionType() == ISD::ZEXTLOAD) {
+      EVT VT = cast<LoadSDNode>(LHS)->getMemoryVT();
+      if (VT == MVT::i32) {
+	int32_t ValueofRHS = cast<ConstantSDNode>(RHS)->getZExtValue();
+	if (ValueofRHS < 0) {
+LLVM_DEBUG(dbgs() << "Sign extend LHS load 32\n");
+	  LHS = DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, MVT::i64, LHS,
+			    DAG.getValueType(MVT::i32));
+	  RHS = DAG.getConstant(ValueofRHS, dl, RHS.getValueType());
+	}
+      } else if (VT == MVT::i16) {
+	int16_t ValueofRHS = cast<ConstantSDNode>(RHS)->getZExtValue();
+	if (ValueofRHS < 0) {
+LLVM_DEBUG(dbgs() << "Sign extend LHS load 16\n");
+	  LHS = DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, MVT::i64, LHS,
+			    DAG.getValueType(MVT::i16));
+	  RHS = DAG.getConstant(ValueofRHS, dl, RHS.getValueType());
+	}
+      } else if (VT == MVT::i8) {
+	int8_t ValueofRHS = cast<ConstantSDNode>(RHS)->getZExtValue();
+	if (ValueofRHS < 0) {
+LLVM_DEBUG(dbgs() << "Sign extend LHS load 8\n");
+	  LHS = DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, MVT::i64, LHS,
+			    DAG.getValueType(MVT::i8));
+	  RHS = DAG.getConstant(ValueofRHS, dl, RHS.getValueType());
+	}
+      }
+    }
+    if (CC == ISD::SETLT && isOneConstant(RHS)) {
+LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
+      RHS = DAG.getConstant(0, dl, MVT::i64);
+      CC = ISD::SETLE;
+    } else if (CC == ISD::SETGT && isAllOnesConstant(RHS)) {
+LLVM_DEBUG(dbgs() << "Convert GT -1 into GE 0\n");
+      RHS = DAG.getConstant(0, dl, MVT::i64);
+      CC = ISD::SETGE;
+    }
+  }
+  return CC;
+}
 
 // Compare and make result into a boolean
 SDValue My66000TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
@@ -539,7 +634,6 @@ SDValue My66000TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   MYCB::CondBits CB;
 LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSETCC\n");
   if (LHS.getValueType().isInteger()) {
-    inst = My66000ISD::CMP;
     // Check for cmpne (and ry,(shl 1,rx),0) which is a bit test
     // Turn it into (and (srl ry,rx),1)
     if ((CC == ISD::SETNE) && isNullConstant(RHS) &&
@@ -554,16 +648,9 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSETCC\n");
 		Shf, DAG.getConstant(1, dl, MVT::i64));
       }
     }
-    if (CC == ISD::SETLT && isOneConstant(RHS)) {
-LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
-	RHS = DAG.getConstant(0, dl, MVT::i64);
-	CC = ISD::SETLE;
-    } else if (CC == ISD::SETGT && isAllOnesConstant(RHS)) {
-LLVM_DEBUG(dbgs() << "Convert GT -1 into GE 0\n");
-	RHS = DAG.getConstant(0, dl, MVT::i64);
-	CC = ISD::SETGE;
-    }
+    CC = optimizeIntCmp(LHS, RHS, CC, DAG, dl);
     CB = ISDCCtoMy66000CBI(CC);
+    inst = My66000ISD::CMP;
   } else {
     inst = My66000ISD::FCMP;
     CB = ISDCCtoMy66000CBF(CC);
@@ -592,13 +679,9 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSELECT_CC\n");
       return DAG.getNode(My66000ISD::CMOV, dl, TVal.getValueType(), TVal, FVal, LHS);
     }
     inst = My66000ISD::CMP;
-    if ((CC == ISD::SETLT) && isOneConstant(RHS)) {
-LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
-	RHS = DAG.getConstant(0, dl, MVT::i64);
-	CC = ISD::SETLE;
-    }
+    CC = optimizeIntCmp(LHS, RHS, CC, DAG, dl);
     /* If items selected are constants that differ by 1 */
-    else if (CC == ISD::SETLT && isNullConstant(RHS) &&
+    if (CC == ISD::SETLT && isNullConstant(RHS) &&
              isa<ConstantSDNode>(TVal) && isa<ConstantSDNode>(FVal)) {
       const APInt &TrueVal = cast<ConstantSDNode>(TVal)->getAPIntValue();
       const APInt &FalseVal = cast<ConstantSDNode>(FVal)->getAPIntValue();
@@ -626,20 +709,16 @@ LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
 }
 
 SDValue My66000TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBR_CC\n");
   SDValue Chain = Op.getOperand(0);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
   SDValue LHS = Op.getOperand(2);
   SDValue RHS = Op.getOperand(3);
   SDValue Dest = Op.getOperand(4);
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBR_CC CC=" << getCCName(CC) << '\n');
   SDLoc dl(Op);
   EVT VT = LHS.getValueType();
   if (VT.isInteger()) {
-    if ((CC == ISD::SETLT) && isOneConstant(RHS)) {
-LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
-	RHS = DAG.getConstant(0, dl, MVT::i64);
-	CC = ISD::SETLE;
-    }
+    CC = optimizeIntCmp(LHS, RHS, CC, DAG, dl);
     if (isNullConstant(RHS)) {
       MYCC::CondCodes cc = ISDCCtoMy66000CC(CC, VT);
       if ((CC == ISD::SETNE || CC == ISD::SETEQ) &&
@@ -664,10 +743,10 @@ LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
       return DAG.getNode(My66000ISD::BRcond, dl, MVT::Other, Chain, Dest,
 		         LHS, DAG.getConstant(cc, dl, MVT::i64));
     }
-    MYCB::CondBits cb = ISDCCtoMy66000CBI(CC);
+    MYCB::CondBits CB = ISDCCtoMy66000CBI(CC);
     SDValue Cmp = DAG.getNode(My66000ISD::CMP, dl, MVT::i64, LHS, RHS);
     return DAG.getNode(My66000ISD::BRcc, dl, MVT::Other, Chain, Dest, Cmp,
-                       DAG.getConstant(cb, dl, MVT::i64));
+                       DAG.getConstant(CB, dl, MVT::i64));
   } else {	// floating point
     if (isNullFPConstant(RHS)) {
       MYCC::CondCodes cc = ISDCCtoMy66000CC(CC, VT);
