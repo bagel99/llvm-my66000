@@ -858,73 +858,157 @@ def srl_parts : SDNode<"ISD::SRL_PARTS", SDT_ISHFW, []>;
 def shl_parts : SDNode<"ISD::SHL_PARTS", SDT_ISHFW, []>;
 def sra_parts : SDNode<"ISD::SRA_PARTS", SDT_ISHFW, []>;
 
-let usesCustomInserter = 1 in {
-def UADDOrr : Pseudo<
+// The following are expanded by the ExpandPseudoInsts pass
+def UADDOrrc : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs),
-	"# UADD0rr",
+	"# UADD0rrc",
 	[(set GRegs:$sum, GRegs:$co, (uaddo GRegs:$lhs, GRegs:$rhs))]>;
-def UADDOri : Pseudo<
+def UADDOric : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs),
-	"# UADD0ri",
+	"# UADD0ric",
 	[(set GRegs:$sum, GRegs:$co, (uaddo GRegs:$lhs, simm16:$rhs))]>;
-def USUBOrr : Pseudo<
-	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs),
-	"# UADD0rr",
-	[(set GRegs:$sum, GRegs:$co, (usubo GRegs:$lhs, GRegs:$rhs))]>;
-def USUBOri : Pseudo<
+def UADDOrwc : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs),
-	"# UADD0ri",
+	"# UADD0rwc",
+	[(set GRegs:$sum, GRegs:$co, (uaddo GRegs:$lhs, simm32:$rhs))]>;
+def UADDOrdc : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs),
+	"# UADD0rdc",
+	[(set GRegs:$sum, GRegs:$co, (uaddo GRegs:$lhs, sneed64:$rhs))]>;
+def USUBOrrc : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs),
+	"# UADD0rrc",
+	[(set GRegs:$sum, GRegs:$co, (usubo GRegs:$lhs, GRegs:$rhs))]>;
+def USUBOric : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs),
+	"# UADD0ric",
 	[(set GRegs:$sum, GRegs:$co, (usubo GRegs:$lhs, simm16:$rhs))]>;
-def ADDCARRYrr : Pseudo<
+def ADDrrbc : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
-	"# ADDCARRYrr",
+	"# ADDrrbc",
 	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
-def ADDCARRYri : Pseudo<
+def ADDribc : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs, GRegs:$ci),
-	"# ADDCARRYri",
+	"# ADDribc",
 	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, simm16:$rhs, GRegs:$ci))]>;
-def SUBCARRYrr : Pseudo<
-	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
-	"# SUBCARRYrr",
-	[(set GRegs:$sum, GRegs:$co, (subcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
-def SUBCARRYri : Pseudo<
+def ADDrwbc : Pseudo<
 	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs, GRegs:$ci),
-	"# ADDCARRYri",
+	"# ADDrwbc",
+	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, simm32:$rhs, GRegs:$ci))]>;
+def ADDrdbc : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs, GRegs:$ci),
+	"# ADDrdbc",
+	[(set GRegs:$sum, GRegs:$co, (addcarry GRegs:$lhs, sneed64:$rhs, GRegs:$ci))]>;
+def SUBrrbc : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, GRegs:$rhs, GRegs:$ci),
+	"# SUBrrbc",
+	[(set GRegs:$sum, GRegs:$co, (subcarry GRegs:$lhs, GRegs:$rhs, GRegs:$ci))]>;
+def SUBribc : Pseudo<
+	(outs GRegs:$sum, GRegs:$co), (ins GRegs:$lhs, i64imm:$rhs, GRegs:$ci),
+	"# SUBribc",
 	[(set GRegs:$sum, GRegs:$co, (subcarry GRegs:$lhs, simm16:$rhs, GRegs:$ci))]>;
-
-def UMULHILOrr : Pseudo<
+def UMULHILOrrc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, GRegs:$rhs),
-	"# UMULHILOrr",
+	"# UMULHILOrcr",
 	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, GRegs:$rhs))]>;
-def UMULHILOri : Pseudo<
+def UMULHILOric : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
-	"# UMULHILOri",
+	"# UMULHILOric",
 	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, simm16:$rhs))]>;
-def UMULHILOrw : Pseudo<
+def UMULHILOrwc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
-	"# UMULHILOrw",
+	"# UMULHILOrwc",
 	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, sneed32:$rhs))]>;
-def UMULHILOrd : Pseudo<
+def UMULHILOrdc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
-	"# UMULHILOrd",
+	"# UMULHILOrdc",
 	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, sneed64:$rhs))]>;
-def SMULHILOrr : Pseudo<
+def SMULHILOrrc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, GRegs:$rhs),
-	"# SMULHILOrr",
+	"# SMULHILOrrc",
 	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, GRegs:$rhs))]>;
-def SMULHILOri : Pseudo<
+def SMULHILOric : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
-	"# SMULHILOri",
+	"# SMULHILOric",
 	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, simm16:$rhs))]>;
-def SMULHILOrw : Pseudo<
+def SMULHILOrwc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
-	"# SMULHILOrw",
+	"# SMULHILOrwc",
 	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, sneed32:$rhs))]>;
-def SMULHILOrd : Pseudo<
+def SMULHILOrdc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
-	"# SMULHILOrd",
+	"# SMULHILOrdc",
 	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, sneed64:$rhs))]>;
+def UDIVREMrrc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$rs1, GRegs:$rs2),
+	"# UDIVREMrrc",
+	[]>;
+def UDIVREMric : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$rhs),
+	"# UDIVREMric",
+	[]>;
+def UDIVREMrwc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$rhs),
+	"# UDIVREMrwc",
+	[]>;
+def UDIVREMwrc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
+	"# UDIVREMwrc",
+	[]>;
+def UDIVREMrdc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$rhs),
+	"# UDIVREMrdc",
+	[]>;
+def UDIVREMdrc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
+	"# UDIVREMdrc",
+	[]>;
+def SDIVREMrrc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
+	"# SDIVREMrrc",
+	[]>;
+def SDIVREMrnc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
+	"# SDIVREMrnc",
+	[]>;
+def SDIVREMnrc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
+	"# SDIVREMnrc",
+	[]>;
+def SDIVREMnnc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
+	"# SDIVREMnnc",
+	[]>;
+def SDIVREMrxc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$rhs),
+	"# SDIVREMrwc",
+	[]>;
+def SDIVREMwrc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
+	"# SDIVREMwrc",
+	[]>;
+def SDIVREMrdc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$rhs),
+	"# SDIVREMrdc",
+	[]>;
+def SDIVREMdrc : Pseudo<
+	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
+	"# SDIVREMdrc",
+	[]>;
+def SRL2rrbc : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
+	"# SRL2rbc",
+	[(set GRegs:$lo, GRegs:$hi, (srl_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
+def SLL2rrbc : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
+	"# SHL2rrbc",
+	[(set GRegs:$lo, GRegs:$hi, (shl_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
+def SRA2rrbc : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
+	"# SRL2rrbc",
+	[(set GRegs:$lo, GRegs:$hi, (sra_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
 
+let usesCustomInserter = 1 in {
 def UDIVREMrr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
 	"# UDIVREMrr",
@@ -949,7 +1033,6 @@ def UDIVREMdr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
 	"# UDIVREMdr",
 	[(set GRegs:$div, GRegs:$rem, (udivrem sneed64:$lhs, GRegs:$rhs))]>;
-
 def SDIVREMrr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
 	"# SDIVREMrr",
@@ -982,36 +1065,6 @@ def SDIVREMdr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
 	"# SDIVREMdr",
 	[(set GRegs:$div, GRegs:$rem, (sdivrem sneed64:$lhs, GRegs:$rhs))]>;
-
-def SRL2rr : Pseudo<
-	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
-	"# SRL2rr",
-	[(set GRegs:$lo, GRegs:$hi, (srl_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
-def SLL2rr : Pseudo<
-	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
-	"# SHL2rr",
-	[(set GRegs:$lo, GRegs:$hi, (shl_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
-def SRA2rr : Pseudo<
-	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
-	"# SRL2rr",
-	[(set GRegs:$lo, GRegs:$hi, (sra_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
-
-def ROTLrr : Pseudo<
-	(outs GRegs:$dst), (ins GRegs:$lhs, GRegs:$rhs),
-	"# ROTLrr",
-	[(set GRegs:$dst, (rotl GRegs:$lhs, GRegs:$rhs))]>;
-def ROTLri : Pseudo<
-	(outs GRegs:$dst), (ins GRegs:$lhs, i64imm:$rhs),
-	"# ROTLri",
-	[(set GRegs:$dst, (rotl GRegs:$lhs, simm16:$rhs))]>;
-def ROTRrr : Pseudo<
-	(outs GRegs:$dst), (ins GRegs:$lhs, GRegs:$rhs),
-	"# ROTRrr",
-	[(set GRegs:$dst, (rotr GRegs:$lhs, GRegs:$rhs))]>;
-def ROTRri : Pseudo<
-	(outs GRegs:$dst), (ins GRegs:$lhs, i64imm:$rhs),
-	"# ROTRri",
-	[(set GRegs:$dst, (rotr GRegs:$lhs, simm16:$rhs))]>;
 }
 
 //

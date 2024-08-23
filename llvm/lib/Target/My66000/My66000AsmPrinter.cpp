@@ -255,6 +255,8 @@ void My66000AsmPrinter::emitInstruction(const MachineInstr *MI) {
   MachineBasicBlock::const_instr_iterator I = MI->getIterator();
   MachineBasicBlock::const_instr_iterator E = MI->getParent()->instr_end();
   do {
+    if (I->isBundle())    // Skip the BUNDLE pseudo instruction
+      continue;
     MCInst TmpInst;
     MCInstLowering.Lower(&*I, TmpInst);
     EmitToStreamer(*OutStreamer, TmpInst);

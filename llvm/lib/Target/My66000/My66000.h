@@ -39,6 +39,8 @@ namespace llvm {
   void initializeMy66000VVMLoopPass(PassRegistry &);
   FunctionPass *createMy66000VVMFixupPass();
   void initializeMy66000VVMFixupPass(PassRegistry &);
+  FunctionPass *createMy66000ExpandPseudoPass();
+  void initializeMy66000ExpandPseudoPass(PassRegistry &);
 
   extern char &My66000VVMLoopID;
   extern char &My66000PredBlockID;

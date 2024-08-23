@@ -1573,6 +1573,8 @@ void My66000TargetLowering::ReplaceNodeResults(SDNode *N,
 //===----------------------------------------------------------------------===//
 //  Custom instruction emit
 //===----------------------------------------------------------------------===//
+/*
+ * FIXME - this functionality now must be in ExpandPseudoInsts.cpp
 //
 // An ADDCARRY is being emitted, so there must have been a
 // UADD0 that was emitted previously.  Search back to find
@@ -1604,145 +1606,27 @@ LLVM_DEBUG(dbgs() << "found FirstCarry n=" << n << " old=" << old << '\n');
   I->addOperand(MachineOperand::CreateImm(chg));
   return true;
 }
-
-static MachineBasicBlock *emitADDCARRY(MachineInstr &MI,
-                                       MachineBasicBlock *BB, unsigned inst) {
-  MachineFunction &MF = *BB->getParent();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  DebugLoc DL = MI.getDebugLoc();
-  unsigned Sum = MI.getOperand(0).getReg();
-  unsigned CO = MI.getOperand(1).getReg();
-  unsigned LHS = MI.getOperand(2).getReg();
-  unsigned CI = MI.getOperand(4).getReg();
-  unsigned Reg;
-LLVM_DEBUG(dbgs() << "emitADDCARRY\n" << MI << '\n');
-  MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
-  unsigned CarryFlag = MRI.use_empty(CO) ? 1: 3;
-  if (!adjustFirstCarry(MI, BB, CarryFlag, Reg)) {
-    MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
-    unsigned CA = MRI.createVirtualRegister(&My66000::GRegsRegClass);
-    BuildMI(*BB, MI, DL, TII.get(My66000::CARRYio), CA)
-	    .addReg(CI).addImm(CarryFlag);
-  }
-  MachineInstr *Add =
-    BuildMI(*BB, MI, DL, TII.get(inst), Sum)
-	    .addReg(LHS).add(MI.getOperand(3))
-	    .addReg(CI, RegState::Implicit)
-	    .addReg(CO, RegState::ImplicitDefine);
-  Add->tieOperands(4, 3);
-  MI.eraseFromParent(); // The pseudo instruction is gone now.
-  return BB;
-}
-
-static MachineBasicBlock *emitUADDO(MachineInstr &MI,
-                                    MachineBasicBlock *BB, unsigned inst) {
-  MachineFunction &MF = *BB->getParent();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  DebugLoc DL = MI.getDebugLoc();
-  unsigned Sum = MI.getOperand(0).getReg();
-  unsigned CO = MI.getOperand(1).getReg();
-  unsigned LHS = MI.getOperand(2).getReg();
-LLVM_DEBUG(dbgs() << "emitUADD0\n" << MI << '\n');
-  BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CO)
-      .addImm(2);	// Out
-  BuildMI(*BB, MI, DL, TII.get(inst), Sum)
-      .addReg(LHS).add(MI.getOperand(3))
-      .addReg(CO, RegState::Implicit);
-  MI.eraseFromParent(); // The pseudo instruction is gone now.
-  return BB;
-}
-
-static MachineBasicBlock *emitUMULHILO(MachineInstr &MI,
-                                       MachineBasicBlock *BB, unsigned inst) {
-  MachineFunction &MF = *BB->getParent();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  DebugLoc DL = MI.getDebugLoc();
-  // ISD::UMUL_LOHI is defined to return the low half first
-  unsigned LO = MI.getOperand(0).getReg();
-  unsigned HI = MI.getOperand(1).getReg();
-  unsigned LHS = MI.getOperand(2).getReg();
-  MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
-  unsigned CI = MRI.createVirtualRegister(&My66000::GRegsRegClass);
-LLVM_DEBUG(dbgs() << "emitUMULHILO\n" << MI << '\n');
-
-  BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CI)
-      .addImm(2);	// Out
-  MachineInstr *Mul;
-  Mul = BuildMI(*BB, MI, DL, TII.get(inst), LO)
-	.addReg(LHS).add(MI.getOperand(3))
-	.addReg(CI, RegState::Implicit)
-	.addReg(HI, RegState::ImplicitDefine);
-  Mul->tieOperands(4, 3);
-  MI.eraseFromParent(); // The pseudo instruction is gone now.
-  return BB;
-}
+*/
 
 static MachineBasicBlock *emitDIVREM(MachineInstr &MI,
-                                       MachineBasicBlock *BB, unsigned inst) {
+				     MachineBasicBlock *BB,
+				     unsigned inst1, unsigned inst2) {
   MachineFunction &MF = *BB->getParent();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
   unsigned DIV = MI.getOperand(0).getReg();
   unsigned REM = MI.getOperand(1).getReg();
-  unsigned CI;
   MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
   bool REMunused = MRI.use_empty(REM);
-  MachineInstr *Div;
 LLVM_DEBUG(dbgs() << "emitUDIVREM\n" << MI << '\n');
-  if (!REMunused) {
-    CI = MRI.createVirtualRegister(&My66000::GRegsRegClass);
-    BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CI)
-	.addImm(2);	// Out
+  if (REMunused) {
+    BuildMI(*BB, MI, DL, TII.get(inst1), DIV)
+	    .add(MI.getOperand(2)).add(MI.getOperand(3));
+  } else {
+    BuildMI(*BB, MI, DL, TII.get(inst2), DIV)
+	    .addDef(REM)
+	    .add(MI.getOperand(2)).add(MI.getOperand(3));
   }
-  Div = BuildMI(*BB, MI, DL, TII.get(inst), DIV)
-	.add(MI.getOperand(2)).add(MI.getOperand(3));
-  if (!REMunused) {	// deal with the CARRY instruction
-    Div->addOperand(MachineOperand::CreateReg(CI, false, true));
-    Div->addOperand(MachineOperand::CreateReg(REM, true, true));
-    Div->tieOperands(4, 3);
-  }
-  MI.eraseFromParent(); // The pseudo instruction is gone now.
-  return BB;
-}
-
-static MachineBasicBlock *emitFREM(MachineInstr &MI,
-				   MachineBasicBlock *BB, unsigned inst) {
-  MachineFunction &MF = *BB->getParent();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  DebugLoc DL = MI.getDebugLoc();
-  unsigned DIV = MI.getOperand(0).getReg();
-  unsigned REM = MI.getOperand(1).getReg();
-
-  unsigned CO;
-  MachineRegisterInfo &MRI = BB->getParent()->getRegInfo();
-  MachineInstr *Div;
-LLVM_DEBUG(dbgs() << "emitFREM\n" << MI << '\n');
-  CO = MRI.createVirtualRegister(&My66000::GRegsRegClass);
-  BuildMI(*BB, MI, DL, TII.get(My66000::CARRYo), CO).addImm(2);	// Out
-  Div = BuildMI(*BB, MI, DL, TII.get(inst), DIV)
-	.add(MI.getOperand(2)).add(MI.getOperand(3));
-    Div->addOperand(MachineOperand::CreateReg(CO, false, true));
-    Div->addOperand(MachineOperand::CreateReg(REM, true, true));
-    Div->tieOperands(4, 3);
-  MI.eraseFromParent(); // The pseudo instruction is gone now.
-  return BB;
-}
-
-
-// Double length shifts using CARRY
-static MachineBasicBlock *emitSHF2(MachineInstr &MI,
-                                       MachineBasicBlock *BB, unsigned inst) {
-  MachineFunction &MF = *BB->getParent();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  DebugLoc DL = MI.getDebugLoc();
-  unsigned RESLO = MI.getOperand(0).getReg();
-  unsigned RESHI = MI.getOperand(1).getReg();
-  unsigned INLO  = MI.getOperand(2).getReg();
-  unsigned INHI  = MI.getOperand(3).getReg();
-
-  BuildMI(*BB, MI, DL, TII.get(My66000::CARRYio), RESHI)
-	.addReg(INHI).addImm(3); //In/Out
-  BuildMI(*BB, MI, DL, TII.get(inst), RESLO).addReg(INLO).add(MI.getOperand(4));
   MI.eraseFromParent(); // The pseudo instruction is gone now.
   return BB;
 }
@@ -1767,51 +1651,34 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   switch (MI.getOpcode()) {
   default:
     llvm_unreachable("Unexpected instr type to insert");
-  case My66000::UADDOrr:	return emitUADDO(MI, BB, My66000::ADDrr);
-  case My66000::USUBOrr:	return emitUADDO(MI, BB, My66000::ADDrn);
-  case My66000::UADDOri:	return emitUADDO(MI, BB, My66000::ADDri);
-  case My66000::USUBOri:	return emitUADDO(MI, BB, My66000::ADDri);
-  case My66000::ADDCARRYrr:	return emitADDCARRY(MI, BB, My66000::ADDrr);
-  case My66000::SUBCARRYrr:	return emitADDCARRY(MI, BB, My66000::ADDrn);
-  case My66000::ADDCARRYri:	return emitADDCARRY(MI, BB, My66000::ADDri);
-  case My66000::SUBCARRYri:	return emitADDCARRY(MI, BB, My66000::ADDri);
-  case My66000::UMULHILOrr:	return emitUMULHILO(MI, BB, My66000::MULrr);
-  case My66000::UMULHILOri:	return emitUMULHILO(MI, BB, My66000::MULri);
-  case My66000::UMULHILOrw:	return emitUMULHILO(MI, BB, My66000::MULrw);
-  case My66000::UMULHILOrd:	return emitUMULHILO(MI, BB, My66000::MULrd);
-  case My66000::SMULHILOrr:	return emitUMULHILO(MI, BB, My66000::MULrr);
-  case My66000::SMULHILOri:	return emitUMULHILO(MI, BB, My66000::MULri);
-  case My66000::SMULHILOrw:	return emitUMULHILO(MI, BB, My66000::MULrw);
-  case My66000::SMULHILOrd:	return emitUMULHILO(MI, BB, My66000::MULrd);
-  case My66000::UDIVREMrr:	return emitDIVREM(MI, BB, My66000::UDIVrr);
-  case My66000::UDIVREMri:	return emitDIVREM(MI, BB, My66000::UDIVri);
-  case My66000::UDIVREMrw:	return emitDIVREM(MI, BB, My66000::UDIVrw);
-  case My66000::UDIVREMwr:	return emitDIVREM(MI, BB, My66000::UDIVwr);
-  case My66000::UDIVREMrd:	return emitDIVREM(MI, BB, My66000::UDIVrd);
-  case My66000::UDIVREMdr:	return emitDIVREM(MI, BB, My66000::UDIVdr);
-  case My66000::SDIVREMrr:	return emitDIVREM(MI, BB, My66000::SDIVrr);
-  case My66000::SDIVREMrn:	return emitDIVREM(MI, BB, My66000::SDIVrn);
-  case My66000::SDIVREMnr:	return emitDIVREM(MI, BB, My66000::SDIVnr);
-  case My66000::SDIVREMnn:	return emitDIVREM(MI, BB, My66000::SDIVnn);
-  case My66000::SDIVREMrx:	return emitDIVREM(MI, BB, My66000::SDIVrx);
-  case My66000::SDIVREMwr:	return emitDIVREM(MI, BB, My66000::SDIVwr);
-  case My66000::SDIVREMrd:	return emitDIVREM(MI, BB, My66000::SDIVrd);
-  case My66000::SDIVREMdr:	return emitDIVREM(MI, BB, My66000::SDIVdr);
-  case My66000::SRL2rr:		return emitSHF2(MI, BB, My66000::SRLrr);
-  case My66000::SLL2rr:		return emitSHF2(MI, BB, My66000::SLLrr);
-  case My66000::SRA2rr:		return emitSHF2(MI, BB, My66000::SRArr);
-  case My66000::FREMrr:		return emitFREM(MI, BB, My66000::FDIVrr);
-  case My66000::FREMrd:		return emitFREM(MI, BB, My66000::FDIVrd);
-  case My66000::FREMrf:		return emitFREM(MI, BB, My66000::FDIVrf);
-  case My66000::FREMrk:		return emitFREM(MI, BB, My66000::FDIVrk);
-  case My66000::FREMdr:		return emitFREM(MI, BB, My66000::FDIVdr);
-  case My66000::FREMfr:		return emitFREM(MI, BB, My66000::FDIVfr);
-  case My66000::FREMkr:		return emitFREM(MI, BB, My66000::FDIVkr);
-  case My66000::FREMFrr:	return emitFREM(MI, BB, My66000::FDIVFrr);
-  case My66000::FREMFrf:	return emitFREM(MI, BB, My66000::FDIVFrf);
-  case My66000::FREMFrk:	return emitFREM(MI, BB, My66000::FDIVFrk);
-  case My66000::FREMFfr:	return emitFREM(MI, BB, My66000::FDIVFfr);
-  case My66000::FREMFkr:	return emitFREM(MI, BB, My66000::FDIVFkr);
+  case My66000::UDIVREMrr:
+	return emitDIVREM(MI, BB, My66000::UDIVrr, My66000::UDIVREMrrc);
+  case My66000::UDIVREMri:
+	return emitDIVREM(MI, BB, My66000::UDIVri, My66000::UDIVREMric);
+  case My66000::UDIVREMrw:
+	return emitDIVREM(MI, BB, My66000::UDIVrw, My66000::UDIVREMrwc);
+  case My66000::UDIVREMwr:
+	return emitDIVREM(MI, BB, My66000::UDIVwr, My66000::UDIVREMwrc);
+  case My66000::UDIVREMrd:
+	return emitDIVREM(MI, BB, My66000::UDIVrd, My66000::UDIVREMrdc);
+  case My66000::UDIVREMdr:
+	return emitDIVREM(MI, BB, My66000::UDIVdr, My66000::UDIVREMdrc);
+  case My66000::SDIVREMrr:
+	return emitDIVREM(MI, BB, My66000::SDIVrr, My66000::SDIVREMrrc);
+  case My66000::SDIVREMrn:
+	return emitDIVREM(MI, BB, My66000::SDIVrn, My66000::SDIVREMrnc);
+  case My66000::SDIVREMnr:
+	return emitDIVREM(MI, BB, My66000::SDIVnr, My66000::SDIVREMnrc);
+  case My66000::SDIVREMnn:
+	return emitDIVREM(MI, BB, My66000::SDIVnn, My66000::SDIVREMnnc);
+  case My66000::SDIVREMrx:
+	return emitDIVREM(MI, BB, My66000::SDIVrx, My66000::SDIVREMrxc);
+  case My66000::SDIVREMwr:
+	return emitDIVREM(MI, BB, My66000::SDIVwr, My66000::SDIVREMwrc);
+  case My66000::SDIVREMrd:
+	return emitDIVREM(MI, BB, My66000::SDIVrd, My66000::SDIVREMrdc);
+  case My66000::SDIVREMdr:
+	return emitDIVREM(MI, BB, My66000::SDIVdr, My66000::SDIVREMdrc);
   case My66000::CPFMFS:		return emitCPFS(MI, BB);
   case My66000::CPTOFS:		return emitCPFS(MI, BB);
   }

@@ -116,6 +116,7 @@ void My66000PassConfig::addMachineLateOptimization() {
 
 // Predication pass must be done after COPY pseudos lowered
 void My66000PassConfig::addPreSched2() {
+  addPass(createMy66000ExpandPseudoPass());
   addPass(createMy66000PredBlockPass());
   addPass(createMy66000VVMFixupPass());
 }

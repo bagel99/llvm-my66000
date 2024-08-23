@@ -159,6 +159,18 @@ def FNEG : ALU_DR<0b110001, 0b10101,
 	(outs GRegs:$rd), (ins GRegs:$rs2),
 	"fadd\t$rd,#0,-$rs2",
 	[(set GRegs:$rd, (fneg (f64 GRegs:$rs2)))]>;
+def FPOWdr : ALU_DR<0b110011, 0b10101,
+	(outs GRegs:$rd), (ins fpimm64:$imm, GRegs:$rs2),
+	"fpow\t$rd,#$imm,$rs2",
+	[(set GRegs:$rd, (fpow fpimm64:$imm, (f64 GRegs:$rs2)))]>;
+def FPOWfr : ALU_DR<0b110011, 0b10101,
+	(outs GRegs:$rd), (ins fpimm32:$imm, GRegs:$rs2),
+	"fpow\t$rd,#$imm,$rs2",
+	[(set GRegs:$rd, (fpow (mySHRUNK (fpimm32:$imm)), (f64 GRegs:$rs2)))]>;
+def FPOWkr : ALU_DR<0b110011, 0b10101,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	"fpow\t$rd,#$imm,$rs2",
+	[(set GRegs:$rd, (fpow (myF64I5 (simm5:$imm)), (f64 GRegs:$rs2)))]>;
 
 // FMA 64-bit FMA - sometimes we get fma and sometime fmad
 def FMArr : ALU_RRR<0b000, 0b000,
@@ -490,6 +502,7 @@ def FCMPFrs : ALU_RD<0b110100, 0b10001,
 	[(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1), fpimm32:$imm))]>;
 }
 
+// Non-commutative ops with constants on the left
 def FSUBFsr : ALU_DR<0b110001, 0b10101,
 	(outs FSRegs:$rd), (ins fpimm32:$imm, FSRegs:$rs2),
 	"faddf\t$rd,#$imm,-$rs2",
@@ -510,6 +523,14 @@ def FNEGF : ALU_DR<0b110001, 0b10111,
 	(outs FSRegs:$rd), (ins FSRegs:$rs2),
 	"faddf\t$rd,#0,-$rs2",
 	[(set FSRegs:$rd, (fneg (f32 FSRegs:$rs2)))]>;
+def FPOWFfr: ALU_WR<0b110011, 0b10010,
+	(outs FSRegs:$rd), (ins fpimm32:$imm, FSRegs:$rs1),
+	"fpowf\t$rd,#$imm,$rs1",
+	[(set FSRegs:$rd, (fpow fpimm32:$imm, (f32 FSRegs:$rs1)))]>;
+def FPOWFkr : ALU_DR<0b110011, 0b10111,
+	(outs FSRegs:$rd), (ins i64imm:$imm, FSRegs:$rs2),
+	"fpowf\t$rd,#$imm,$rs2",
+	[(set FSRegs:$rd, (fpow (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs2)))]>;
 
 // FMA 32-bit FMA - sometimes we get fma and somtimes fmad
 def FMAFrr : ALU_RRR<0b000, 0b000,
@@ -671,64 +692,63 @@ def RNDNEF: RND<0b10010, 0b00100,
 
 //
 // Requires CARRY instruction
+// The following are expanded by the ExpandPseudoInsts pass
 //
-let usesCustomInserter = 1 in {
 // FP64 remainder
-def FREMrr : Pseudo<
+def FREMrrc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
-	"# FREMrr",
+	"# FREMrrc",
 	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, GRegs:$rhs))]>;
-def FREMrd : Pseudo<
+def FREMrdc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, fpimm64:$rhs),
-	"# FREMrd",
+	"# FREMrdc",
 	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, fpimm64:$rhs))]>;
-def FREMrf : Pseudo<
+def FREMrfc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, fpimm32:$imm),
-	"# FREMrf",
+	"# FREMrfc",
 	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, (mySHRUNK (fpimm32:$imm))))]>;
-def FREMrk : Pseudo<
+def FREMrkc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$imm),
-	"# FREMrk",
+	"# FREMrkc",
 	[(set GRegs:$div, GRegs:$rem, (myFDIVREM GRegs:$lhs, (myF64I5 (simm5:$imm))))]>;
-def FREMdr : Pseudo<
+def FREMdrc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins fpimm64:$lhs, GRegs:$rhs),
-	"# FREMdr",
+	"# FREMdrc",
 	[(set GRegs:$div, GRegs:$rem, (myFDIVREM fpimm64:$lhs, GRegs:$rhs))]>;
-def FREMfr : Pseudo<
+def FREMfrc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins fpimm32:$imm, GRegs:$rhs),
-	"# FREMwr",
+	"# FREMwrc",
 	[(set GRegs:$div, GRegs:$rem, (myFDIVREM (mySHRUNK (fpimm32:$imm)), GRegs:$rhs))]>;
-def FREMkr : Pseudo<
+def FREMkrc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$imm, GRegs:$rhs),
-	"# FREMkr",
+	"# FREMkrc",
 	[(set GRegs:$div, GRegs:$rem, (myFDIVREM (myF64I5 (simm5:$imm)), GRegs:$rhs))]>;
 // FP32 remainder
-def FREMFrr : Pseudo<
+def FREMFrrc : Pseudo<
 	(outs FSRegs:$div, FSRegs:$rem), (ins FSRegs:$lhs, FSRegs:$rhs),
-	"# FREMFrr",
+	"# FREMFrrc",
 	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
 	    (myFDIVREM (f32 FSRegs:$lhs), (f32 FSRegs:$rhs)))]>;
-def FREMFrf : Pseudo<
+def FREMFrfc : Pseudo<
 	(outs FSRegs:$div, FSRegs:$rem), (ins FSRegs:$lhs, fpimm32:$imm),
-	"# FREMFrf",
+	"# FREMFrfc",
 	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
 	    (myFDIVREM (f32 FSRegs:$lhs), fpimm32:$imm))]>;
-def FREMFrk : Pseudo<
+def FREMFrkc : Pseudo<
 	(outs FSRegs:$div, FSRegs:$rem), (ins FSRegs:$lhs, i64imm:$imm),
-	"# FREMFrk",
+	"# FREMFrkc",
 	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
 	    (myFDIVREM (f32 FSRegs:$lhs), (myF32I5 (simm5:$imm))))]>;
-def FREMFfr : Pseudo<
+def FREMFfrc : Pseudo<
 	(outs FSRegs:$div, FSRegs:$rem), (ins fpimm32:$imm, FSRegs:$rhs),
-	"# FREMFwr",
+	"# FREMFwcr",
 	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
 	    (myFDIVREM fpimm32:$imm, (f32 FSRegs:$rhs)))]>;
-def FREMFkr : Pseudo<
+def FREMFkrc : Pseudo<
 	(outs FSRegs:$div, FSRegs:$rem), (ins i64imm:$imm, FSRegs:$rhs),
-	"# FREMFkr",
+	"# FREMFkrc",
 	[(set (f32 FSRegs:$div), (f32 FSRegs:$rem),
 	    (myFDIVREM (myF32I5 (simm5:$imm)), (f32 FSRegs:$rhs)))]>;
-}
 
 // transcendentals defined in LLVM
 multiclass FSTRAN<string OpName,  bits<6>OpC, bits<5>Flags,

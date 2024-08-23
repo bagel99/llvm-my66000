@@ -47,6 +47,7 @@ class ALU_RR<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
   let Inst{15-11} = flags;
   let Inst{10-5}  = minor;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 4;
 }
 
@@ -62,6 +63,7 @@ class ALU_RW<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
   let Inst{15-11} = !or(flags,0b10000);
   let Inst{10-5}  = minor;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 8;
 }
 
@@ -77,6 +79,7 @@ class ALU_RD<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
   let Inst{15-11} = !or(flags,0b10001);
   let Inst{10-5}  = minor;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 12;
 }
 
@@ -92,6 +95,7 @@ class ALU_WR<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
   let Inst{15-11} = !or(flags,0b10000);
   let Inst{10-5}  = minor;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 8;
 }
 
@@ -107,6 +111,7 @@ class ALU_DR<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
   let Inst{15-11} = !or(flags,0b10001);
   let Inst{10-5}  = minor;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 12;
 }
 
@@ -124,6 +129,7 @@ class ALU_RRR<bits<3> minor, bits<3> flags, dag outs, dag ins, string asmstr,
   let Inst{12-10} = minor;
   let Inst{9-5}   = rs3;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 4;
 }
 
@@ -141,6 +147,7 @@ class ALU_RRM<bits<3> minor, bits<3> flags, dag outs, dag ins, string asmstr,
   let Inst{12-10} = minor;
   let Inst{9-5}   = rs3;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 4;
 }
 
@@ -153,6 +160,7 @@ class ALU_RI<bits<6> major, dag outs, dag ins, string asmstr, list<dag> pattern>
   let Inst{25-21} = rd;
   let Inst{20-16} = rs1;
   let Inst{15-0}  = imm;
+  let hasSideEffects = 0;
   let Size = 4;
 }
 
@@ -168,6 +176,7 @@ class SHF_RI<bits<4> minor, dag outs, dag ins, string asmstr, list<dag> pattern>
   let Inst{15-12} = minor;
   let Inst{11-6} = w;
   let Inst{5-0} = o;
+  let hasSideEffects = 0;
   let Size = 4;
 }
 
@@ -184,6 +193,7 @@ class SHF_RR<bits<4> minor, dag outs, dag ins, string asmstr, list<dag> pattern>
   let Inst{11-6} = w;
   let Inst{5} = 0;
   let Inst{4-0} = rs1;
+  let hasSideEffects = 0;
   let Size = 4;
 }
 
