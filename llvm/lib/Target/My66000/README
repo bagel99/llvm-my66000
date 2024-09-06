@@ -29,8 +29,6 @@ Command Line Options
 
 * Optimize carry sequences.
 
-* Implement bundled carry sequences.
-
 * Implement vec/loop sequences for more cases.
 
 * Compute correct instruction sizes for variable length instructions.

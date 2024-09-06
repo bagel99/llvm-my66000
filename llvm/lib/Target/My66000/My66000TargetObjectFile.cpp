@@ -29,6 +29,9 @@ void My66000TargetObjectFile::Initialize(MCContext &Ctx, const TargetMachine &TM
   MergeableConst16Section = Ctx.getELFSection(".rodata",
 				ELF::SHT_PROGBITS,
 				ELF::SHF_ALLOC | ELF::SHF_MERGE, 16);
+  MergeableConst32Section = Ctx.getELFSection(".rodata",
+				ELF::SHT_PROGBITS,
+				ELF::SHF_ALLOC | ELF::SHF_MERGE, 32);
   CStringSection = Ctx.getELFSection(".rodata",
 				ELF::SHT_PROGBITS,
 				ELF::SHF_ALLOC | ELF::SHF_MERGE | ELF::SHF_STRINGS);
@@ -60,7 +63,8 @@ static unsigned getMy66000SectionFlags(SectionKind K, bool IsCPRel) {
     Flags |= ELF::SHF_WRITE;
 
   if (K.isMergeableCString() || K.isMergeableConst4() ||
-      K.isMergeableConst8() || K.isMergeableConst16())
+      K.isMergeableConst8() || K.isMergeableConst16() ||
+      K.isMergeableConst32())
     Flags |= ELF::SHF_MERGE;
 
   if (K.isMergeableCString())
@@ -90,6 +94,7 @@ MCSection *My66000TargetObjectFile::SelectSectionForGlobal(
     if (Kind.isMergeableConst4())       return MergeableConst4Section;
     if (Kind.isMergeableConst8())       return MergeableConst8Section;
     if (Kind.isMergeableConst16())      return MergeableConst16Section;
+    if (Kind.isMergeableConst32())      return MergeableConst32Section;
   }
 
   // Otherwise, we work the same as ELF.
@@ -103,6 +108,7 @@ MCSection *My66000TargetObjectFile::getSectionForConstant(const DataLayout &DL,
   if (Kind.isMergeableConst4())           return MergeableConst4Section;
   if (Kind.isMergeableConst8())           return MergeableConst8Section;
   if (Kind.isMergeableConst16())          return MergeableConst16Section;
+  if (Kind.isMergeableConst32())          return MergeableConst32Section;
   assert((Kind.isReadOnly() || Kind.isReadOnlyWithRel()) &&
          "Unknown section kind");
   // We assume the size of the object is never greater than CodeModelLargeSize.

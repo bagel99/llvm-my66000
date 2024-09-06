@@ -296,13 +296,15 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     BuildMI(*TB, E, DL, TII.get(My66000::BRU)).addMBB(EB);
     LLVM_DEBUG(dbgs() << " need terminating BRU\n");
   }
+  // If there was and unconditional branch get rid of it
   if (UMI != nullptr)
     UMI->eraseFromParent();
+  // The conditional branch is not longer needed
   BMI->eraseFromParent();
-  if (CMI != nullptr)
-    CMI->eraseFromParent();
   if (AMI != nullptr)
-    AMI->eraseFromParent();
+    AMI->eraseFromParent();	// Is this safe?
+  // CMI may also be dead
+  // It will be removed by a subsequent DeadMachineInstructionElim pass
   return true;
 }
 

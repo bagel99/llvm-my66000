@@ -169,6 +169,9 @@ bool My66000ExpandPseudo::ExpandMI(MachineBasicBlock &MBB,
     case My66000::SRL2rrbc:	return ShfIO(MBB, MBBI, My66000::SRLrr);
     case My66000::SLL2rrbc:	return ShfIO(MBB, MBBI, My66000::SLLrr);
     case My66000::SRA2rrbc:	return ShfIO(MBB, MBBI, My66000::SRArr);
+    case My66000::SRL2ribc:	return ShfIO(MBB, MBBI, My66000::SRLri);
+    case My66000::SLL2ribc:	return ShfIO(MBB, MBBI, My66000::SLLri);
+    case My66000::SRA2ribc:	return ShfIO(MBB, MBBI, My66000::SRAri);
   }
 }
 

@@ -709,14 +709,14 @@ def MEMSETbd: ALU_RRM<0b110, 0b000,
 // ENTER/EXIT
 let mayStore = 1 in {
 def ENTER : ALU_RI<0b101100,
-	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$f, i16imm:$imm),
-	"enter\t$rd,$rb,$f,$imm",
+	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$imm, i16imm:$f),
+	"enter\t$rd,$rb,$imm,$f",
 	[]>;
 }
 let mayLoad = 1 in {
 def EXIT : ALU_RI<0b101100,
-	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$f, i16imm:$imm),
-	"exit\t$rd,$rb,$f,$imm",
+	(outs), (ins GRegs:$rd, GRegs:$rb, i16imm:$imm, i16imm:$f),
+	"exit\t$rd,$rb,$imm,$f",
 	[]>;
 }
 
@@ -997,7 +997,7 @@ def SDIVREMdrc : Pseudo<
 	[]>;
 def SRL2rrbc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
-	"# SRL2rbc",
+	"# SRL2rrbc",
 	[(set GRegs:$lo, GRegs:$hi, (srl_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
 def SLL2rrbc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
@@ -1007,6 +1007,18 @@ def SRA2rrbc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, GRegs:$cnt),
 	"# SRL2rrbc",
 	[(set GRegs:$lo, GRegs:$hi, (sra_parts GRegs:$slo, GRegs:$shi, GRegs:$cnt))]>;
+def SRL2ribc : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, i64imm:$cnt),
+	"# SRL2ribc",
+	[(set GRegs:$lo, GRegs:$hi, (srl_parts GRegs:$slo, GRegs:$shi, shfamt:$cnt))]>;
+def SLL2ribc : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, i64imm:$cnt),
+	"# SHL2ribc",
+	[(set GRegs:$lo, GRegs:$hi, (shl_parts GRegs:$slo, GRegs:$shi, shfamt:$cnt))]>;
+def SRA2ribc : Pseudo<
+	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$slo, GRegs:$shi, i64imm:$cnt),
+	"# SRL2ribc",
+	[(set GRegs:$lo, GRegs:$hi, (sra_parts GRegs:$slo, GRegs:$shi, shfamt:$cnt))]>;
 
 let usesCustomInserter = 1 in {
 def UDIVREMrr : Pseudo<

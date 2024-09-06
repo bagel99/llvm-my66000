@@ -166,8 +166,8 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
     BuildMI(MBB, MBBI, DL, TII->get(My66000::ENTER))
 	      .addReg(LoReg, getKillRegState(!isLive))
 	      .addReg(HiReg, getKillRegState(!isLive))
-	      .addImm(flags)
-	      .addImm(Offset);
+	      .addImm(Offset)
+	      .addImm(flags);
     if (!isLive)
       MBB.addLiveIn(LoReg);
   } else if (Offset != 0) {
@@ -250,8 +250,8 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
     BuildMI(MBB, MBBI, DL, TII->get(My66000::EXIT))
 	      .addReg(LoReg, RegState::Define)
 	      .addReg(HiReg, RegState::Define)
-	      .addImm(flags)
-	      .addImm(Offset);
+	      .addImm(Offset)
+	      .addImm(flags);
     if (!MFI.hasTailCall() && VarArgsSaveSize == 0)
 	MBB.erase(MBBI); 	// remove the return
   } else if (Offset != 0) {

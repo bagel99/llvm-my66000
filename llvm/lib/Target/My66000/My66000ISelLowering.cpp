@@ -161,6 +161,9 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::SUBCARRY, MVT::i64, Legal);
     setOperationAction(ISD::UADDO, MVT::i64, Legal);
     setOperationAction(ISD::USUBO, MVT::i64, Legal);
+    setOperationAction(ISD::SHL, MVT::i128, Custom);
+    setOperationAction(ISD::SRL, MVT::i128, Custom);
+    setOperationAction(ISD::SRA, MVT::i128, Custom);
   }
   setOperationAction(ISD::BITREVERSE, MVT::i64, Legal);
   // Sign extend inreg
@@ -1556,9 +1559,11 @@ LLVM_DEBUG(Op.dump());
 void My66000TargetLowering::ReplaceNodeResults(SDNode *N,
 					       SmallVectorImpl<SDValue> &Results,
 		                               SelectionDAG &DAG) const {
+LLVM_DEBUG(dbgs() << "My66000TargetLowering::ReplaceNodeResults\n");
   SDLoc DL(N);
-  if (N->getOpcode() == ISD::BITCAST) {
-    EVT VT = N->getValueType(0);
+  EVT VT = N->getValueType(0);
+  switch (N->getOpcode()) {
+  case ISD::BITCAST: {
     SDValue Op0 = N->getOperand(0);
     EVT Op0VT = Op0.getValueType();
     if (VT == MVT::i32 && Op0VT == MVT::f32) {
@@ -1567,6 +1572,34 @@ void My66000TargetLowering::ReplaceNodeResults(SDNode *N,
       Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Copy));
     }
   }
+  break;
+  // Expand all shifts including those with constants
+  // ExpandIntRes_Shift() does things differently with constants
+  // FIXME: if constant shift amount >= 64 then use default expansion
+  case ISD::SHL:
+  case ISD::SRL:
+  case ISD::SRA: {
+    // assume VT == MVT::i128
+    unsigned PartsOpc;
+    if (N->getOpcode() == ISD::SHL) {
+      PartsOpc = ISD::SHL_PARTS;
+    } else if (N->getOpcode() == ISD::SRL) {
+      PartsOpc = ISD::SRL_PARTS;
+    } else {
+      PartsOpc = ISD::SRA_PARTS;
+    }
+    // Expand the subcomponents.
+    SDValue LHSL = N->getOperand(0)->getOperand(0);
+    SDValue LHSH = N->getOperand(0)->getOperand(1);
+    EVT VT = LHSL.getValueType();
+    SDValue ShiftOp = N->getOperand(1);
+    SDValue Ops[] = { LHSL, LHSH, ShiftOp };
+    SDValue Lo = DAG.getNode(PartsOpc, DL, DAG.getVTList(VT, VT), Ops);
+    SDValue Hi = Lo.getValue(1);
+    Results.push_back(DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i128, Lo, Hi));
+  }
+  break;
+  } // end switch
 }
 
 
