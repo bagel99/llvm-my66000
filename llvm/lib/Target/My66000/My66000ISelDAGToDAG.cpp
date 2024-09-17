@@ -392,6 +392,8 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotateI\n");
   if (isOpcWithIntImmediate(OpL.getNode(), ISD::SHL, Shlimm) &&
       isOpcWithIntImmediate(OpR.getNode(), ISD::SRL, Shrimm)) {
 LLVM_DEBUG(dbgs() << "Shlimm=" << Shlimm << " Shrimm=" << Shrimm << '\n');
+    if (OpL.getNode()->getOperand(0) != OpR.getNode()->getOperand(0))
+      return false;	// operands not the same
     KnownBits KnownL = CurDAG->computeKnownBits(OpL.getNode()->getOperand(0));
     unsigned WidthL = 64 - KnownL.countMinLeadingZeros();
     KnownBits KnownR = CurDAG->computeKnownBits(OpR.getNode()->getOperand(0));
@@ -401,10 +403,10 @@ LLVM_DEBUG(dbgs() << "WidthL=" << WidthL << " WidthR=" << WidthR << '\n');
     if (OpL.getNode()->getOperand(0) != OpR.getNode()->getOperand(0)) {
 LLVM_DEBUG(dbgs() << "Shift operands not the same, proceeding anyway!\n");
 //	return false;
-    }
+      }
     if (Width != Shlimm + Shrimm) {
 LLVM_DEBUG(dbgs() << "Not a rotate?\n");
-	return false;
+      return false;
     }
     SDValue Ops[] = {  OpR.getNode()->getOperand(0),
 		       CurDAG->getTargetConstant(Width, dl, MVT::i32),
@@ -488,15 +490,6 @@ LLVM_DEBUG(dbgs() << "\tmasked static shift left w=" << Width << " o=" << Shfimm
 		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
 		      CurDAG->getTargetConstant(Shfimm, dl, MVT::i64) };
     CurDAG->SelectNodeTo(N, My66000::SLLri, MVT::i64, Ops);
-    return true;
-  } else {
-    if (!isMask(Andimm, Width))
-      return false;
-LLVM_DEBUG(dbgs() << "\tmasked dynamic shift left w=" << Width << '\n');
-    SDValue Ops[] = { N->getOperand(0).getOperand(0),
-		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
-		      N->getOperand(0).getOperand(1) };
-    CurDAG->SelectNodeTo(N, My66000::SLLrr, MVT::i64, Ops);
     return true;
   }
   return false;
