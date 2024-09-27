@@ -319,8 +319,8 @@ enum {
   EM_BPF = 247,           // Linux kernel bpf virtual machine
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
-  EM_My66000 = 254,       // My66000
   EM_LOONGARCH = 258,     // LoongArch
+  EM_MY66000 = 0x1801,    // My66000
 };
 
 // Object file classes.
@@ -944,6 +944,11 @@ enum : unsigned {
 // ELF Relocation types for Xtensa
 enum {
 #include "ELFRelocs/Xtensa.def"
+};
+
+// ELF Relocation types for My66000
+enum {
+#include "ELFRelocs/My66000.def"
 };
 
 #undef ELF_RELOC
