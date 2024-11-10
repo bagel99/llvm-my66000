@@ -1139,6 +1139,11 @@ def LOOP2ii : ALU_RRR<0b111, 0b000,
 		 GRegs:$ra, brtarget:$adr),
 	"loop2\t$cnd,$rt,#$ii,#$ib",
 	[]>;
+def LOOP3rr : ALU_RRR<0b111, 0b000,
+	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, GRegs:$rc,
+		 GRegs:$ra, brtarget:$adr),
+	"loop3\t$cnd,$rt,$ri,$rc",
+	[]>;
 def LOOP3ri : ALU_RRR<0b111, 0b000,
 	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),

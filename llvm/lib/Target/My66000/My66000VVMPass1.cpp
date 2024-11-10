@@ -93,7 +93,13 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   LLVM_DEBUG(dbgs() << " found candidate inner loop " << printMBBReference(*TB) << '\n');
   MachineBasicBlock::iterator I = TB->begin();
   MachineBasicBlock::iterator E = TB->getLastNonDebugInstr();
-  MachineInstr *BMI, *CMI = nullptr, *AMI = nullptr, *UMI = nullptr;
+  MachineInstr *BrcMI,		// the conditional branch instruction
+	       *BruMI = nullptr,// the ending uncoditional branch (if any)
+	       *CmpMI = nullptr,// the compare instruction
+	       *AddMI = nullptr,// the add to loop counter instruction
+	       *IncMI = nullptr,// an increment by 1 instruction
+	       *CpyMI = nullptr;// an intervening copy instruction (if any)
+//  MachineOperand &CmpOp = nullptr;	// the compare operand of interest
   MachineInstr *MI;
   Register BReg, LReg;
   unsigned BCnd;
@@ -101,6 +107,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   unsigned CmpOpNo;
   MachineBasicBlock *EB = nullptr;	// the exit block if not fall-thru
   bool CondIsExit = false;
+  bool HasBRC;
   // Skip any optional terminating unconditional branch
   MI = &*E;
   if (MI->isUnconditionalBranch()) {
@@ -108,17 +115,17 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     if (EB == TB) CondIsExit = true;	// it is the loop branch
     LLVM_DEBUG(dbgs() << " skip unconditional branch to " << printMBBReference(*EB) << '\n');
     LLVM_DEBUG(dbgs() << " CondIsExit=" << CondIsExit << '\n');
-    UMI = MI;	// remember we need to delete this
+    BruMI= MI;	// remember we need to delete this
     --E;
   }
   // Then we must have a conditional branch
-  BMI = &*E;
+  BrcMI = &*E;
   if (E->getOpcode() == My66000::BRIB) {
     LLVM_DEBUG(dbgs() << " found BRIB\n");
-    Type = 1;
+    HasBRC = false;
   } else if (E->getOpcode() == My66000::BRC) {
     LLVM_DEBUG(dbgs() << " found BRC\n");
-    Type = 2;
+    HasBRC = true;
   } else {
     LLVM_DEBUG(dbgs() << " fail - no conditional branch\n");
     return false;	// weird, not a conditional branch
@@ -126,19 +133,20 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   // Make sure this conditional branch goes to top of the loop
   // or else its the exit from the loop followed by an
   // unconditional branch to the top.
-  BReg = BMI->getOperand(1).getReg();
-  BCnd = BMI->getOperand(2).getImm();
-  CB = BMI->getOperand(0).getMBB();
+  BReg = BrcMI->getOperand(1).getReg();
+  BCnd = BrcMI->getOperand(2).getImm();
+  CB = BrcMI->getOperand(0).getMBB();
   if (CB != TB) {
     if (!CondIsExit) {
       LLVM_DEBUG(dbgs() << " fail - bad branch target\n");
       return false;
     } else {
-      LLVM_DEBUG(dbgs() << " exit was conditional to " << printMBBReference(*CB) << '\n');
-      if (Type == 1)
-	BCnd = TII->reverseBRIB(static_cast<MYCB::CondBits>(BCnd));
-      else
+      LLVM_DEBUG(dbgs() << " exit was conditional to " <<
+			   printMBBReference(*CB) << '\n');
+      if (HasBRC)
 	BCnd = TII->reverseBRC(static_cast<MYCC::CondCodes>(BCnd));
+      else
+	BCnd = TII->reverseBRIB(static_cast<MYCB::CondBits>(BCnd));
       EB = CB;
     }
   }
@@ -146,11 +154,19 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   // Now scan to top of loop looking for interesting stuff
   // FIXME - should count instructions, VVM has a limitation
   unsigned NInstr = MaxVVMInstr;
-  while (E != I) {
+  for (;;) {
     MachineInstr *MI = &*E;
     if (MI->isCall()) {
       LLVM_DEBUG(dbgs() << " fail - loop contains call\n");
       return false;	// calls not allowed in vector mode
+    }
+    if (MI->isCopy()) {
+      LLVM_DEBUG(dbgs() << " warn - loop contains copy\n");
+      if (CpyMI != nullptr)
+      { LLVM_DEBUG(dbgs() << " fail - loop contains more than one copy\n");
+        return false;	// we don't handle ths
+      }
+      CpyMI = MI;
     }
     if (NInstr == 0) {
       LLVM_DEBUG(dbgs() << " fail - too many instructions in loop\n");
@@ -160,75 +176,121 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
       if (MI->getOperand(0).getReg() == BReg) {
 	if (MI->isCompare()) {
 	  LLVM_DEBUG(dbgs() << " def of branch variable is compare: " << *MI);
-	  CMI = MI;
+	  CmpMI = MI;
 	} else {
 	  LLVM_DEBUG(dbgs() << " def of branch variable is not compare: " << *MI);
-	  AMI = MI;
+	  AddMI = MI;
 	}
-      }
-      else if (CMI != nullptr) {	// we have seen the compare
-	if (MI->getOperand(0).getReg() == CMI->getOperand(1).getReg()) {
+      } else if (CmpMI != nullptr) {	// we have seen the compare
+	if (MI->getOperand(0).getReg() == CmpMI->getOperand(1).getReg()) {
 	  LLVM_DEBUG(dbgs() << " def of compare variable op1: " << *MI);
 	  CmpOpNo = 2;
-	  AMI = MI;
-	} else if (CMI->getOperand(2).isReg() &&
-		   MI->getOperand(0).getReg() == CMI->getOperand(2).getReg()) {
+	  AddMI = MI;
+	} else if (CmpMI->getOperand(2).isReg() &&
+		   MI->getOperand(0).getReg() == CmpMI->getOperand(2).getReg()) {
 	  LLVM_DEBUG(dbgs() << " def of compare variable op2: " << *MI);
 	  CmpOpNo = 1;
-	  AMI = MI;
+	  AddMI = MI;
         }
+      }
+      if (MI->getOpcode() == My66000::ADDri) {
+	LLVM_DEBUG(dbgs() << " found ADDri: " << *MI);
+	if (MI->getOperand(0).getReg() == MI->getOperand(1).getReg() &&
+	    MI->getOperand(2).isImm() && MI->getOperand(2).getImm() == 1) {
+	  IncMI = MI;
+	}
       }
     }
     --NInstr;
+    if (E == I) break;
     --E;
   }
-  if (AMI != nullptr) {
-    if (AMI->getOpcode() != My66000::ADDrr &&
-        AMI->getOpcode() != My66000::ADDri) {
-      AMI = nullptr; // AMI must be an ADD instruction if incorporated into LOOP
+  if (AddMI != nullptr) {
+    if (AddMI->getOpcode() != My66000::ADDrr &&
+        AddMI->getOpcode() != My66000::ADDri) {
+      AddMI = nullptr; // AddMI must be an ADD instruction if incorporated into LOOP
     } else {	// We don't handle other than increment version of ADD
-      if (!((AMI->getOperand(0).getReg() == AMI->getOperand(1).getReg()) ||
-	    (AMI->getOperand(2).isReg() &&
-	     AMI->getOperand(0).getReg() == AMI->getOperand(2).getReg()))) {
+      if (!((AddMI->getOperand(0).getReg() == AddMI->getOperand(1).getReg()) ||
+	    (AddMI->getOperand(2).isReg() &&
+	     AddMI->getOperand(0).getReg() == AddMI->getOperand(2).getReg()))) {
 	LLVM_DEBUG(dbgs() << " fail - ADD is not a simple increment\n");
 	return false;
       }
     }
   }
-  // Type 1 requires both CMI and AMI
-  if (Type == 1) {
-    if (CMI == nullptr) {
-      LLVM_DEBUG(dbgs() << " fail - type 1 has CMI == null\n");
-      return false;
-    }
-    if (AMI == nullptr) {
-      Type = 3;
-    }
+  else {
+    // We did not find an increment, so assume we are testing the leftmost
+    // operand of the compare.
+    // Can this be wrong? If the rightmost operand is a constant, then
+    // we correct, but...
+    CmpOpNo = 1;
   }
-  else if (Type == 2) {
+  if (AddMI == nullptr) LLVM_DEBUG(dbgs() << " AddMI= nullptr\n");
+  else LLVM_DEBUG(dbgs() << " AddMI= " << *AddMI);
+  if (CmpMI == nullptr) LLVM_DEBUG(dbgs() << " CmpMI= nullptr\n");
+  else LLVM_DEBUG(dbgs() << " CmpMI= " << *CmpMI);
+  if (IncMI != nullptr) LLVM_DEBUG(dbgs() << " IncMI= " << *IncMI);
+  if (CpyMI != nullptr) LLVM_DEBUG(dbgs() << " CpyMI= " << *CpyMI);
+
+  if (HasBRC) {
     if (!MapLoopCond(BCnd)) {
-      LLVM_DEBUG(dbgs() << " unsupported condition\n");
+      LLVM_DEBUG(dbgs() << " fail - unsupported condition\n");
       return false;
     }
+    Type = 2;
+  }
+  else {
+    if (CmpMI == nullptr) {
+      LLVM_DEBUG(dbgs() << " fail - BRIB has no compare\n");
+      return false;
+    }
+    if (AddMI != nullptr) Type = 1;
+    else if (IncMI != nullptr) Type = 4;
+    else Type = 3;
   }
   LLVM_DEBUG(dbgs() << " will vectorize this block:\n");
+  // Check for compare register destruction
   MachineFunction &MF = *TB->getParent();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineRegisterInfo &MRI = MF.getRegInfo();
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+//  MachineOperand &CmpOp = CmpMI->getOperand(CmpOpNo);
+  bool HasCopy = false;
+  Register RC;
+  MachineInstr *SavMI = nullptr;
+  if (CpyMI != nullptr && CmpMI != nullptr) {
+    LLVM_DEBUG(dbgs() << " CmpOpNo= " << CmpOpNo << '\n');
+    if (CmpMI->getOperand(CmpOpNo).isReg()) {
+      Register CmpReg = CmpMI->getOperand(CmpOpNo).getReg();
+      Register CpyReg = CpyMI->getOperand(0).getReg();;
+      if (CmpReg == CpyReg) {
+	LLVM_DEBUG(dbgs() << " warn - compare input register overwritten\n");
+	RC = MRI.createVirtualRegister(&My66000::GRegsRegClass);
+	SavMI = BuildMI(*TB, CmpMI, CmpMI->getDebugLoc(),
+		TII.get(TargetOpcode::COPY), RC)
+	    .addReg(CpyReg);
+	HasCopy = true;
+//	CmpOp = SIB.getOperand(0);
+//	return false;
+      }
+    }
+  }
   // Create the VEC instruction
-  unsigned RA = MRI.createVirtualRegister(&My66000::GRegsRegClass);
+  Register RA = MRI.createVirtualRegister(&My66000::GRegsRegClass);
   BuildMI(*TB, I, I->getDebugLoc(), TII.get(My66000::VEC), RA)
 	.addImm(0);	// pass2 will fill this in after reg allocation
 
   MachineInstrBuilder LIB;
-  DebugLoc DL = BMI->getDebugLoc();
+  DebugLoc DL = BrcMI->getDebugLoc();
   E = TB->getFirstTerminator();
   unsigned Opc;
   switch (Type) {
-  case 1: {
-    LReg = AMI->getOperand(1).getReg();		// loop counter
-    if (CMI->getOperand(CmpOpNo).isReg()) {
-      if (AMI->getOperand(2).isReg()) {
+  case 1: {	// Have CmpMI and AddMI
+    LReg = AddMI->getOperand(1).getReg();		// loop counter
+    MachineOperand &CmpOp = (HasCopy) ?
+	SavMI->getOperand(0) :
+	CmpMI->getOperand(CmpOpNo);
+    if (CmpOp.isReg()) {
+      if (AddMI->getOperand(2).isReg()) {
 	Opc = My66000::LOOP1rr;
 	LLVM_DEBUG(dbgs() << " type1rr\n");
       } else {
@@ -236,7 +298,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
 	LLVM_DEBUG(dbgs() << " type1ri\n");
       }
     } else {
-      if (AMI->getOperand(2).isReg()) {
+      if (AddMI->getOperand(2).isReg()) {
 	Opc = My66000::LOOP1ir;
 	LLVM_DEBUG(dbgs() << " type1ir\n");
       } else {
@@ -247,47 +309,72 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     LIB = BuildMI(*TB, E, DL, TII.get(Opc))
 	    .addImm(BCnd)
 	    .addReg(LReg)
-	    .add(CMI->getOperand(CmpOpNo))
-	    .add(AMI->getOperand(2));
+	    .add(CmpOp)
+	    .add(AddMI->getOperand(2));
     break;
   }
-  case 2: {
-    if (AMI == nullptr) {	// no increment use LOOP1
-      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
-	      .addImm(BCnd)
-	      .addReg(BReg)
-	      .addImm(0)
-	      .addImm(0);
+  case 2: {	// No CmpMI and possibly AddMI
+    if (AddMI == nullptr) {
       LLVM_DEBUG(dbgs() << " type100\n");
+      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
+	    .addImm(BCnd)
+	    .addReg(BReg)
+	    .addImm(0)
+	    .addImm(0);
+
+    } else if (AddMI->getOperand(2).isReg()) {
+      LLVM_DEBUG(dbgs() << " type10r\n");
+      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ir))
+	    .addImm(BCnd)
+	    .addReg(BReg)
+	    .addImm(0)
+	    .addReg(AddMI->getOperand(2).getReg());
     } else {
-      if (AMI->getOperand(2).isReg()) {
-	Opc = My66000::LOOP2ri;
-	LLVM_DEBUG(dbgs() << " type2ri\n");
-      } else {
-	Opc = My66000::LOOP2ii;
-	LLVM_DEBUG(dbgs() << " type2ii\n");
-      }
-      LIB = BuildMI(*TB, E, DL, TII.get(Opc))
-	      .addImm(BCnd)
-	      .addReg(BReg)
-	      .addImm(0)
-	      .add(AMI->getOperand(2));
+      LLVM_DEBUG(dbgs() << " type10i\n");
+      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
+	    .addImm(BCnd)
+	    .addReg(BReg)
+	    .addImm(0)
+	    .add(AddMI->getOperand(2));
     }
     break;
    }
-   case 3: {
-      if (CMI->getOperand(2).isReg()) {
-	Opc = My66000::LOOP3ri;
-	LLVM_DEBUG(dbgs() << " type3ri\n");
-      } else {
-	Opc = My66000::LOOP3ii;
-	LLVM_DEBUG(dbgs() << " type3ii\n");
-      }
-      LIB = BuildMI(*TB, E, DL, TII.get(Opc))
+   case 3: {	// Have CmpMI and NO AddMI
+      if (CmpMI->getOperand(2).isReg()) {
+	LLVM_DEBUG(dbgs() << " type1r0\n");
+	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ri))
 	      .addImm(BCnd)
-	      .add(CMI->getOperand(1))
-	      .add(CMI->getOperand(2))
+	      .add(CmpMI->getOperand(1))
+	      .add(CmpMI->getOperand(2))
 	      .addImm(0);
+      } else {
+	LLVM_DEBUG(dbgs() << " type1i0\n");
+	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
+	      .addImm(BCnd)
+	      .add(CmpMI->getOperand(1))
+	      .add(CmpMI->getOperand(2))
+	      .addImm(0);
+      }
+      break;
+   }
+   case 4: {	// Have CmpMI and IncMI but NO AddMI
+      if (CmpMI->getOperand(2).isReg()) {
+	LLVM_DEBUG(dbgs() << " type3rr\n");
+	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP3rr))
+	      .addImm(BCnd)
+	      .addReg(IncMI->getOperand(0).getReg())
+	      .add(CmpMI->getOperand(1))
+	      .add(CmpMI->getOperand(2));
+      } else {
+	LLVM_DEBUG(dbgs() << " type3ri\n");
+	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP3ri))
+	      .addImm(BCnd)
+	      .addReg(IncMI->getOperand(0).getReg())
+	      .add(CmpMI->getOperand(1))
+	      .add(CmpMI->getOperand(2));
+      }
+      IncMI->eraseFromParent();
+      break;
     }
   }
   LIB.addReg(RA);
@@ -297,14 +384,16 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     LLVM_DEBUG(dbgs() << " need terminating BRU\n");
   }
   // If there was and unconditional branch get rid of it
-  if (UMI != nullptr)
-    UMI->eraseFromParent();
+  if (BruMI != nullptr)
+    BruMI->eraseFromParent();
   // The conditional branch is not longer needed
-  BMI->eraseFromParent();
-  if (AMI != nullptr)
-    AMI->eraseFromParent();	// Is this safe?
-  // CMI may also be dead
+  BrcMI->eraseFromParent();
+  if (AddMI != nullptr)
+    AddMI->eraseFromParent();	// Is this safe?
+  // CmpMI may also be dead
   // It will be removed by a subsequent DeadMachineInstructionElim pass
+  LLVM_DEBUG(dbgs() << "*** Modified basic block ***\n");
+  LLVM_DEBUG(dbgs() << *TB);
   return true;
 }
 

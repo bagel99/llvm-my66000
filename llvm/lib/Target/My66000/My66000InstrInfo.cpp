@@ -111,6 +111,7 @@ static void parseCondBranch(MachineInstr &LastInst, MachineBasicBlock *&Target,
     case My66000::LOOP1ii:
     case My66000::LOOP2ri:
     case My66000::LOOP2ii:
+    case My66000::LOOP3rr:
     case My66000::LOOP3ri:
     case My66000::LOOP3ii:
      Target = LastInst.getOperand(5).getMBB();
