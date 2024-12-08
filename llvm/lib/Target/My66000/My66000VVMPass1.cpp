@@ -294,13 +294,13 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
 	Opc = My66000::LOOP1rr;
 	LLVM_DEBUG(dbgs() << " type1rr\n");
       } else {
-	Opc = My66000::LOOP1ri;
-	LLVM_DEBUG(dbgs() << " type1ri\n");
+	Opc = My66000::LOOP1ir;
+	LLVM_DEBUG(dbgs() << " type1ir\n");
       }
     } else {
       if (AddMI->getOperand(2).isReg()) {
-	Opc = My66000::LOOP1ir;
-	LLVM_DEBUG(dbgs() << " type1ir\n");
+	Opc = My66000::LOOP1ri;
+	LLVM_DEBUG(dbgs() << " type1ri\n");
       } else {
 	Opc = My66000::LOOP1ii;
 	LLVM_DEBUG(dbgs() << " type1ii\n");
@@ -309,9 +309,9 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     LIB = BuildMI(*TB, E, DL, TII.get(Opc))
 	    .addImm(BCnd)
 	    .addReg(LReg)
-	    .add(CmpOp)
-	    .add(AddMI->getOperand(2));
-    break;
+	    .add(AddMI->getOperand(2))
+	    .add(CmpOp);
+   break;
   }
   case 2: {	// No CmpMI and possibly AddMI
     if (AddMI == nullptr) {
@@ -324,40 +324,40 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
 
     } else if (AddMI->getOperand(2).isReg()) {
       LLVM_DEBUG(dbgs() << " type10r\n");
-      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ir))
+      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ri))
 	    .addImm(BCnd)
 	    .addReg(BReg)
-	    .addImm(0)
-	    .addReg(AddMI->getOperand(2).getReg());
+	    .addReg(AddMI->getOperand(2).getReg())
+	    .addImm(0);
     } else {
       LLVM_DEBUG(dbgs() << " type10i\n");
       LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
 	    .addImm(BCnd)
 	    .addReg(BReg)
-	    .addImm(0)
-	    .add(AddMI->getOperand(2));
+	    .add(AddMI->getOperand(2))
+	    .addImm(0);
     }
     break;
-   }
-   case 3: {	// Have CmpMI and NO AddMI
-      if (CmpMI->getOperand(2).isReg()) {
-	LLVM_DEBUG(dbgs() << " type1r0\n");
-	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ri))
-	      .addImm(BCnd)
-	      .add(CmpMI->getOperand(1))
-	      .add(CmpMI->getOperand(2))
-	      .addImm(0);
-      } else {
-	LLVM_DEBUG(dbgs() << " type1i0\n");
-	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
-	      .addImm(BCnd)
-	      .add(CmpMI->getOperand(1))
-	      .add(CmpMI->getOperand(2))
-	      .addImm(0);
-      }
-      break;
-   }
-   case 4: {	// Have CmpMI and IncMI but NO AddMI
+  }
+  case 3: {	// Have CmpMI and NO AddMI
+    if (CmpMI->getOperand(2).isReg()) {
+    LLVM_DEBUG(dbgs() << " type1r0\n");
+    LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ir))
+	  .addImm(BCnd)
+	  .add(CmpMI->getOperand(1))
+	  .addImm(0)
+	  .add(CmpMI->getOperand(2));
+    } else {
+    LLVM_DEBUG(dbgs() << " type1i0\n");
+    LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
+	  .addImm(BCnd)
+	  .add(CmpMI->getOperand(1))
+	  .addImm(0)
+	  .add(CmpMI->getOperand(2));
+    }
+    break;
+  }
+  case 4: {	// Have CmpMI and IncMI but NO AddMI
       if (CmpMI->getOperand(2).isReg()) {
 	LLVM_DEBUG(dbgs() << " type3rr\n");
 	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP3rr))
