@@ -195,7 +195,8 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
       }
       if (MI->getOpcode() == My66000::ADDri) {
 	LLVM_DEBUG(dbgs() << " found ADDri: " << *MI);
-	if (MI->getOperand(0).getReg() == MI->getOperand(1).getReg() &&
+	if (MI->getOperand(1).isReg() &&
+	    MI->getOperand(0).getReg() == MI->getOperand(1).getReg() &&
 	    MI->getOperand(2).isImm() && MI->getOperand(2).getImm() == 1) {
 	  IncMI = MI;
 	}
@@ -207,7 +208,9 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   }
   if (AddMI != nullptr) {
     if (AddMI->getOpcode() != My66000::ADDrr &&
-        AddMI->getOpcode() != My66000::ADDri) {
+        AddMI->getOpcode() != My66000::ADDri &&
+	AddMI->getOpcode() != My66000::ADDrw &&
+	AddMI->getOpcode() != My66000::ADDrd) {
       AddMI = nullptr; // AddMI must be an ADD instruction if incorporated into LOOP
     } else {	// We don't handle other than increment version of ADD
       if (!((AddMI->getOperand(0).getReg() == AddMI->getOperand(1).getReg()) ||
