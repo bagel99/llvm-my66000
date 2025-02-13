@@ -114,13 +114,14 @@ static void parseCondBranch(MachineInstr &LastInst, MachineBasicBlock *&Target,
     case My66000::LOOP3rr:
     case My66000::LOOP3ri:
     case My66000::LOOP3ii:
-      Target = LastInst.getOperand(5).getMBB();
+      Target = LastInst.getOperand(6).getMBB();
       Cond.push_back(MachineOperand::CreateImm(LastInst.getOpcode()));
-      Cond.push_back(LastInst.getOperand(0));	// cond code/bits
-      Cond.push_back(LastInst.getOperand(1));	// register
-      Cond.push_back(LastInst.getOperand(2));	// increment
-      Cond.push_back(LastInst.getOperand(3));	// bound
-      Cond.push_back(LastInst.getOperand(4));	// loop top register
+      Cond.push_back(LastInst.getOperand(0));	// loop register out
+      Cond.push_back(LastInst.getOperand(1));	// cond code/bits
+      Cond.push_back(LastInst.getOperand(2));	// loop register in
+      Cond.push_back(LastInst.getOperand(3));	// inc
+      Cond.push_back(LastInst.getOperand(4));	// cmp
+      Cond.push_back(LastInst.getOperand(5));	// loop top register
       break;
     default:
       Target = LastInst.getOperand(0).getMBB();
@@ -244,10 +245,12 @@ LLVM_DEBUG(dbgs() << "\tconditional " << Opc << "\n");
     case My66000::LOOP3rr:
     case My66000::LOOP3ri:
     case My66000::LOOP3ii:
+LLVM_DEBUG(dbgs() << "\tloop " << Opc << "\n");
       BuildMI(&MBB, DL, get(Opc)).add(Cond[1]).add(Cond[2]).add(Cond[3])
-	    .add(Cond[4]).add(Cond[5]).addMBB(TBB);
+	    .add(Cond[4]).add(Cond[5]).add(Cond[6]).addMBB(TBB);
       break;
     default:
+LLVM_DEBUG(dbgs() << "\tconditional " << Opc << "\n");
       BuildMI(&MBB, DL, get(Opc)).addMBB(TBB).add(Cond[1]).add(Cond[2]);
   }
 

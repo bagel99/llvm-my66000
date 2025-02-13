@@ -587,14 +587,18 @@ LLVM_DEBUG(dbgs() << "\tbit clear idiom not implemented\n");
     }
   } else if (isOpcWithIntImmediate(N, ISD::SRA, Shfimm)) {
     uint64_t Shf2imm;
-//dbgs() << "\tSRA extract\n";
+LLVM_DEBUG(dbgs() << "\tSRA extract\n");
+LLVM_DEBUG(dbgs() << "\tSRA extract not implemented\n");
+    return false;
+/*
     if (isOpcWithIntImmediate(N->getOperand(0).getNode(), ISD::SHL, Shf2imm)) {
+LLVM_DEBUG(dbgs() << "\tsigned extract pattern #4: w=" << Shfimm <<  " o=" << Shf2imm << "\n");
       SDValue Ops[] = { N->getOperand(0).getOperand(0),
-                        CurDAG->getTargetConstant(Shf2imm, dl, MVT::i64),
-                        CurDAG->getTargetConstant(Shfimm, dl, MVT::i64) };
+                        CurDAG->getTargetConstant(Shfimm, dl, MVT::i64),
+                        CurDAG->getTargetConstant(Shf2imm, dl, MVT::i64) };
       CurDAG->SelectNodeTo(N, My66000::SRAri, MVT::i64, Ops);
-LLVM_DEBUG(dbgs() << "\tsigned extract pattern #3: w=" << Shf2imm <<  " o=" << Shfimm << "\n");
       return true;
+*/
     }
   } else if (N->getOpcode() == ISD::SRL) {
 LLVM_DEBUG(dbgs() << "\tSRL extract not implemented\n");

@@ -226,7 +226,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     // operand of the compare.
     // Can this be wrong? If the rightmost operand is a constant, then
     // we correct, but...
-    CmpOpNo = 1;
+    CmpOpNo = 2;
   }
   if (AddMI == nullptr) LLVM_DEBUG(dbgs() << " AddMI= nullptr\n");
   else LLVM_DEBUG(dbgs() << " AddMI= " << *AddMI);
@@ -240,40 +240,56 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
       LLVM_DEBUG(dbgs() << " fail - unsupported condition\n");
       return false;
     }
-    Type = 2;
+    LReg = BReg;
+    if (AddMI != nullptr) Type = 2;
+    else Type = 3;
   }
   else {
     if (CmpMI == nullptr) {
       LLVM_DEBUG(dbgs() << " fail - BRIB has no compare\n");
       return false;
     }
-    if (AddMI != nullptr) Type = 1;
-    else if (IncMI != nullptr) Type = 4;
-    else Type = 3;
+    if (AddMI != nullptr) {
+      LReg = AddMI->getOperand(1).getReg();		// loop counter
+      Type = 1;
+    } else {
+      if (IncMI != nullptr) {
+	LReg = IncMI->getOperand(0).getReg();
+	Type = 5;
+      } else {
+	LReg = CmpMI->getOperand(1).getReg();
+	Type = 4;
+      }
+    }
   }
   LLVM_DEBUG(dbgs() << " will vectorize this block:\n");
   // Check for compare register destruction
   MachineFunction &MF = *TB->getParent();
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-//  MachineOperand &CmpOp = CmpMI->getOperand(CmpOpNo);
-  bool HasCopy = false;
-  Register RC;
-  MachineInstr *SavMI = nullptr;
-  if (CpyMI != nullptr && CmpMI != nullptr) {
+  MachineOperand *CmpOp;
+  if (CmpMI != nullptr) {
     LLVM_DEBUG(dbgs() << " CmpOpNo= " << CmpOpNo << '\n');
-    if (CmpMI->getOperand(CmpOpNo).isReg()) {
-      Register CmpReg = CmpMI->getOperand(CmpOpNo).getReg();
-      Register CpyReg = CpyMI->getOperand(0).getReg();;
-      if (CmpReg == CpyReg) {
-	LLVM_DEBUG(dbgs() << " warn - compare input register overwritten\n");
-	RC = MRI.createVirtualRegister(&My66000::GRegsRegClass);
-	SavMI = BuildMI(*TB, CmpMI, CmpMI->getDebugLoc(),
-		TII.get(TargetOpcode::COPY), RC)
-	    .addReg(CpyReg);
-	HasCopy = true;
-//	CmpOp = SIB.getOperand(0);
-//	return false;
+    CmpOp = &CmpMI->getOperand(CmpOpNo);
+    Register RC;
+    MachineInstr *SavMI = nullptr;
+    if (CpyMI != nullptr) {
+      unsigned CmpOpOther = CmpOpNo ^ 3;	// 1->2, 2->1
+      if (CmpMI->getOperand(CmpOpOther).isReg()) {
+        Register CmpReg = CmpMI->getOperand(CmpOpOther).getReg();
+        Register CpyReg = CpyMI->getOperand(0).getReg();
+        if (CmpReg == CpyReg) {
+/*
+	  LLVM_DEBUG(dbgs() << " warn - compare input register overwritten\n");
+	  RC = MRI.createVirtualRegister(&My66000::GRegsRegClass);
+	  SavMI = BuildMI(*TB, CmpMI, CmpMI->getDebugLoc(),
+		        TII.get(TargetOpcode::COPY), RC)
+			.addReg(CpyReg);
+	  LReg = SavMI->getOperand(0).getReg();
+*/
+	  LLVM_DEBUG(dbgs() << " giveing up - compare input register overwritten\n");
+	  return false;
+	}
       }
     }
   }
@@ -285,14 +301,12 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   MachineInstrBuilder LIB;
   DebugLoc DL = BrcMI->getDebugLoc();
   E = TB->getFirstTerminator();
+  Register Rloop = MRI.createVirtualRegister(&My66000::GRegsRegClass);
+  LLVM_DEBUG(dbgs() << " Type=" << Type << '\n');
   unsigned Opc;
   switch (Type) {
   case 1: {	// Have CmpMI and AddMI
-    LReg = AddMI->getOperand(1).getReg();		// loop counter
-    MachineOperand &CmpOp = (HasCopy) ?
-	SavMI->getOperand(0) :
-	CmpMI->getOperand(CmpOpNo);
-    if (CmpOp.isReg()) {
+    if (CmpOp->isReg()) {
       if (AddMI->getOperand(2).isReg()) {
 	Opc = My66000::LOOP1rr;
 	LLVM_DEBUG(dbgs() << " type1rr\n");
@@ -309,73 +323,65 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
 	LLVM_DEBUG(dbgs() << " type1ii\n");
       }
     }
-    LIB = BuildMI(*TB, E, DL, TII.get(Opc))
-	    .addImm(BCnd)
-	    .addReg(LReg)
-	    .add(AddMI->getOperand(2))
-	    .add(CmpOp);
+    LIB = BuildMI(*TB, E, DL, TII.get(Opc), LReg)
+	  .addImm(BCnd)
+	  .addReg(LReg)
+	  .add(AddMI->getOperand(2))
+	  .add(*CmpOp);
    break;
   }
-  case 2: {	// No CmpMI and possibly AddMI
-    if (AddMI == nullptr) {
-      LLVM_DEBUG(dbgs() << " type100\n");
-      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
-	    .addImm(BCnd)
-	    .addReg(BReg)
-	    .addImm(0)
-	    .addImm(0);
-
-    } else if (AddMI->getOperand(2).isReg()) {
+  case 2: {	// No CmpMI but have AddMI
+    if (AddMI->getOperand(2).isReg()) {
+      LLVM_DEBUG(dbgs() << " type1r0\n");
+      Opc = My66000::LOOP1ri;
+    } else {
+      LLVM_DEBUG(dbgs() << " type1i0\n");
+      Opc = My66000::LOOP1ii;
+    }
+    LIB = BuildMI(*TB, E, DL, TII.get(Opc), LReg)
+	  .addImm(BCnd)
+	  .addReg(LReg)
+	  .add(AddMI->getOperand(2))
+	  .addImm(0);
+    break;
+  }
+  case 3: {	// No CmpMI and no AddMI
+    LLVM_DEBUG(dbgs() << " type100\n");
+    LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii), LReg)
+	  .addImm(BCnd)
+	  .addReg(LReg)
+	  .addImm(0)
+	  .addImm(0);
+    break;
+  }
+  case 4: {	// Have CmpMI and No AddMI
+    if (CmpMI->getOperand(2).isReg()) {
       LLVM_DEBUG(dbgs() << " type10r\n");
-      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ri))
-	    .addImm(BCnd)
-	    .addReg(BReg)
-	    .addReg(AddMI->getOperand(2).getReg())
-	    .addImm(0);
+      Opc = My66000::LOOP1ir;
     } else {
       LLVM_DEBUG(dbgs() << " type10i\n");
-      LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
-	    .addImm(BCnd)
-	    .addReg(BReg)
-	    .add(AddMI->getOperand(2))
-	    .addImm(0);
+      Opc = My66000::LOOP1ii;
     }
-    break;
-  }
-  case 3: {	// Have CmpMI and NO AddMI
-    if (CmpMI->getOperand(2).isReg()) {
-    LLVM_DEBUG(dbgs() << " type1r0\n");
-    LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ir))
+    LIB = BuildMI(*TB, E, DL, TII.get(Opc), LReg)
 	  .addImm(BCnd)
-	  .add(CmpMI->getOperand(1))
+	  .addReg(LReg, RegState::Define)
 	  .addImm(0)
 	  .add(CmpMI->getOperand(2));
-    } else {
-    LLVM_DEBUG(dbgs() << " type1i0\n");
-    LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP1ii))
-	  .addImm(BCnd)
-	  .add(CmpMI->getOperand(1))
-	  .addImm(0)
-	  .add(CmpMI->getOperand(2));
-    }
     break;
   }
-  case 4: {	// Have CmpMI and IncMI but NO AddMI
+  case 5: {	// Have CmpMI and IncMI but NO AddMI
       if (CmpMI->getOperand(2).isReg()) {
 	LLVM_DEBUG(dbgs() << " type3rr\n");
-	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP3rr))
-	      .addImm(BCnd)
-	      .addReg(IncMI->getOperand(0).getReg())
-	      .add(CmpMI->getOperand(1))
-	      .add(CmpMI->getOperand(2));
+	Opc = My66000::LOOP3rr;
       } else {
 	LLVM_DEBUG(dbgs() << " type3ri\n");
-	LIB = BuildMI(*TB, E, DL, TII.get(My66000::LOOP3ri))
-	      .addImm(BCnd)
-	      .addReg(IncMI->getOperand(0).getReg())
-	      .add(CmpMI->getOperand(1))
-	      .add(CmpMI->getOperand(2));
+	Opc = My66000::LOOP3ri;
       }
+      LIB = BuildMI(*TB, E, DL, TII.get(Opc), LReg)
+	    .addImm(BCnd)
+	    .addReg(LReg)
+	    .add(CmpMI->getOperand(1))
+	    .add(CmpMI->getOperand(2));
       IncMI->eraseFromParent();
       break;
     }

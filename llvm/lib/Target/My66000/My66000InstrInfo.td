@@ -693,18 +693,6 @@ def MEMSETkd: ALU_RRM<0b110, 0b000,
 	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
 	"ms\t$dst,#$src,#$len",
 	[(myMEMSET GRegs:$dst, kimm8:$src, sneed64:$len)]>;
-def MEMSETbr: ALU_RRM<0b110, 0b000,
-	(outs), (ins GRegs:$dst, i64imm:$src, GRegs:$len),
-	"ms\t$dst,#$src,$len",
-	[(myMEMSET GRegs:$dst, uimm8:$src, GRegs:$len)]>;
-def MEMSETbw: ALU_RRM<0b110, 0b000,
-	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
-	"ms\t$dst,#$src,#$len",
-	[(myMEMSET GRegs:$dst, uimm8:$src, simm32:$len)]>;
-def MEMSETbd: ALU_RRM<0b110, 0b000,
-	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
-	"ms\t$dst,#$src,#$len",
-	[(myMEMSET GRegs:$dst, uimm8:$src, sneed64:$len)]>;
 
 // ENTER/EXIT
 let mayStore = 1 in {
@@ -1108,51 +1096,51 @@ def VEC : VECF<0b111101,
 	"vec\t$rd,$imm",
 	[]>;
 // FIXME - ALU_RRR is wrong
-let isBranch = 1, isTerminator = 1 in {
+let isBranch = 1, isTerminator = 1, Constraints = "$rlout = $rlin" in {
 def LOOP1rr : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, GRegs:$rb,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, GRegs:$ri, GRegs:$rb,
 		 GRegs:$ra, brtarget:$adr),
-	"loop1\t$cnd,$rt,$ri,$rb",
+	"loop1\t$cnd,$rlout,$ri,$rb",
 	[]>;
 def LOOP1ri : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, i16imm:$ib,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, GRegs:$ri, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop1\t$cnd,$rt,$ri,#$ib",
+	"loop1\t$cnd,$rlout,$ri,#$ib",
 	[]>;
 def LOOP1ir : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, GRegs:$rb,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, i16imm:$ii, GRegs:$rb,
 		 GRegs:$ra, brtarget:$adr),
-	"loop1\t$cnd,$rt,#$ii,$rb",
+	"loop1\t$cnd,$rlout,#$ii,$rb",
 	[]>;
 def LOOP1ii : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, i16imm:$ib,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, i16imm:$ii, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop1\t$cnd,$rt,#$ii,#$ib",
+	"loop1\t$cnd,$rlout,#$ii,#$ib",
 	[]>;
 def LOOP2ri : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, i16imm:$ib,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, GRegs:$ri, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop2\t$cnd,$rt,$ri,#$ib",
+	"loop2\t$cnd,$rlout,$ri,#$ib",
 	[]>;
 def LOOP2ii : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, i16imm:$ib,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, i16imm:$ii, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop2\t$cnd,$rt,#$ii,#$ib",
+	"loop2\t$cnd,$rlout,#$ii,#$ib",
 	[]>;
 def LOOP3rr : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, GRegs:$rc,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, GRegs:$ri, GRegs:$rc,
 		 GRegs:$ra, brtarget:$adr),
-	"loop3\t$cnd,$rt,$ri,$rc",
+	"loop3\t$cnd,$rlout,$ri,$rc",
 	[]>;
 def LOOP3ri : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, GRegs:$ri, i16imm:$ib,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, GRegs:$ri, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop3\t$cnd,$rt,$ri,#$ib",
+	"loop3\t$cnd,$rlout,$ri,#$ib",
 	[]>;
 def LOOP3ii : ALU_RRR<0b111, 0b000,
-	(outs), (ins CBOp:$cnd, GRegs:$rt, i16imm:$ii, i16imm:$ib,
+	(outs GRegs:$rlout), (ins CBOp:$cnd, GRegs:$rlin, i16imm:$ii, i16imm:$ib,
 		 GRegs:$ra, brtarget:$adr),
-	"loop3\t$cnd,$rt,#$ii,#$ib",
+	"loop3\t$cnd,$rlout,#$ii,#$ib",
 	[]>;
 }
 

@@ -256,7 +256,11 @@ LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch.\n");
     TII->insertBranch(*Head, Tail, nullptr, EmptyCond, HeadDL);
     Head->addSuccessor(Tail);
   }
-  return true;  // FIXME - temp
+  unsigned N = ninstrsT+ninstrsF;
+  MachineBasicBlock::iterator IB = MIB;	// save location of 1st predicate
+  MachineBasicBlock::iterator IE = std::next(IB, N+1);
+  MIBundleBuilder(*Head, IB, IE);
+  return true;
 }
 
 bool My66000PredBlock::ConvertT2(MachineBasicBlock *Head0,
