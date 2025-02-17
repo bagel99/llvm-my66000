@@ -312,6 +312,14 @@ def TestTypeAPFloat : Test_Type<"TestTypeAPFloat"> {
   let assemblyFormat = "`<` $a `>`";
 }
 
+def TestTypeOptionalValueType : Test_Type<"TestTypeOptionalValueType"> {
+  let parameters = (ins
+    OptionalParameter<"std::optional<int>">:$value
+  );
+  let mnemonic = "optional_value_type";
+  let assemblyFormat = "(`<` $value^ `>`)?";
+}
+
 def TestTypeDefaultValuedType : Test_Type<"TestTypeDefaultValuedType"> {
   let parameters = (ins
     DefaultValuedParameter<"mlir::IntegerType",
@@ -340,6 +348,12 @@ def TestTypeCustomString : Test_Type<"TestTypeCustomString"> {
   let mnemonic = "custom_type_string";
   let assemblyFormat = [{ `<` custom<FooString>($foo)
                               custom<BarString>(ref($foo)) `>` }];
+}
+
+def TestTypeOptionalString : Test_Type<"TestTypeOptionalString"> {
+  let parameters = (ins StringRefParameter<"description", [{"default"}]>:$str);
+  let mnemonic = "optional_type_string";
+  let assemblyFormat = [{ (`<` $str^ `>`)? }];
 }
 
 def TestTypeElseAnchor : Test_Type<"TestTypeElseAnchor"> {

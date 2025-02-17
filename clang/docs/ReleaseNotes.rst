@@ -13,7 +13,7 @@ Written by the `LLVM Team <https://llvm.org/>`_
   .. warning::
      These are in-progress notes for the upcoming Clang |version| release.
      Release notes for previous releases can be found on
-     `the Download Page <https://releases.llvm.org/download.html>`_.
+     `the Releases Page <https://llvm.org/releases/>`_.
 
 Introduction
 ============
@@ -23,24 +23,29 @@ frontend, part of the LLVM Compiler Infrastructure, release |release|. Here we
 describe the status of Clang in some detail, including major
 improvements from the previous release and new feature work. For the
 general LLVM release notes, see `the LLVM
-documentation <https://llvm.org/docs/ReleaseNotes.html>`_. All LLVM
-releases may be downloaded from the `LLVM releases web
-site <https://llvm.org/releases/>`_.
+documentation <https://llvm.org/docs/ReleaseNotes.html>`_. For the libc++ release notes,
+see `this page <https://libcxx.llvm.org/ReleaseNotes.html>`_. All LLVM releases
+may be downloaded from the `LLVM releases web site <https://llvm.org/releases/>`_.
 
 For more information about Clang or LLVM, including information about the
 latest release, please see the `Clang Web Site <https://clang.llvm.org>`_ or the
 `LLVM Web Site <https://llvm.org>`_.
-
-Note that if you are reading this file from a Git checkout or the
-main Clang web page, this document applies to the *next* release, not
-the current one. To see the release notes for a specific release, please
-see the `releases page <https://llvm.org/releases/>`_.
 
 Potentially Breaking Changes
 ============================
 These changes are ones which we think may surprise users when upgrading to
 Clang |release| because of the opportunity they pose for disruption to existing
 code bases.
+
+
+C/C++ Language Potentially Breaking Changes
+-------------------------------------------
+
+C++ Specific Potentially Breaking Changes
+-----------------------------------------
+
+ABI Changes in This Version
+---------------------------
 
 What's New in Clang |release|?
 ==============================
@@ -49,14 +54,26 @@ here. Generic improvements to Clang as a whole or to its underlying
 infrastructure are described first, followed by language-specific
 sections with improvements to Clang's support for those languages.
 
-Major New Features
+C++ Language Changes
+--------------------
+
+C++20 Feature Support
+^^^^^^^^^^^^^^^^^^^^^
+
+C++23 Feature Support
+^^^^^^^^^^^^^^^^^^^^^
+
+C++2c Feature Support
+^^^^^^^^^^^^^^^^^^^^^
+
+Resolutions to C++ Defect Reports
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+C Language Changes
 ------------------
 
-Bug Fixes
----------
-
-Improvements to Clang's diagnostics
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C2x Feature Support
+^^^^^^^^^^^^^^^^^^^
 
 Non-comprehensive list of changes in this release
 -------------------------------------------------
@@ -73,91 +90,80 @@ Modified Compiler Flags
 Removed Compiler Flags
 -------------------------
 
-New Pragmas in Clang
---------------------
-- ...
-
 Attribute Changes in Clang
 --------------------------
 
+Improvements to Clang's diagnostics
+-----------------------------------
+
+Bug Fixes in This Version
+-------------------------
+
+Bug Fixes to Compiler Builtins
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes to Attribute Support
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes to C++ Support
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes to AST Handling
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Miscellaneous Bug Fixes
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Miscellaneous Clang Crashes Fixed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Target Specific Changes
+-----------------------
+
+AMDGPU Support
+^^^^^^^^^^^^^^
+
+X86 Support
+^^^^^^^^^^^
+
+Arm and AArch64 Support
+^^^^^^^^^^^^^^^^^^^^^^^
+
 Windows Support
----------------
+^^^^^^^^^^^^^^^
+
+LoongArch Support
+^^^^^^^^^^^^^^^^^
+
+RISC-V Support
+^^^^^^^^^^^^^^
+
+CUDA/HIP Language Changes
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+CUDA Support
+^^^^^^^^^^^^
 
 AIX Support
------------
+^^^^^^^^^^^
 
-C Language Changes in Clang
----------------------------
+WebAssembly Support
+^^^^^^^^^^^^^^^^^^^
 
-C2x Feature Support
--------------------
-
-C++ Language Changes in Clang
------------------------------
-
-C++20 Feature Support
-^^^^^^^^^^^^^^^^^^^^^
-
-C++2b Feature Support
-^^^^^^^^^^^^^^^^^^^^^
-
-CUDA/HIP Language Changes in Clang
-----------------------------------
-
-Objective-C Language Changes in Clang
--------------------------------------
-
-OpenCL C Language Changes in Clang
-----------------------------------
-
-...
-
-ABI Changes in Clang
---------------------
-
-OpenMP Support in Clang
------------------------
-
-...
-
-CUDA Support in Clang
----------------------
-
-LoongArch Support in Clang
---------------------------
-
-RISC-V Support in Clang
------------------------
-
-X86 Support in Clang
---------------------
-
-WebAssembly Support in Clang
-----------------------------
+AVR Support
+^^^^^^^^^^^
 
 DWARF Support in Clang
 ----------------------
 
-Arm and AArch64 Support in Clang
---------------------------------
-
 Floating Point Support in Clang
 -------------------------------
-
-Internal API Changes
---------------------
-
-Build System Changes
---------------------
 
 AST Matchers
 ------------
 
 clang-format
 ------------
-
-clang-extdef-mapping
---------------------
 
 libclang
 --------
@@ -170,25 +176,8 @@ Static Analyzer
 Sanitizers
 ----------
 
-Core Analysis Improvements
-==========================
-
-- ...
-
-New Issues Found
-================
-
-- ...
-
 Python Binding Changes
 ----------------------
-
-The following methods have been added:
-
--  ...
-
-Significant Known Problems
-==========================
 
 Additional Information
 ======================
@@ -201,5 +190,5 @@ this release by going into the "``clang/docs/``" directory in the Clang
 tree.
 
 If you have any questions or comments about Clang, please feel free to
-contact us on the Discourse forums (Clang Frontend category)
+contact us on the `Discourse forums (Clang Frontend category)
 <https://discourse.llvm.org/c/clang/6>`_.

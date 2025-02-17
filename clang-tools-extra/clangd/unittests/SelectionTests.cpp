@@ -520,13 +520,6 @@ TEST(SelectionTest, CommonAncestor) {
       )cpp",
        "TypedefTypeLoc"},
 
-      {R"cpp(
-        namespace ns { class Foo {}; }
-        using ns::Foo;
-        class [[^Foo]] foo;
-      )cpp",
-       "UsingTypeLoc"},
-
       // lambda captured var-decl
       {R"cpp(
         void test(int bar) {
@@ -697,7 +690,7 @@ TEST(SelectionTest, PathologicalPreprocessor) {
   auto TU = TestTU::withCode(Test.code());
   TU.AdditionalFiles["Expand.inc"] = "MACRO\n";
   auto AST = TU.build();
-  EXPECT_THAT(*AST.getDiagnostics(), ::testing::IsEmpty());
+  EXPECT_THAT(AST.getDiagnostics(), ::testing::IsEmpty());
   auto T = makeSelectionTree(Case, AST);
 
   EXPECT_EQ("BreakStmt", T.commonAncestor()->kind());

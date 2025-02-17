@@ -345,8 +345,8 @@ func.func @failedSingleBlockImplicitTerminator_missing_terminator() {
 
 // -----
 
-// expected-error@+1 {{op attribute 'sym_visibility' failed to satisfy constraint: string attribute}}
-"test.symbol"() {sym_name = "foo_2", sym_visibility} : () -> ()
+// expected-error@+1 {{invalid properties {sym_name = "foo_2", sym_visibility} for op test.symbol: Invalid attribute `sym_visibility` in property conversion: unit}}
+"test.symbol"() <{sym_name = "foo_2", sym_visibility}> : () -> ()
 
 // -----
 
@@ -383,21 +383,21 @@ func.func private @foo()
 // -----
 
 func.func @failedMissingOperandSizeAttr(%arg: i32) {
-  // expected-error @+1 {{requires dense i32 array attribute 'operand_segment_sizes'}}
+  // expected-error @+1 {{op operand count (4) does not match with the total size (0) specified in attribute 'operand_segment_sizes'}}
   "test.attr_sized_operands"(%arg, %arg, %arg, %arg) : (i32, i32, i32, i32) -> ()
 }
 
 // -----
 
 func.func @failedOperandSizeAttrWrongType(%arg: i32) {
-  // expected-error @+1 {{requires dense i32 array attribute 'operand_segment_sizes'}}
+  // expected-error @+1 {{op operand count (4) does not match with the total size (0) specified in attribute 'operand_segment_sizes'}}
   "test.attr_sized_operands"(%arg, %arg, %arg, %arg) {operand_segment_sizes = 10} : (i32, i32, i32, i32) -> ()
 }
 
 // -----
 
 func.func @failedOperandSizeAttrWrongElementType(%arg: i32) {
-  // expected-error @+1 {{requires dense i32 array attribute 'operand_segment_sizes'}}
+  // expected-error @+1 {{op operand count (4) does not match with the total size (0) specified in attribute 'operand_segment_sizes'}}
   "test.attr_sized_operands"(%arg, %arg, %arg, %arg) {operand_segment_sizes = array<i64: 1, 1, 1, 1>} : (i32, i32, i32, i32) -> ()
 }
 
@@ -418,7 +418,7 @@ func.func @failedOperandSizeAttrWrongTotalSize(%arg: i32) {
 // -----
 
 func.func @failedOperandSizeAttrWrongCount(%arg: i32) {
-  // expected-error @+1 {{'operand_segment_sizes' attribute for specifying operand segments must have 4 elements}}
+  // expected-error @+1 {{test.attr_sized_operands' op operand count (4) does not match with the total size (0) specified in attribute 'operand_segment_sizes}}
   "test.attr_sized_operands"(%arg, %arg, %arg, %arg) {operand_segment_sizes = array<i32: 2, 1, 1>} : (i32, i32, i32, i32) -> ()
 }
 
@@ -433,14 +433,14 @@ func.func @succeededOperandSizeAttr(%arg: i32) {
 // -----
 
 func.func @failedMissingResultSizeAttr() {
-  // expected-error @+1 {{requires dense i32 array attribute 'result_segment_sizes'}}
+  // expected-error @+1 {{op result count (4) does not match with the total size (0) specified in attribute 'result_segment_sizes'}}
   %0:4 = "test.attr_sized_results"() : () -> (i32, i32, i32, i32)
 }
 
 // -----
 
 func.func @failedResultSizeAttrWrongType() {
-  // expected-error @+1 {{requires dense i32 array attribute 'result_segment_sizes'}}
+  // expected-error @+1 {{ op result count (4) does not match with the total size (0) specified in attribute 'result_segment_sizes'}}
   %0:4 = "test.attr_sized_results"() {result_segment_sizes = 10} : () -> (i32, i32, i32, i32)
 }
 
@@ -448,7 +448,7 @@ func.func @failedResultSizeAttrWrongType() {
 // -----
 
 func.func @failedResultSizeAttrWrongElementType() {
-  // expected-error @+1 {{requires dense i32 array attribute 'result_segment_sizes'}}
+  // expected-error @+1 {{ op result count (4) does not match with the total size (0) specified in attribute 'result_segment_sizes'}}
   %0:4 = "test.attr_sized_results"() {result_segment_sizes = array<i64: 1, 1, 1, 1>} : () -> (i32, i32, i32, i32)
 }
 
@@ -469,7 +469,7 @@ func.func @failedResultSizeAttrWrongTotalSize() {
 // -----
 
 func.func @failedResultSizeAttrWrongCount() {
-  // expected-error @+1 {{'result_segment_sizes' attribute for specifying result segments must have 4 elements, but got 3}}
+  // expected-error @+1 {{ op result count (4) does not match with the total size (0) specified in attribute 'result_segment_sizes'}}
   %0:4 = "test.attr_sized_results"() {result_segment_sizes = array<i32: 2, 1, 1>} : () -> (i32, i32, i32, i32)
 }
 
@@ -655,7 +655,7 @@ func.func @failed_type_traits() {
 
 // Check that we can query traits in attributes
 func.func @succeeded_attr_traits() {
-  // CHECK: "test.attr_with_trait"() {attr = #test.attr_with_trait} : () -> ()
+  // CHECK: "test.attr_with_trait"() <{attr = #test.attr_with_trait}> : () -> ()
   "test.attr_with_trait"() {attr = #test.attr_with_trait} : () -> ()
   return
 }
