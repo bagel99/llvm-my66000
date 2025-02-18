@@ -16,6 +16,7 @@
 #include "My66000TargetMachine.h"
 #include "My66000Subtarget.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
+#include <bitset>
 
 using namespace llvm;
 

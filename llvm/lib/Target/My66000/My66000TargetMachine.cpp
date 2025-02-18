@@ -16,7 +16,6 @@
 #include "My66000MachineFunctionInfo.h"
 #include "My66000TargetObjectFile.h"
 #include "My66000TargetTransformInfo.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
@@ -26,14 +25,14 @@
 
 using namespace llvm;
 
-static Reloc::Model getEffectiveRelocModel(Optional<Reloc::Model> RM) {
+static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
   if (!RM.has_value())
     return Reloc::Static;
   return *RM;
 }
 
 static CodeModel::Model
-getEffectiveMy66000CodeModel(Optional<CodeModel::Model> CM) {
+getEffectiveMy66000CodeModel(std::optional<CodeModel::Model> CM) {
   if (CM) {
     if (*CM != CodeModel::Large)
       report_fatal_error("Target only supports CodeModel Small or Large");
@@ -47,8 +46,8 @@ getEffectiveMy66000CodeModel(Optional<CodeModel::Model> CM) {
 My66000TargetMachine::My66000TargetMachine(const Target &T, const Triple &TT,
 				       StringRef CPU, StringRef FS,
 				       const TargetOptions &Options,
-				       Optional<Reloc::Model> RM,
-				       Optional<CodeModel::Model> CM,
+				       std::optional<Reloc::Model> RM,
+				       std::optional<CodeModel::Model> CM,
 				       CodeGenOpt::Level OL, bool JIT)
     : LLVMTargetMachine(
 	  T,"e-m:e-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-f64:64-a:0:64-n64",

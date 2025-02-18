@@ -763,7 +763,7 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
         return std::make_unique<LoongArch64TargetInfo>(Triple, Opts);
     }
   case llvm::Triple::my66000:
-    return new My66000TargetInfo(Triple, Opts);
+    return std::make_unique<My66000TargetInfo>(Triple, Opts);
   }
 }
 } // namespace targets

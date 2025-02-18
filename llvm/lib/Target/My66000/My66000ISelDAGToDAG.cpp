@@ -135,7 +135,7 @@ static bool isOpcWithIntImmediate(const SDNode *N, unsigned Opc, uint64_t &Imm) 
 static bool isMask(uint64_t imm, unsigned &Width) {
   if (imm & (imm + 1))
     return false;
-  Width = countTrailingOnes(imm);
+  Width = llvm::countr_one(imm);
   return true;
 }
 
@@ -532,7 +532,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryExtract " << N->getOperationName(0
 	if (trySLLmask(N, Andimm))
 	  return true;
       }
-      unsigned Width = countTrailingOnes(Andimm);
+      unsigned Width = llvm::countr_one(Andimm);
       if (!isMask(Andimm, Width))
         return false;
 LLVM_DEBUG(dbgs() << "\tw=" << Width << "\n");
@@ -629,7 +629,7 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryInsert " << N->getOperationName(0)
     if (VT == MVT::i8)  Andimm |= 0xFFFFFFFFFFFFFF00;
 //dbgs() << "\tmask1="; dbgs().write_hex(Andimm) << '\n';
 //dbgs() << "\tshfimm=" << Shfimm << '\n';
-    unsigned Width = countTrailingZeros(Andimm >> Shfimm);
+    unsigned Width = llvm::countr_zero(Andimm >> Shfimm);
     if (Width == 0 || !isShiftedMask_64(~Andimm)) {
 //dbgs() << "\tfail, not a mask\n";
       return false;

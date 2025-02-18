@@ -838,8 +838,8 @@ def SDT_ISHFW : SDTypeProfile<2, 3,
 		 SDTCisSameAs<0, 3>,SDTCisInt<4>]>;
 def uaddo :	SDNode<"ISD::UADDO", SDT_ADDCO, []>;
 def usubo :	SDNode<"ISD::USUBO", SDT_ADDCO, []>;
-def addcarry :	SDNode<"ISD::ADDCARRY", SDT_ADDCIO, []>;
-def subcarry :	SDNode<"ISD::SUBCARRY", SDT_ADDCIO, []>;
+def addcarry :	SDNode<"ISD::UADDO_CARRY", SDT_ADDCIO, []>;
+def subcarry :	SDNode<"ISD::USUBO_CARRY", SDT_ADDCIO, []>;
 def umul_lohi : SDNode<"ISD::UMUL_LOHI", SDTIntBinHiLoOp, []>;
 def smul_lohi : SDNode<"ISD::SMUL_LOHI", SDTIntBinHiLoOp, []>;
 def srl_parts : SDNode<"ISD::SRL_PARTS", SDT_ISHFW, []>;

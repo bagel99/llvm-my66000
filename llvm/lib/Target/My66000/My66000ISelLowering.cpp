@@ -16,6 +16,7 @@
 #include "My66000Subtarget.h"
 #include "My66000TargetMachine.h"
 #include "My66000TargetObjectFile.h"
+#include "llvm/ADT/APSInt.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -157,8 +158,8 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::SDIVREM, MVT::i64, Legal);
     setOperationAction(ISD::UMUL_LOHI, MVT::i64, Legal);
     setOperationAction(ISD::SMUL_LOHI, MVT::i64, Legal);
-    setOperationAction(ISD::ADDCARRY, MVT::i64, Legal);
-    setOperationAction(ISD::SUBCARRY, MVT::i64, Legal);
+    setOperationAction(ISD::UADDO_CARRY, MVT::i64, Legal);
+    setOperationAction(ISD::USUBO_CARRY, MVT::i64, Legal);
     setOperationAction(ISD::UADDO, MVT::i64, Legal);
     setOperationAction(ISD::USUBO, MVT::i64, Legal);
     setOperationAction(ISD::SHL, MVT::i128, Custom);
@@ -817,8 +818,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerCall"
   MachineFunction &MF = DAG.getMachineFunction();
 
   SmallVector<CCValAssign, 16> ArgLocs;
-  CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
-                 *DAG.getContext());
+  CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
 
   CCInfo.AnalyzeCallOperands(Outs, CC_My66000);
   if (IsTailCall && !canUseTailCall(ArgLocs))
@@ -828,11 +828,11 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerCall"
   // Analyze return values to determine the number of bytes of stack required.
   CCState RetCCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), RVLocs,
                     *DAG.getContext());
-  RetCCInfo.AllocateStack(CCInfo.getNextStackOffset(), Align(8));
+  RetCCInfo.AllocateStack(CCInfo.getStackSize(), Align(8));
   RetCCInfo.AnalyzeCallResult(Ins, RetCC_My66000);
 
   // Get a count of how many bytes are to be pushed on the stack.
-  unsigned NumBytes = RetCCInfo.getNextStackOffset();
+  unsigned NumBytes = RetCCInfo.getStackSize();
   auto PtrVT = getPointerTy(DAG.getDataLayout());
 
   // Mark the start of the call.
@@ -1045,7 +1045,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
   unsigned StackSlotSize = 8;
 
   if (!IsVarArg)
-    FI->setReturnStackOffset(CCInfo.getNextStackOffset());
+    FI->setReturnStackOffset(CCInfo.getStackSize());
 
   // All getCopyFromReg ops must precede any getMemcpys to prevent the
   // scheduler clobbering a register before it has been copied.
@@ -1112,7 +1112,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
     int Offset;
     int VaSaveSize = (ArgRegs.size() - FirstVAReg) * 8;
     if (VaSaveSize == 0)
-      Offset = CCInfo.getNextStackOffset();
+      Offset = CCInfo.getStackSize();
     else
       Offset = -VaSaveSize;
     // Record the frame index of the first variable argument
@@ -1185,7 +1185,7 @@ bool My66000TargetLowering::CanLowerReturn(
   CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, Context);
   if (!CCInfo.CheckReturn(Outs, RetCC_My66000))
     return false;
-  if (CCInfo.getNextStackOffset() != 0 && IsVarArg)
+  if (CCInfo.getStackSize() != 0 && IsVarArg)
     return false;
   return true;
 }
