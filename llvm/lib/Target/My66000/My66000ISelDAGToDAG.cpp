@@ -43,7 +43,7 @@ class My66000DAGToDAGISel : public SelectionDAGISel {
 public:
   static char ID;
 
-  My66000DAGToDAGISel(My66000TargetMachine &TM, CodeGenOpt::Level OptLevel)
+  My66000DAGToDAGISel(My66000TargetMachine &TM, CodeGenOptLevel OptLevel)
       : SelectionDAGISel(ID, TM, OptLevel) {}
 
   void Select(SDNode *N) override;
@@ -81,7 +81,7 @@ char My66000DAGToDAGISel::ID;
 /// This pass converts a legalized DAG into a My66000-specific DAG, ready for
 /// instruction scheduling.
 FunctionPass *llvm::createMy66000ISelDag(My66000TargetMachine &TM,
-                                     CodeGenOpt::Level OptLevel) {
+                                     CodeGenOptLevel OptLevel) {
   return new My66000DAGToDAGISel(TM, OptLevel);
 }
 

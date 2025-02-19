@@ -48,7 +48,7 @@ My66000TargetMachine::My66000TargetMachine(const Target &T, const Triple &TT,
 				       const TargetOptions &Options,
 				       std::optional<Reloc::Model> RM,
 				       std::optional<CodeModel::Model> CM,
-				       CodeGenOpt::Level OL, bool JIT)
+				       CodeGenOptLevel OL, bool JIT)
     : LLVMTargetMachine(
 	  T,"e-m:e-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-f64:64-a:0:64-n64",
 	  TT, CPU, FS, Options, getEffectiveRelocModel(RM),

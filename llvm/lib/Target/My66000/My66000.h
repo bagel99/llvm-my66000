@@ -29,7 +29,7 @@ namespace llvm {
 
   FunctionPass *createMy66000FrameToArgsOffsetEliminationPass();
   FunctionPass *createMy66000ISelDag(My66000TargetMachine &TM,
-                                   CodeGenOpt::Level OptLevel);
+                                   CodeGenOptLevel OptLevel);
   ModulePass *createMy66000LowerThreadLocalPass();
   FunctionPass *createMy66000PredBlockPass();
   void initializeMy66000PredBlockPass(PassRegistry &);
