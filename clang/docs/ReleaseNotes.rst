@@ -37,7 +37,6 @@ These changes are ones which we think may surprise users when upgrading to
 Clang |release| because of the opportunity they pose for disruption to existing
 code bases.
 
-
 C/C++ Language Potentially Breaking Changes
 -------------------------------------------
 
@@ -46,6 +45,9 @@ C++ Specific Potentially Breaking Changes
 
 ABI Changes in This Version
 ---------------------------
+
+AST Dumping Potentially Breaking Changes
+----------------------------------------
 
 What's New in Clang |release|?
 ==============================
@@ -72,7 +74,7 @@ Resolutions to C++ Defect Reports
 C Language Changes
 ------------------
 
-C2x Feature Support
+C23 Feature Support
 ^^^^^^^^^^^^^^^^^^^
 
 Non-comprehensive list of changes in this release
@@ -96,6 +98,9 @@ Attribute Changes in Clang
 Improvements to Clang's diagnostics
 -----------------------------------
 
+Improvements to Clang's time-trace
+----------------------------------
+
 Bug Fixes in This Version
 -------------------------
 
@@ -117,6 +122,9 @@ Miscellaneous Bug Fixes
 Miscellaneous Clang Crashes Fixed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+OpenACC Specific Changes
+------------------------
+
 Target Specific Changes
 -----------------------
 
@@ -128,6 +136,9 @@ X86 Support
 
 Arm and AArch64 Support
 ^^^^^^^^^^^^^^^^^^^^^^^
+
+Android Support
+^^^^^^^^^^^^^^^
 
 Windows Support
 ^^^^^^^^^^^^^^^
@@ -170,6 +181,18 @@ libclang
 
 Static Analyzer
 ---------------
+
+New features
+^^^^^^^^^^^^
+
+Crash and bug fixes
+^^^^^^^^^^^^^^^^^^^
+
+Improvements
+^^^^^^^^^^^^
+
+Moved checkers
+^^^^^^^^^^^^^^
 
 .. _release-notes-sanitizers:
 

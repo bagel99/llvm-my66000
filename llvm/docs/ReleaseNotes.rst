@@ -68,9 +68,6 @@ Changes to the AArch64 Backend
 Changes to the AMDGPU Backend
 -----------------------------
 
-* `llvm.sqrt.f64` is now lowered correctly. Use `llvm.amdgcn.sqrt.f64`
-  for raw instruction access.
-
 Changes to the ARM Backend
 --------------------------
 
@@ -110,9 +107,6 @@ Changes to the OCaml bindings
 Changes to the Python bindings
 ------------------------------
 
-* The python bindings have been removed.
-
-
 Changes to the C API
 --------------------
 
@@ -137,7 +131,7 @@ Changes to Sanitizers
 Other Changes
 -------------
 
-External Open Source Projects Using LLVM 15
+External Open Source Projects Using LLVM 19
 ===========================================
 
 * A project...

@@ -66,6 +66,9 @@ Hover
 Code completion
 ^^^^^^^^^^^^^^^
 
+Code actions
+^^^^^^^^^^^^
+
 Signature help
 ^^^^^^^^^^^^^^
 
