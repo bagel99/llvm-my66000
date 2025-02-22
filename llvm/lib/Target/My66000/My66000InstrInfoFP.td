@@ -48,6 +48,10 @@ def myCOPYTOFS:     SDNode<"My66000ISD::COPYTOFS",
 			SDTypeProfile<1, 1,
 			  [SDTCisVT<0, f32>, SDTCisVT<1, i64>]>,
 			[]>;
+def myEADD:	    SDNode<"My66000ISD::EADD",
+			SDTypeProfile<1, 2, [SDTCisVT<2, i64>,
+			    SDTCisSameAs<0, 1>]>,
+			[]>;
 
 //
 // 64-bit floating point shares the GRegs with integers
@@ -255,6 +259,15 @@ def FMADkr : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm, GRegs:$rs3),
 	"fmac\t$rd,$rs1,#$imm,$rs3",
 	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (myF64I5 (simm5:$imm)), (f64 GRegs:$rs3)))]>;
+
+def EADDrk : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	"eadd\t$rd,$rs1,#$imm",
+	[(set (f64 GRegs:$rd), (myEADD (f64 GRegs:$rs1), (simm5:$imm)))]>;
+def EADDrd : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	"eadd\t$rd,$rs1,#$imm",
+	[(set (f64 GRegs:$rd), (myEADD (f64 GRegs:$rs1), (simm32:$imm)))]>;
 
 // Moves
 let isAsCheapAsAMove = 1 in {

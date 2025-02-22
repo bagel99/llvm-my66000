@@ -78,6 +78,7 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
   case My66000ISD::F64I5: return "My66000ISD::F64I5";
   case My66000ISD::F32I5: return "My66000ISD::F32I5";
+  case My66000ISD::EADD: return "My66000ISD::EADD";
   }
   return nullptr;
 }
@@ -1567,79 +1568,14 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::ReplaceNodeResults\n");
     SDValue Op0 = N->getOperand(0);
     EVT Op0VT = Op0.getValueType();
     if (VT == MVT::i32 && Op0VT == MVT::f32) {
-//      Results.push_back(DAG.getNode(My66000ISD::COPYFMFS, DL, MVT::i64, Op0));
       SDValue Copy = DAG.getNode(My66000ISD::COPYFMFS, DL, MVT::i64, Op0);
       Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Copy));
     }
   }
   break;
-  // Expand all shifts including those with constants
-  // ExpandIntRes_Shift() does things differently with constants
-  // FIXME: if constant shift amount >= 64 then use default expansion
-  case ISD::SHL:
-  case ISD::SRL:
-  case ISD::SRA: {
-    // assume VT == MVT::i128
-    unsigned PartsOpc;
-    if (N->getOpcode() == ISD::SHL) {
-      PartsOpc = ISD::SHL_PARTS;
-    } else if (N->getOpcode() == ISD::SRL) {
-      PartsOpc = ISD::SRL_PARTS;
-    } else {
-      PartsOpc = ISD::SRA_PARTS;
-    }
-    // Expand the subcomponents.
-    SDValue LHSL = N->getOperand(0)->getOperand(0);
-    SDValue LHSH = N->getOperand(0)->getOperand(1);
-    EVT VT = LHSL.getValueType();
-    SDValue ShiftOp = N->getOperand(1);
-    SDValue Ops[] = { LHSL, LHSH, ShiftOp };
-    SDValue Lo = DAG.getNode(PartsOpc, DL, DAG.getVTList(VT, VT), Ops);
-    SDValue Hi = Lo.getValue(1);
-    Results.push_back(DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i128, Lo, Hi));
-  }
-  break;
   } // end switch
 }
 
-
-//===----------------------------------------------------------------------===//
-//  Custom instruction emit
-//===----------------------------------------------------------------------===//
-/*
- * FIXME - this functionality now must be in ExpandPseudoInsts.cpp
-//
-// An ADDCARRY is being emitted, so there must have been a
-// UADD0 that was emitted previously.  Search back to find
-// the CARRYo instruction that resulted.  Modify the immediate
-// to include the ADD instruction now being emitted, if they
-// are close enought together.
-static bool adjustFirstCarry(MachineInstr &MI, MachineBasicBlock *BB,
-				    unsigned imm, unsigned &reg) {
-  if (!OptimCarry) return false;
-  MachineBasicBlock::iterator I = MI;
-  I--;		// backup to before the ADDCARRY
-  unsigned n = 0;
-
-  while (I->getOpcode() != My66000::CARRYo) {
-    n += 1;
-    if (I == BB->begin()) {
-LLVM_DEBUG(dbgs() << "did not find FirstCarry n=" << n << '\n');
-	return false;
-    }
-    I--;
-  }
-  unsigned old = I->getOperand(1).getImm();
-  unsigned chg = (imm << n*2) | old;
-LLVM_DEBUG(dbgs() << "found FirstCarry n=" << n << " old=" << old << '\n');
-  if (n > 8) return false;
-  reg = I->getOperand(0).getReg();
-  // Replace the immediate operand(1). Is there a better way to do this?
-  I->removeOperand(1);
-  I->addOperand(MachineOperand::CreateImm(chg));
-  return true;
-}
-*/
 
 static MachineBasicBlock *emitDIVREM(MachineInstr &MI,
 				     MachineBasicBlock *BB,

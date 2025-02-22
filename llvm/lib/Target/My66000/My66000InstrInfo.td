@@ -684,15 +684,15 @@ def MEMSETrd: ALU_RRM<0b110, 0b000,
 def MEMSETkr: ALU_RRM<0b110, 0b000,
 	(outs), (ins GRegs:$dst, i64imm:$src, GRegs:$len),
 	"ms\t$dst,#$src,$len",
-	[(myMEMSET GRegs:$dst, kimm8:$src, GRegs:$len)]>;
+	[(myMEMSET GRegs:$dst, simm5:$src, GRegs:$len)]>;
 def MEMSETkw: ALU_RRM<0b110, 0b000,
 	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
 	"ms\t$dst,#$src,#$len",
-	[(myMEMSET GRegs:$dst, kimm8:$src, simm32:$len)]>;
+	[(myMEMSET GRegs:$dst, simm5:$src, simm32:$len)]>;
 def MEMSETkd: ALU_RRM<0b110, 0b000,
 	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
 	"ms\t$dst,#$src,#$len",
-	[(myMEMSET GRegs:$dst, kimm8:$src, sneed64:$len)]>;
+	[(myMEMSET GRegs:$dst, simm5:$src, sneed64:$len)]>;
 
 // ENTER/EXIT
 let mayStore = 1 in {

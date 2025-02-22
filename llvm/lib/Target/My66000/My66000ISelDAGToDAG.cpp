@@ -67,6 +67,7 @@ private:
   bool tryOR(SDNode *N);
   bool tryAND(SDNode *N);
   bool trySex(SDNode *N);
+  bool tryEADD(SDNode *N);
   bool tryADDSUBCARRY(SDNode *N, bool isSub);
   bool shouldAvoidImmediate(SDNode *N) const;
 
@@ -661,6 +662,19 @@ LLVM_DEBUG(dbgs() << "Sign extend pattern: w=" << Width << "\n");
   return true;
 }
 
+bool My66000DAGToDAGISel::tryEADD(SDNode *N) {
+  SDLoc dl(N);
+  int Log2;
+  if (N->getOperand(1).getOpcode() == ISD::ConstantFP)
+  {
+LLVM_DEBUG(dbgs() << "tryEADD\n");
+
+     SDNode *R = N->getOperand(1).getNode();
+  }
+
+  return false;
+}
+
 void My66000DAGToDAGISel::Select(SDNode *N) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::Select " << N->getOperationName(CurDAG) << "\n");
   SDLoc dl(N);
@@ -697,6 +711,10 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::Select " << N->getOperationName(CurDA
     break;
   case ISD::SIGN_EXTEND_INREG:
     if (trySex(N))
+      return;
+    break;
+  case ISD::FMUL:
+    if (tryEADD(N))
       return;
     break;
   case ISD::STORE: {
