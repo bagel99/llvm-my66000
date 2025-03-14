@@ -45,11 +45,7 @@ using namespace llvm;
 static cl::opt<bool> EnableCarry("enable-carry-generation", cl::Hidden,
     cl::desc("enable the use of the CARRY prefix"), cl::init(false));
 
-static cl::opt<bool> OptimCarry("early-carry-coalesce", cl::Hidden,
-    cl::desc("try early carry coalescing"), cl::init(false));
-
 const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
-
   switch (Opcode) {
   case My66000ISD::RET: return "My66000ISD::RET";
   case My66000ISD::CALL: return "My66000ISD::CALL";

@@ -39,6 +39,8 @@ namespace {
     }
 
   private:
+    bool AddCarry(MachineBasicBlock &MBB,
+		        MachineBasicBlock::iterator MBBI, unsigned inst);
     bool CarryO(MachineBasicBlock &MBB,
 		        MachineBasicBlock::iterator MBBI, unsigned inst);
     bool CarryIO(MachineBasicBlock &MBB,
@@ -112,18 +114,80 @@ bool My66000ExpandPseudo::CarryO(MachineBasicBlock &MBB,
   return true;
 }
 
+static bool AddNext(MachineInstr &MI, unsigned &Opcode)
+{
+  if (MI.getOpcode() == My66000::ADDrrbc) {
+    Opcode = My66000::ADDrr;
+    return true;
+  } else if (MI.getOpcode() == My66000::ADDribc) {
+    Opcode = My66000::ADDri;
+    return true;
+  }
+  return false;
+}
+
+bool My66000ExpandPseudo::AddCarry(MachineBasicBlock &MBB,
+				 MachineBasicBlock::iterator MBBI,
+				 unsigned inst) {
+
+  MachineInstr &MI1 = *MBBI;
+  MachineInstr *Carry, *Last;
+  SmallVector<MachineInstr *, 8> ToErase;
+  Register CarryReg = MI1.getOperand(1).getReg();
+  Carry = BuildMI(MBB, MBBI, MI1.getDebugLoc(), TII->get(My66000::CARRYio))
+	  .add(MI1.getOperand(1))
+	  .add(MI1.getOperand(1))
+	  .addImm(0);			// will get replaced
+  Last   = BuildMI(MBB, MBBI, MI1.getDebugLoc(), TII->get(inst))
+	  .add(MI1.getOperand(0))
+	  .add(MI1.getOperand(2))
+	  .add(MI1.getOperand(3));
+  unsigned CarryShift = 0;
+  unsigned CarryFlags = 2;	// {O}
+  ToErase.push_back(&*MBBI);
+  unsigned Opcode;
+  for (;;) {
+    ++MBBI;
+    MachineInstr &Next = *MBBI;
+    if (!AddNext(Next, Opcode)) break;
+    if (Next.getOperand(1).getReg() != CarryReg) break;
+LLVM_DEBUG(dbgs() << "  next op works " <<  Next);
+    Last = BuildMI(MBB, MBBI, Next.getDebugLoc(), TII->get(Opcode))
+	  .add(Next.getOperand(0))
+	  .add(Next.getOperand(2))
+	  .add(Next.getOperand(3));
+    CarryShift += 2;
+    CarryFlags |= (Next.getOperand(1).isDead() ? 1: 3) << CarryShift;
+LLVM_DEBUG(dbgs() << "  carry flags: " << CarryFlags << '\n');
+    ToErase.push_back(&*MBBI);
+  }
+  Carry->removeOperand(2);
+  Carry->addOperand(MachineOperand::CreateImm(CarryFlags));
+LLVM_DEBUG(dbgs() << "  erasing old instructions\n");
+//LLVM_DEBUG(dbgs() << MBB);
+  for (auto &I : ToErase)
+    I->eraseFromParent();
+//LLVM_DEBUG(dbgs() << "  after erase\n");
+//LLVM_DEBUG(dbgs() << MBB);
+  finalizeBundle(MBB, Carry->getIterator(), ++Last->getIterator());
+LLVM_DEBUG(dbgs() << "  after bundle\n");
+LLVM_DEBUG(dbgs() << MBB);
+  return true;
+}
+
 bool My66000ExpandPseudo::ExpandMI(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator MBBI,
                                MachineBasicBlock::iterator &NextMBBI) {
   MachineInstr &MI = *MBBI;
   unsigned Opcode = MI.getOpcode();
+LLVM_DEBUG(dbgs() << "  expand " << MI);
   switch (Opcode) {
     default:
       return false;
-    case My66000::UADDOrrc:	return CarryO(MBB, MBBI, My66000::ADDrr);
-    case My66000::UADDOric:	return CarryO(MBB, MBBI, My66000::ADDri);
-    case My66000::UADDOrwc:	return CarryO(MBB, MBBI, My66000::ADDrw);
-    case My66000::UADDOrdc:	return CarryO(MBB, MBBI, My66000::ADDrd);
+    case My66000::UADDOrrc:	return AddCarry(MBB, MBBI, My66000::ADDrr);
+    case My66000::UADDOric:	return AddCarry(MBB, MBBI, My66000::ADDri);
+    case My66000::UADDOrwc:	return AddCarry(MBB, MBBI, My66000::ADDrw);
+    case My66000::UADDOrdc:	return AddCarry(MBB, MBBI, My66000::ADDrd);
     case My66000::USUBOrrc:	return CarryO(MBB, MBBI, My66000::ADDrn);
     case My66000::USUBOric:	return CarryO(MBB, MBBI, My66000::ADDri);
     case My66000::ADDrrbc:	return CarryIO(MBB, MBBI, My66000::ADDrr);
@@ -177,12 +241,18 @@ bool My66000ExpandPseudo::ExpandMI(MachineBasicBlock &MBB,
 
 bool My66000ExpandPseudo::ExpandMBB(MachineBasicBlock &MBB) {
   bool Modified = false;
-  MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
-  while (MBBI != E) {
-    MachineBasicBlock::iterator NMBBI = std::next(MBBI);
-    Modified |= ExpandMI(MBB, MBBI, NMBBI);
-    MBBI = NMBBI;
-  }
+  bool Expanded = false;
+  do {
+    Expanded = false;
+    MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
+    // If MBB changed, start over
+    while (MBBI != E && !Expanded) {
+      MachineBasicBlock::iterator NMBBI = std::next(MBBI);
+      Expanded |= ExpandMI(MBB, MBBI, NMBBI);
+      MBBI = NMBBI;
+    }
+    Modified |= Expanded;
+  } while (Expanded);
   return Modified;
 }
 
