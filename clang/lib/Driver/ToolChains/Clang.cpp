@@ -24,6 +24,7 @@
 #include "Hexagon.h"
 #include "MSP430.h"
 #include "PS4CPU.h"
+#include "My66000.h"
 #include "clang/Basic/CLWarnings.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/CodeGenOptions.h"
@@ -1352,6 +1353,7 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
   case llvm::Triple::riscv64:
   case llvm::Triple::systemz:
   case llvm::Triple::xcore:
+  case llvm::Triple::my66000:
     return false;
   }
 }
@@ -1690,6 +1692,10 @@ void Clang::RenderTargetOptions(const llvm::Triple &EffectiveTriple,
 
   case llvm::Triple::ve:
     AddVETargetArgs(Args, CmdArgs);
+    break;
+
+  case llvm::Triple::my66000:
+    AddMy66000TargetArgs(Args, CmdArgs);
     break;
   }
 }
@@ -2332,6 +2338,22 @@ void Clang::AddVETargetArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
   // Floating point operations and argument passing are hard.
   CmdArgs.push_back("-mfloat-abi");
   CmdArgs.push_back("hard");
+}
+
+void Clang::AddMy66000TargetArgs(const ArgList &Args,
+				 ArgStringList &CmdArgs) const {
+  if (Args.hasArg(options::OPT_mvvm)) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-enable-vvm");
+  }
+  if (Args.hasArg(options::OPT_mpred)) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-enable-predication");
+  }
+  if (Args.hasArg(options::OPT_mpred2)) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-enable-predication2");
+  }
 }
 
 void Clang::DumpCompilationDatabase(Compilation &C, StringRef Filename,

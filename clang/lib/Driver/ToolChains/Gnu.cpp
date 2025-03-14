@@ -3129,6 +3129,7 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
   case llvm::Triple::nvptx:
   case llvm::Triple::nvptx64:
   case llvm::Triple::xcore:
+  case llvm::Triple::my66000:
     return false;
   default:
     return true;
