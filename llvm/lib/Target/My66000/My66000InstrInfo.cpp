@@ -363,3 +363,14 @@ LLVM_DEBUG(dbgs() << "My66000InstrInfo::reverseBranchCondition\n");
 LLVM_DEBUG(dbgs() << "\tNot reversible: " << Cond[0].getImm() << '\n');
   return true;
 }
+
+bool My66000InstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
+  const unsigned Opcode = MI.getOpcode();
+  switch (Opcode) {
+  default:
+    break;
+  case My66000::MOVri:
+    return true;
+  }
+  return MI.isAsCheapAsAMove();
+}

@@ -67,9 +67,8 @@ namespace llvm {
 	OR=16, NOR, TO, NTO,	// float ordered
 	SIN=24, FIN, CIN, RIN,	// range
 	SNaN=32, QNaN,		// float
-	MINF=34, MNOR,		// float
-	MDE=36, MZE, PZE, PDE,	// float
-	PNOR=40, NINF		// float
+	MINF=34, MNOR, MDE, MZE,// float
+	PZE=38, PDE, PNOR, NINF	// float
     };
   }
 

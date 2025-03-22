@@ -55,8 +55,7 @@ enum NodeType : unsigned {
   COPYTOFS,	// bitcast to f32
   SHRUNK,	// wrapper for F64 constants shrunk to F32
   F64I5,	// wrapper for F64 constants that fit in I5
-  F32I5,	// wrapper for F32 constants that fit in I5
-  EADD		// Exponent add instruction
+  F32I5		// wrapper for F32 constants that fit in I5
 };
 
 } // end namespace My66000ISD

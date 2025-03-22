@@ -23,6 +23,7 @@ add_llvm_target(My66000CodeGen
   My66000Subtarget.cpp
   My66000TargetMachine.cpp
   My66000TargetObjectFile.cpp
+  My66000TargetTransformInfo.cpp
   My66000SelectionDAGInfo.cpp
   My66000ExpandPseudoInsts.cpp
   My66000PredicatePass.cpp

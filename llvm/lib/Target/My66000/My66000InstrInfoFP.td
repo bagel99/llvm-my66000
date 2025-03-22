@@ -260,14 +260,15 @@ def FMADkr : ALU_RRR<0b000, 0b000,
 	"fmac\t$rd,$rs1,#$imm,$rs3",
 	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (myF64I5 (simm5:$imm)), (f64 GRegs:$rs3)))]>;
 
+// Matched in DAGToDAG
 def EADDrk : ALU_RRR<0b000, 0b000,
-	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	(outs GRegs:$rd), (ins GRegs:$rs1, simm5:$imm),
 	"eadd\t$rd,$rs1,#$imm",
-	[(set (f64 GRegs:$rd), (myEADD (f64 GRegs:$rs1), (simm5:$imm)))]>;
+	[]>;
 def EADDrd : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"eadd\t$rd,$rs1,#$imm",
-	[(set (f64 GRegs:$rd), (myEADD (f64 GRegs:$rs1), (simm32:$imm)))]>;
+	[]>;
 
 // Moves
 let isAsCheapAsAMove = 1 in {
@@ -612,6 +613,16 @@ def FMADFkr : ALU_RRR<0b000, 0b000,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, i64imm:$imm, FSRegs:$rs3),
 	"fmacf\t$rd,$rs1,#$imm,$rs3",
 	[(set FSRegs:$rd, (fmad (f32 FSRegs:$rs1), (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs3)))]>;
+
+// Matched in DAGToDAG
+def EADDFrk : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, simm5:$imm),
+	"eaddf\t$rd,$rs1,#$imm",
+	[]>;
+def EADDFrd : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, i64imm:$imm),
+	"eaddf\t$rd,$rs1,#$imm",
+	[]>;
 
 // Moves
 let isAsCheapAsAMove = 1 in {

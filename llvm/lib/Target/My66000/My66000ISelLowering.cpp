@@ -74,7 +74,6 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
   case My66000ISD::F64I5: return "My66000ISD::F64I5";
   case My66000ISD::F32I5: return "My66000ISD::F32I5";
-  case My66000ISD::EADD: return "My66000ISD::EADD";
   }
   return nullptr;
 }

@@ -337,7 +337,7 @@ def SUBdr : ALU_DR<0b100000, 0b00100,
 // MOVs
 //
 // Immediate 16-bit signed extended
-let isAsCheapAsAMove = 1 in {
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def MOVri : ALU_RI<0b111011,
 	(outs GRegs:$rd), (ins s16imm64:$imm),
 	"mov\t$rd,#$imm",

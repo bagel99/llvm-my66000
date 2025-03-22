@@ -67,7 +67,7 @@ private:
   bool tryOR(SDNode *N);
   bool tryAND(SDNode *N);
   bool trySex(SDNode *N);
-  bool tryEADD(SDNode *N);
+  bool tryEADD(SDNode *N, bool isDiv);
   bool tryADDSUBCARRY(SDNode *N, bool isSub);
   bool shouldAvoidImmediate(SDNode *N) const;
 
@@ -131,6 +131,15 @@ static bool isIntImmediate(SDNode *N, uint64_t &Imm) {
 static bool isOpcWithIntImmediate(const SDNode *N, unsigned Opc, uint64_t &Imm) {
   return N->getOpcode() == Opc
          && isIntImmediate(N->getOperand(1).getNode(), Imm);
+}
+
+static bool isPow2(uint64_t imm, int &Log2) {
+  if (imm == 0)
+    return false;
+  if ((imm & (imm-1)) != 0)
+    return false;
+  Log2 = llvm::countr_zero(imm);
+  return true;
 }
 
 static bool isMask(uint64_t imm, unsigned &Width) {
@@ -662,17 +671,57 @@ LLVM_DEBUG(dbgs() << "Sign extend pattern: w=" << Width << "\n");
   return true;
 }
 
-bool My66000DAGToDAGISel::tryEADD(SDNode *N) {
+bool My66000DAGToDAGISel::tryEADD(SDNode *N, bool isDiv) {
+LLVM_DEBUG(dbgs() << "tryEADD:\n");
   SDLoc dl(N);
-  int Log2;
-  if (N->getOperand(1).getOpcode() == ISD::ConstantFP)
-  {
-LLVM_DEBUG(dbgs() << "tryEADD\n");
-
-     SDNode *R = N->getOperand(1).getNode();
+  SDValue Op2 = N->getOperand(1);
+  EVT VT = N->getValueType(0);
+  bool isFP = true;
+  switch (Op2.getOpcode()) {
+    case ISD::ConstantFP:
+LLVM_DEBUG(dbgs() << "  normal\n");
+    break;
+    case My66000ISD::SHRUNK:
+LLVM_DEBUG(dbgs() << "  SHRUNK\n");
+      Op2 = Op2.getOperand(0);
+    break;
+    case My66000ISD::F64I5:
+LLVM_DEBUG(dbgs() << "  F64I5\n");
+      Op2 = Op2.getOperand(0);
+      isFP = false;
+    break;
+    case My66000ISD::F32I5:
+LLVM_DEBUG(dbgs() << "  F32I5\n");
+      Op2 = Op2.getOperand(0);
+      isFP = false;
+    break;
+    default:
+LLVM_DEBUG(dbgs() << "  not handled\n");
+      return false;
   }
-
-  return false;
+  int Log2;
+  if (isFP) {
+    const ConstantFPSDNode *RNode = isConstOrConstSplatFP(Op2);
+    if (RNode && !RNode->isNegative()) {
+LLVM_DEBUG(dbgs() << "  got constantFP\n");
+      Log2 = RNode->getValueAPF().getExactLog2Abs();
+LLVM_DEBUG(dbgs() << "  Log2=" << Log2 << '\n');
+      if (Log2 == INT_MIN)
+	return false;
+    }
+  } else {
+    int Imm;
+    const ConstantSDNode *C = dyn_cast<const ConstantSDNode>(Op2.getNode());
+    Imm = C->getSExtValue();
+    if(Imm <= 0 || !isPow2(Imm, Log2))
+      return false;
+  }
+  if (isDiv) Log2 = -Log2;
+  unsigned OpCode = (VT == MVT::f32) ? My66000::EADDFrd : My66000::EADDrd;
+  SDValue Ops[] = { N->getOperand(0),
+		    CurDAG->getTargetConstant(Log2, dl, MVT::i32) };
+	CurDAG->SelectNodeTo(N, OpCode, VT, Ops);
+  return true;
 }
 
 void My66000DAGToDAGISel::Select(SDNode *N) {
@@ -714,7 +763,11 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::Select " << N->getOperationName(CurDA
       return;
     break;
   case ISD::FMUL:
-    if (tryEADD(N))
+    if (tryEADD(N, false))
+      return;
+    break;
+  case ISD::FDIV:
+    if (tryEADD(N, true))
       return;
     break;
   case ISD::STORE: {

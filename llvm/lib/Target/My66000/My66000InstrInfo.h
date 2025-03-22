@@ -69,6 +69,8 @@ public:
   bool
   reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
 
+  bool isAsCheapAsAMove(const MachineInstr &MI) const override;
+
   const My66000RegisterInfo &getRegisterInfo() const { return RI; }
 };
 
