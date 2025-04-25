@@ -272,7 +272,6 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     LLVM_DEBUG(dbgs() << " CmpOpNo= " << CmpOpNo << '\n');
     CmpOp = &CmpMI->getOperand(CmpOpNo);
     Register RC;
-    MachineInstr *SavMI = nullptr;
     if (CpyMI != nullptr) {
       unsigned CmpOpOther = CmpOpNo ^ 3;	// 1->2, 2->1
       if (CmpMI->getOperand(CmpOpOther).isReg()) {
@@ -301,7 +300,6 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
   MachineInstrBuilder LIB;
   DebugLoc DL = BrcMI->getDebugLoc();
   E = TB->getFirstTerminator();
-  Register Rloop = MRI.createVirtualRegister(&My66000::GRegsRegClass);
   LLVM_DEBUG(dbgs() << " Type=" << Type << '\n');
   unsigned Opc;
   switch (Type) {
@@ -364,7 +362,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     }
     LIB = BuildMI(*TB, E, DL, TII.get(Opc), LReg)
 	  .addImm(BCnd)
-	  .addReg(LReg, RegState::Define)
+	  .addReg(LReg)
 	  .addImm(0)
 	  .add(CmpMI->getOperand(2));
     break;

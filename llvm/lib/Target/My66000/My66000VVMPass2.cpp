@@ -90,23 +90,29 @@ bool My66000VVMFixup::fixLoop(MachineLoop *Loop) {
   MachineBasicBlock *TB = Loop->getTopBlock();
   MachineBasicBlock::iterator I = TB->begin();
   unsigned bits = 0;
-  std::bitset<32> Liveout, Modified;
+  std::bitset<32> Livein, Modified;
 
   // We are only interested in loops that start with VEC
   if (I->getOpcode() == My66000::VEC) {
 LLVM_DEBUG(dbgs() << "  fix loop\n");
     findModified(TB, Modified);
-    Liveout.reset();
-        for (MachineBasicBlock::liveout_iterator LI = TB->liveout_begin(),
-	     LE = TB->liveout_end(); LI != LE; ++LI) {
+    Livein.reset();
+    for (MachineBasicBlock::succ_iterator SI = TB->succ_begin(),
+         SE = TB->succ_end(); SI != SE; ++SI) {
+      if (*SI != TB) {
+	const MachineBasicBlock *SB = *SI;
+        for (MachineBasicBlock::livein_iterator LI = SB->livein_begin(),
+	     LE = SB->livein_end(); LI != LE; ++LI) {
 	  unsigned reg = LI->PhysReg-1;		// 0 is illegal
 	  if (reg == 0) reg = 31;		// SP fixup
 	  else --reg;
-	  Liveout[reg] = 1;
+	  Livein[reg] = 1;
 	}
+      }
+    }
 LLVM_DEBUG(dbgs() << "  modified=" << Modified.to_string() << '\n');
-LLVM_DEBUG(dbgs() << "  liveout= " << Liveout.to_string() << '\n');
-    Modified &= Liveout;
+LLVM_DEBUG(dbgs() << "  livein=  " << Livein.to_string() << '\n');
+    Modified &= Livein;
 LLVM_DEBUG(dbgs() << "  bits=    " << Modified.to_string() << '\n');
     bits = Modified.to_ulong();
     I->removeOperand(1);

@@ -32,7 +32,7 @@ static cl::opt<bool> EnablePred2("enable-predication2", cl::Hidden,
 
 STATISTIC(NumPREDs,        "Number of single predicated blocks inserted");
 STATISTIC(NumPRED2s,       "Number of double predicated blocks inserted");
-
+STATISTIC(NumRanges,       "Number of range checks converted");
 
 namespace {
   class My66000PredBlock : public MachineFunctionPass {
@@ -56,6 +56,7 @@ namespace {
     void getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
 			bool invert, unsigned &op, unsigned &cc, unsigned &reg);
     int checkBlock(MachineBasicBlock *MBB);
+    void MakeBundle(MachineBasicBlock *MBB, MachineInstr *Head, unsigned N);
     bool Convert(MachineBasicBlock *Head,
 		 MachineBasicBlock *Succ0, MachineBasicBlock *Succ1,
 		 MachineBasicBlock *Tail);
@@ -65,6 +66,10 @@ namespace {
     bool ConvertD2(MachineBasicBlock *Head0, MachineBasicBlock *Head1,
 		 MachineBasicBlock *Succ0, MachineBasicBlock *Succ1,
 		 MachineBasicBlock *Tail);
+    bool findCompare(MachineBasicBlock *MBB, Register reg, MachineInstr *&Cmp);
+    bool RangeCheck2(MachineBasicBlock *MBB);
+    bool RangeCheck1(MachineFunction &MF);
+    void RangeCheck(MachineFunction &MF);
   };
 
 } // end anonymous namespace
@@ -112,19 +117,16 @@ LLVM_DEBUG(dbgs() << "\tcond/uncond branch pair, uncond branch to fallthru\n");
 // If theres a call that is not at the end, return 0.
 // Any branch should be at the end.
 int My66000PredBlock::checkBlock(MachineBasicBlock *MBB) {
-  MachineBasicBlock::iterator I = MBB->begin();
-  MachineBasicBlock::iterator E = MBB->getFirstTerminator();
   unsigned NumInstrs = 0;
 
-  while (I != E) {
-    MachineInstr *MI = &*I;
+  for (const MachineInstr &MI : instrs(*MBB)) {
+    if (MI.isTerminator()) return NumInstrs;
+    if (MI.isCall()) return -1;
     // FIXME - why are CFI_INSTRUCTIONs in the code?
     // answer: because of tail merged RETs
-    if (!MI->isCFIInstruction()) {
-      if (MI->isCall() && I != E) return -1;
+    if (!MI.isCFIInstruction()) {
       NumInstrs += 1;
     }
-    ++I;
   }
   return NumInstrs;
 }
@@ -158,6 +160,15 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
     default:
       llvm_unreachable("Predicate conversion: unknown conditional branch");
   }
+}
+
+void My66000PredBlock::MakeBundle(MachineBasicBlock *MBB, MachineInstr *MI,
+				  unsigned N) {
+  MI->setFlag(MachineInstr::NoMerge);
+  MachineBasicBlock::instr_iterator IB = MI->getIterator();
+  MachineBasicBlock::instr_iterator IE = std::next(IB, N+1);
+LLVM_DEBUG(dbgs() << "\tmake bundle N=" << N << '\n');
+  MIBundleBuilder(*MBB, IB, IE);
 }
 
 bool My66000PredBlock::Convert(MachineBasicBlock *Head,
@@ -204,7 +215,8 @@ LLVM_DEBUG(dbgs() << "\tCannot convert\n");
   MachineInstrBuilder MIB = BuildMI(*Head, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT+ninstrsF-1)<<16) | ((1 << ninstrsT)-1));
+  MIB.addImm(ninstrsT);
+  MIB.addImm(ninstrsF);
 
   // Move all instructions into Head, except for the terminators.
   if (TBB != Tail)
@@ -251,15 +263,12 @@ LLVM_DEBUG(dbgs() << "\tjoining tail " << printMBBReference(*Tail)
     Tail->eraseFromParent();
   } else {
     // We need a branch to Tail, let code placement work it out later.
-LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch.\n");
+LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch\n");
     SmallVector<MachineOperand, 0> EmptyCond;
     TII->insertBranch(*Head, Tail, nullptr, EmptyCond, HeadDL);
     Head->addSuccessor(Tail);
   }
-  unsigned N = ninstrsT+ninstrsF;
-  MachineBasicBlock::iterator IB = MIB;	// save location of 1st predicate
-  MachineBasicBlock::iterator IE = std::next(IB, N+1);
-  MIBundleBuilder(*Head, IB, IE);
+  MakeBundle(Head, MIB, ninstrsT+ninstrsF);
   return true;
 }
 
@@ -294,10 +303,6 @@ LLVM_DEBUG(dbgs() << "\tninstrsT1=" << ninstrsT1 << '\n');
 LLVM_DEBUG(dbgs() << "\tninstrsF1=" << ninstrsF1 << '\n');
   if (ninstrsT0 + ninstrsT1 + ninstrsF1 > 8)		// too many
     return false;
-  unsigned M1 = (1 << ninstrsT1)-1;		// inner predicate mask
-  unsigned M0 = (1 << ninstrsT0)-1;		// outer predicate mask
-LLVM_DEBUG(dbgs() << "\tM1=" << M1 << '\n');
-LLVM_DEBUG(dbgs() << "\tM0=" << M0 << '\n');
 LLVM_DEBUG(dbgs() << "\tTBB0:   " << printMBBReference(*TBB0) << '\n');
 LLVM_DEBUG(dbgs() << "\tFBB0:   " << printMBBReference(*FBB0) << '\n');
 LLVM_DEBUG(dbgs() << "\tTBB1:   " << printMBBReference(*TBB1) << '\n');
@@ -311,10 +316,13 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   // Create predicate instruction for 2nd condition
   MachineBasicBlock::iterator IP = Head1->getFirstTerminator();
   DebugLoc dl = IP->getDebugLoc();
+LLVM_DEBUG(dbgs() << "\tinner: invert=" << invert <<
+	" nT=" << ninstrsT1 << " nF=" << ninstrsF1 << '\n');
   MachineInstrBuilder MIB = BuildMI(*Head1, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT1+ninstrsF1-1)<<16) | M1);
+  MIB.addImm(ninstrsT1);
+  MIB.addImm(ninstrsF1);
   // Move all instructions into Head1, except for the terminators
   if (Succ0 != Tail) {
     Head1->splice(IP, Succ0, Succ0->begin(), Succ0->getFirstTerminator());
@@ -336,10 +344,13 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   getConditionInfo(Cond0, invert, prop, cc, reg);
   IP = Head0->getFirstTerminator();
   dl = IP->getDebugLoc();
+LLVM_DEBUG(dbgs() << "\touter: invert=" << invert <<
+	" nT=" << ninstrsT0+ninstrsF1 << " nF=" << ninstrsT1 << '\n');
   MIB = BuildMI(*Head0, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT0+ninstrsT1+ninstrsF1-1)<<16) | M0);
+  MIB.addImm(ninstrsT0);
+  MIB.addImm(ninstrsT1+ninstrsF1);
   // Move all instructions into Head0, except for the terminators
   Head0->splice(IP, Head1, Head1->begin(), Head1->getFirstTerminator());
   Head0->removeSuccessor(Head1, true);
@@ -354,10 +365,7 @@ LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch.\n");
     SmallVector<MachineOperand, 0> EmptyCond;
     TII->insertBranch(*Head0, Tail, nullptr, EmptyCond, dl);
   }
-  unsigned N = ninstrsT0+ninstrsT1+ninstrsF1;
-  MachineBasicBlock::iterator IB = MIB;	// save location of 1st predicate
-  MachineBasicBlock::iterator IE = std::next(IB, N+1);
-  MIBundleBuilder(*Head0, IB, IE);
+  MakeBundle(Head0, MIB, ninstrsT0+ninstrsT1+ninstrsF1);
   return true;
 }
 
@@ -392,11 +400,6 @@ LLVM_DEBUG(dbgs() << "\tninstrsT1=" << ninstrsT1 << '\n');
 LLVM_DEBUG(dbgs() << "\tninstrsF1=" << ninstrsF1 << '\n');
   if (ninstrsT0 + ninstrsT1 + ninstrsF1 > 8)		// too many
     return false;
-  unsigned M1 = (1 << ninstrsT1)-1;		// inner predicate mask
-//  unsigned M0 = (1 << ninstrsT0)-1;		// outer predicate mask
-  unsigned M0 = (1 << (ninstrsT0+ninstrsT1))-1;	// outer predicate mask
-LLVM_DEBUG(dbgs() << "\tM1=" << M1 << '\n');
-LLVM_DEBUG(dbgs() << "\tM0=" << M0 << '\n');
 LLVM_DEBUG(dbgs() << "\tTBB0:   " << printMBBReference(*TBB0) << '\n');
 LLVM_DEBUG(dbgs() << "\tFBB0:   " << printMBBReference(*FBB0) << '\n');
 LLVM_DEBUG(dbgs() << "\tTBB1:   " << printMBBReference(*TBB1) << '\n');
@@ -410,10 +413,13 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   // Create predicate instruction for 2nd condition
   MachineBasicBlock::iterator IP = Head1->getFirstTerminator();
   DebugLoc dl = IP->getDebugLoc();
+LLVM_DEBUG(dbgs() << "\tinner: invert=" << invert <<
+	" nT=" << ninstrsT1 << " nF=" << ninstrsF1 << '\n');
   MachineInstrBuilder MIB = BuildMI(*Head1, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT1+ninstrsF1-1)<<16) | M1);
+  MIB.addImm(ninstrsT1);
+  MIB.addImm(ninstrsF1);
   // Move all instructions into Head1, except for the terminators
   Head1->splice(IP, Succ0, Succ0->begin(), Succ0->getFirstTerminator());
   Head1->removeSuccessor(Succ0);
@@ -429,10 +435,13 @@ LLVM_DEBUG(dbgs() << "\tFBB1:   " << printMBBReference(*FBB1) << '\n');
   getConditionInfo(Cond0, invert, prop, cc, reg);
   IP = Head0->getFirstTerminator();
   dl = IP->getDebugLoc();
+LLVM_DEBUG(dbgs() << "\touter: invert=" << invert <<
+	" nT=" << ninstrsT0+ninstrsF1 << " nF=" << ninstrsT1 << '\n');
   MIB = BuildMI(*Head0, IP, dl, TII->get(prop));
   MIB.addImm(cc);
   MIB.addReg(reg);
-  MIB.addImm(((ninstrsT0+ninstrsT1+ninstrsF1-1)<<16) | M0);
+  MIB.addImm(ninstrsT0+ninstrsT1);
+  MIB.addImm(ninstrsF1);
   // Move all instructions into Head0, except for the terminators
   Head0->splice(IP, Head1, Head1->begin(), Head1->getFirstTerminator());
   Head0->removeSuccessor(Head1, true);
@@ -447,10 +456,7 @@ LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch.\n");
     SmallVector<MachineOperand, 0> EmptyCond;
     TII->insertBranch(*Head0, Tail, nullptr, EmptyCond, dl);
   }
-  unsigned N = ninstrsT0+ninstrsT1+ninstrsF1;
-  MachineBasicBlock::iterator IB = MIB;	// save location of 1st predicate
-  MachineBasicBlock::iterator IE = std::next(IB, N+1);
-  MIBundleBuilder(*Head0, IB, IE);
+  MakeBundle(Head0, MIB, ninstrsT0+ninstrsT1+ninstrsF1);
   return true;
 }
 
@@ -493,15 +499,15 @@ LLVM_DEBUG(dbgs() << "\tDiamond\n");
     // We have a simple triangle or diamond
     Modified = Convert(Head, Succ0, Succ1, Tail);
     if (Modified) NumPREDs += 1;
-
   } else {	// not a simple triangle or diamond
-
-LLVM_DEBUG(dbgs() << "\tpossible && or ||\n");
     if (!EnablePred2)
       return false;
+LLVM_DEBUG(dbgs() << "\tcheck for && or ||\n");
+    // Succ0 has Head as sole predecessor
+    if (Succ0->succ_size() != 2)	// is Succ0 conditional?
+      return false;			// no
     MachineBasicBlock *Head1 = Succ0;
-    if (Head1->succ_size() != 2)
-      return false;
+    // Find new Succ0
     if (Head1->succ_begin()[0] == Succ1) {
       Succ0 = Head1->succ_begin()[1];
     } else if (Head1->succ_begin()[1] == Succ1) {
@@ -518,31 +524,28 @@ LLVM_DEBUG(dbgs() << "\tSucc0: " << printMBBReference(*Succ0) <<
 " #P=" << Succ0->pred_size() << " #S=" << Succ0->succ_size() << '\n');
 LLVM_DEBUG(dbgs() << "\tSucc1: " << printMBBReference(*Succ1) <<
 " #P=" << Succ1->pred_size() << " #S=" << Succ1->succ_size() << '\n');
-    if (Succ1->pred_size() != 2)
-      return false;
-    if (Succ0->pred_size() != 1)
-      return false;
     if (Succ0->succ_size() != 1)
       return false;
     Tail = Succ0->succ_begin()[0];
 LLVM_DEBUG(dbgs() << "\tTail:  " << printMBBReference(*Tail) <<
 " #P=" << Tail->pred_size() << " #S=" << Tail->succ_size() << '\n');
-    if (Tail == Succ1) {
+    if (Tail->pred_size() != 2)
+      return false;
+    if (Succ1->pred_size() != 2)
+      return false;
+    if (Tail == Succ1) {	// possible 2 level triangle
+      if (Succ0->pred_size() > 2)
+        return false;
 LLVM_DEBUG(dbgs() << "\tTriangle2\n");
       Modified = ConvertT2(Head, Head1, Succ0, Succ1, Tail);
-    } else {
-      if (Succ1->succ_size() != 1)
+    } else {			// possible 2 level diamond
+      if (Succ1->succ_size() != 1 || Succ1->succ_begin()[0] != Tail)
 	return false;
-      // Both Succ? must have Tail as only succ.
-      if (Succ1->succ_begin()[0] != Tail) {
-	return false;
-      }
 LLVM_DEBUG(dbgs() << "\tDiamond2\n");
       Modified = ConvertD2(Head, Head1, Succ0, Succ1, Tail);
     }
     if (Modified) NumPRED2s += 1;
   }
-
   return Modified;
 }
 
@@ -557,11 +560,174 @@ bool My66000PredBlock::onePass(MachineFunction &MF) {
   return false;
 }
 
+/*
+ * The My66000 compare instruction checks for integer ranges.
+ * Given two BB, MBB1 and MBB2,
+ * if MBB1 ends with BRC rx
+ * and MBB2 ends with CMP rx,ry; BRIB
+ * then if the conditions indicate a range check
+ * the two blocks can be merged to one block with a BRIB with range bit.
+ */
+static MYCB::CondBits mapRangeBit(MYCC::CondCodes cc,
+				  MYCB::CondBits cb) {
+    if      (cc == MYCC::LE0 && cb == MYCB::GE)
+      return MYCB::SIN;
+    else if (cc == MYCC::LE0 && cb == MYCB::GT)
+      return MYCB::FIN;
+    else if (cc == MYCC::LT0 && cb == MYCB::GE)
+      return MYCB::CIN;
+    else if (cc == MYCC::LT0 && cb == MYCB::GT)
+      return MYCB::RIN;
+    else
+      return MYCB::EQ;	// This is bogus
+}
+
+// Find the compare instruction that defines reg
+// This would be simple if the define information was still around
+bool My66000PredBlock::findCompare(MachineBasicBlock *MBB,
+				   Register reg, MachineInstr *&Cmp) {
+
+LLVM_DEBUG(dbgs() << "\tfindCompare: " << printMBBReference(*MBB) << '\n');
+  MachineBasicBlock::iterator I = MBB->getFirstTerminator();
+  while (I != MBB->begin()) {
+    --I;
+LLVM_DEBUG(dbgs() << "\ttest: " << *I);
+    if (I->isCompare()) {
+LLVM_DEBUG(dbgs() << "\tfound a CMP\n");
+      if (I->getOperand(0).getReg() == reg) {
+LLVM_DEBUG(dbgs() << "\tfound the CMP\n");
+	Cmp = &*I;
+	return true;
+      }
+    }
+  }
+  for (MachineBasicBlock::pred_iterator PI = MBB->pred_begin(),
+                                        PE = MBB->pred_end();
+					PI != PE; ++PI) {
+    if (findCompare(*PI, reg, Cmp))
+      return true;
+  }
+  return false;
+}
+
+bool My66000PredBlock::RangeCheck2(MachineBasicBlock *MBB1) {
+LLVM_DEBUG(dbgs() << "My66000PredBlock::RangeCheck2\n");
+  if (MBB1->succ_size() != 2)
+    return false;
+  MachineBasicBlock *MBB2 = MBB1->succ_begin()[0];
+  MachineBasicBlock *MBB3 = MBB1->succ_begin()[1];
+  // Canonicalize so MBB2 has MBB1 as its single predecessor.
+  if (MBB2->pred_size() != 1) {
+LLVM_DEBUG(dbgs() << "\tswapped arms\n");
+    std::swap(MBB2, MBB3);
+  }
+  if (MBB2->pred_begin()[0] != MBB1)
+    return false;
+LLVM_DEBUG(dbgs() << "\tMBB1: " << printMBBReference(*MBB1) << '\n');
+LLVM_DEBUG(dbgs() << "\tMBB2: " << printMBBReference(*MBB2) << '\n');
+  SmallVector<MachineOperand, 4> Cond1, Cond2, Cond3;
+  MachineBasicBlock *TBB1, *FBB1, *TBB2, *FBB2;
+  if (!ExamineBranch(MBB1, TBB1, FBB1, Cond1))
+    return false;
+  if (!ExamineBranch(MBB2, TBB2, FBB2, Cond2))
+    return false;
+  MYCC::CondCodes cc;
+  MYCB::CondBits cb;
+  Register CondReg;	// the register that CMP sets and BRIB uses
+  Register TestReg;	// the register that BRC uses and CMP uses
+  // First BB must end with BRC and cc={LE0,LT0}
+  if (       Cond1[0].getImm() == My66000::BRC &&
+             Cond2[0].getImm() == My66000::BRIB) {
+    // "normal" order
+LLVM_DEBUG(dbgs() << "\tnormal order\n");
+    cc = static_cast<MYCC::CondCodes>(Cond1[2].getImm());
+    cb = static_cast<MYCB::CondBits> (Cond2[2].getImm());
+    TestReg = Cond1[1].getReg();
+    CondReg = Cond2[1].getReg();
+    Cond3 = Cond2;
+  } else if (Cond1[0].getImm() == My66000::BRIB &&
+             Cond2[0].getImm() == My66000::BRC) {
+    // "inverse" order
+LLVM_DEBUG(dbgs() << "\tinverse order\n");
+    cc = static_cast<MYCC::CondCodes>(Cond2[2].getImm());
+    cb = static_cast<MYCB::CondBits> (Cond1[2].getImm());
+    TestReg = Cond2[1].getReg();
+    CondReg = Cond1[1].getReg();
+    Cond3 = Cond1;
+  } else
+    return false;
+  if (cc != MYCC::LT0 && cc != MYCC::LE0)
+    return false;
+  if (cb != MYCB::GT && cb != MYCB::GE)
+    return false;
+LLVM_DEBUG(dbgs() << "\tTBB1: " << printMBBReference(*TBB1) << '\n');
+LLVM_DEBUG(dbgs() << "\tFBB1: " << printMBBReference(*FBB1) << '\n');
+  if (FBB1 != MBB2)
+    return false;
+LLVM_DEBUG(dbgs() << "\tTBB2: " << printMBBReference(*TBB2) << '\n');
+LLVM_DEBUG(dbgs() << "\tFBB2: " << printMBBReference(*FBB2) << '\n');
+  // Both BRC and BBIT have to branch to the same place
+  if (TBB1 != TBB2)
+    return false;
+  MachineBasicBlock::iterator IP2 = MBB2->getFirstTerminator();
+  MachineInstr *BMI = &*IP2;   // the BRIB instruction
+LLVM_DEBUG(dbgs() << "\tBRIB: " << *BMI);
+  // Try and find the CMP instruction that produces CondReg
+  MachineInstr *Cmp;
+  if (!findCompare(MBB2, CondReg, Cmp))
+    return false;
+LLVM_DEBUG(dbgs() << "\tCMP: " << *Cmp);
+  // The register in the BRC must be the same in the CMP
+//  if (TestReg != IP2->getOperand(1).getReg())
+//    return false;
+LLVM_DEBUG(dbgs() << "\tpotential merge candidate\n");
+LLVM_DEBUG(dbgs() << "\tcc= " << cc << "  cb= " << cb << '\n');
+  cb = mapRangeBit(cc, cb);
+LLVM_DEBUG(dbgs() << "\tnewcb= " << cb << '\n');
+  // Merge MBB2 into MBB1 replacing the BRC (and any following BRU)
+  MachineBasicBlock::iterator IP1 = MBB1->getFirstTerminator();
+  MBB1->splice(IP1, MBB2, MBB2->begin(), MBB2->getFirstTerminator());
+  // Remove old BRC
+  TII->removeBranch(*MBB1);
+  // Create a new BRIB with new condition bit
+  Cond3[2] = MachineOperand::CreateImm(cb);
+  TII->insertBranch(*MBB1, FBB2, TBB2, Cond3, BMI->getDebugLoc());
+  // Update successors (this will update predecessors)
+  MBB1->replaceSuccessor(MBB2, FBB2);
+  MBB2->removeSuccessor(FBB2);
+  MBB2->removeSuccessor(TBB2);
+  // MBB2 is now unused
+  MBB2->eraseFromParent();
+  NumRanges++;
+  return true;
+}
+
+bool My66000PredBlock::RangeCheck1(MachineFunction &MF) {
+  for (auto &MBB : MF ) {
+    if (RangeCheck2(&MBB))
+      return true;
+  }
+  return false;
+}
+
+void My66000PredBlock::RangeCheck(MachineFunction &MF) {
+LLVM_DEBUG(dbgs() << "My66000PredBlock::RangeCheck\n");
+  bool Mod;
+  do {
+LLVM_DEBUG(dbgs() << "***Before RangeCheck ***\n");
+    for (auto &MBB : MF ) {
+      LLVM_DEBUG(dbgs() << MBB);
+    }
+    Mod = RangeCheck1(MF);
+  } while (Mod);
+}
+
 bool My66000PredBlock::runOnMachineFunction(MachineFunction &MF) {
   TII = MF.getSubtarget<My66000Subtarget>().getInstrInfo();
 
   if (!MF.getSubtarget<My66000Subtarget>().usePredication()) return false;
 LLVM_DEBUG(dbgs() << "My66000PredBlock::runOnMachineFunction\n");
+  RangeCheck(MF);
 // begin debug
 LLVM_DEBUG(dbgs() << "*** Original basic blocks ***\n");
     for (auto &MBB : MF ) {

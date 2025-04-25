@@ -1071,20 +1071,20 @@ def SDIVREMdr : Pseudo<
 // Predication Instructions, never selected
 //
 def PRC : PC<0b000110,
-	(outs), (ins ccode:$cc, GRegs:$rs1, i16imm:$inf),
-	"pc\t$cc,$rs1,$inf",
+	(outs), (ins ccode:$cc, GRegs:$rs1, i8imm:$true, i8imm:$false),
+	"pc\t$cc,$rs1,$true,$false",
 	[]>;
 def PRIB : PB<0b00011,
-	(outs), (ins i64imm:$cb, GRegs:$rs1, i16imm:$inf),
-	"pb1\t$cb,$rs1,$inf",
+	(outs), (ins i64imm:$cb, GRegs:$rs1, i8imm:$true, i8imm:$false),
+	"pb1\t$cb,$rs1,$true,$false",
 	[]>;
 def PRFB : PB<0b00011,
-	(outs), (ins i64imm:$cb, GRegs:$rs1, i16imm:$inf),
-	"pb1\t$cb,$rs1,$inf",
+	(outs), (ins i64imm:$cb, GRegs:$rs1, i8imm:$true, i8imm:$false),
+	"pb1\t$cb,$rs1,$true,$false",
 	[]>;
 def PBIT : PB<0b00011,
-	(outs), (ins i64imm:$bit, GRegs:$rs1, i16imm:$inf),
-	"pb1\t$bit,$rs1,$inf",
+	(outs), (ins i64imm:$bit, GRegs:$rs1, i8imm:$true, i8imm:$false),
+	"pb1\t$bit,$rs1,$true,$false",
 	[]>;
 
 

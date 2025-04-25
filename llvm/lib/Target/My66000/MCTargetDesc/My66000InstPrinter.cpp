@@ -142,12 +142,12 @@ static void printCarryBits(unsigned bits, raw_ostream &O) {
     O << '}';
 }
 
-static void printShadow(raw_ostream &OS, unsigned imm32) {
-  unsigned cnt = imm32 >> 16;
-
-  for (unsigned i=0; i <= cnt; i++) {
-    OS << (((imm32&1) == 0) ? 'F' : 'T');
-    imm32 >>= 1;
+static void printShadow(raw_ostream &OS, unsigned nT, unsigned nF) {
+  for (unsigned i=nT; i != 0 ; i--) {
+    OS << 'T';
+  }
+  for (unsigned i=nF; i != 0 ; i--) {
+    OS << 'F';
   }
 }
 
@@ -217,7 +217,7 @@ void My66000InstPrinter::printInst(const MCInst *MI, uint64_t Address,
     O << "\tp" << CondCodeString(Opcc.getImm()) << "\t";
     printOperand(MI, 1, O);
     O << ",";
-    printShadow(O, MI->getOperand(2).getImm());
+    printShadow(O, MI->getOperand(2).getImm(), MI->getOperand(3).getImm());
     }
     break;
   case My66000::PRIB: {
@@ -225,7 +225,7 @@ void My66000InstPrinter::printInst(const MCInst *MI, uint64_t Address,
     O << "\tp" << CondBitString(Opcc.getImm()) << "\t";
     printOperand(MI, 1, O);
     O << ",";
-    printShadow(O, MI->getOperand(2).getImm());
+    printShadow(O, MI->getOperand(2).getImm(), MI->getOperand(3).getImm());
     }
     break;
   case My66000::PRFB: {
@@ -233,7 +233,7 @@ void My66000InstPrinter::printInst(const MCInst *MI, uint64_t Address,
     O << "\tp" << FCondBitString(Opcc.getImm()) << "\t";
     printOperand(MI, 1, O);
     O << ",";
-    printShadow(O, MI->getOperand(2).getImm());
+    printShadow(O, MI->getOperand(2).getImm(), MI->getOperand(3).getImm());
     }
     break;
   case My66000::PBIT: {
@@ -242,7 +242,7 @@ void My66000InstPrinter::printInst(const MCInst *MI, uint64_t Address,
     O << ",";
     printOperand(MI, 1, O);
     O << ",";
-    printShadow(O, MI->getOperand(2).getImm());
+    printShadow(O, MI->getOperand(2).getImm(), MI->getOperand(3).getImm());
     }
     break;
   case My66000::VEC: {

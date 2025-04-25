@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/Support/CodeGen.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/MC/TargetRegistry.h"
 
 using namespace llvm;
@@ -94,8 +95,13 @@ MachineFunctionInfo *My66000TargetMachine::createMachineFunctionInfo(
 
 void My66000PassConfig::addIRPasses() {
   addPass(createAtomicExpandPass());
+  addPass(createCFGSimplificationPass(SimplifyCFGOptions()
+					.speculateBlocks(false)));
 
   TargetPassConfig::addIRPasses();
+
+  addPass(createSelectOptimizePass());
+
 }
 
 bool My66000PassConfig::addInstSelector() {
