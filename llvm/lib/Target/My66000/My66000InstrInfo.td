@@ -1070,6 +1070,7 @@ def SDIVREMdr : Pseudo<
 //
 // Predication Instructions, never selected
 //
+let isPredicable = 1 in {
 def PRC : PC<0b000110,
 	(outs), (ins ccode:$cc, GRegs:$rs1, i8imm:$true, i8imm:$false),
 	"pc\t$cc,$rs1,$true,$false",
@@ -1086,7 +1087,7 @@ def PBIT : PB<0b00011,
 	(outs), (ins i64imm:$bit, GRegs:$rs1, i8imm:$true, i8imm:$false),
 	"pb1\t$bit,$rs1,$true,$false",
 	[]>;
-
+}
 
 //
 // Virtual Vector Mode (VVM) Instructions

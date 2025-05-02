@@ -66,6 +66,7 @@ namespace {
     bool ConvertD2(MachineBasicBlock *Head0, MachineBasicBlock *Head1,
 		 MachineBasicBlock *Succ0, MachineBasicBlock *Succ1,
 		 MachineBasicBlock *Tail);
+    void MakeBundles(MachineBasicBlock *MBB);
     bool findCompare(MachineBasicBlock *MBB, Register reg, MachineInstr *&Cmp);
     bool RangeCheck2(MachineBasicBlock *MBB);
     bool RangeCheck1(MachineFunction &MF);
@@ -124,7 +125,7 @@ int My66000PredBlock::checkBlock(MachineBasicBlock *MBB) {
     if (MI.isCall()) return -1;
     // FIXME - why are CFI_INSTRUCTIONs in the code?
     // answer: because of tail merged RETs
-    if (!MI.isCFIInstruction()) {
+    if (!MI.isCFIInstruction() /* && !MI.isBundle() */) {
       NumInstrs += 1;
     }
   }
@@ -164,11 +165,25 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
 
 void My66000PredBlock::MakeBundle(MachineBasicBlock *MBB, MachineInstr *MI,
 				  unsigned N) {
-  MI->setFlag(MachineInstr::NoMerge);
+//  MI->setFlag(MachineInstr::NoMerge);
   MachineBasicBlock::instr_iterator IB = MI->getIterator();
   MachineBasicBlock::instr_iterator IE = std::next(IB, N+1);
 LLVM_DEBUG(dbgs() << "\tmake bundle N=" << N << '\n');
-  MIBundleBuilder(*MBB, IB, IE);
+  finalizeBundle(*MBB, IB, IE);
+}
+
+void My66000PredBlock::MakeBundles(MachineBasicBlock *MBB) {
+  MachineBasicBlock::iterator I = MBB->begin();
+  MachineBasicBlock::iterator E = MBB->end();
+  while (I != E) {
+    if (I->isPredicable()) {
+      unsigned N = I->getOperand(2).getImm() + I->getOperand(3).getImm();
+      MakeBundle(MBB, &*I, N);
+      I = std::next(I, N+1);
+    }
+    else
+      ++I;
+  }
 }
 
 bool My66000PredBlock::Convert(MachineBasicBlock *Head,
@@ -268,7 +283,7 @@ LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch\n");
     TII->insertBranch(*Head, Tail, nullptr, EmptyCond, HeadDL);
     Head->addSuccessor(Tail);
   }
-  MakeBundle(Head, MIB, ninstrsT+ninstrsF);
+//  MakeBundle(Head, MIB, ninstrsT+ninstrsF);
   return true;
 }
 
@@ -365,7 +380,7 @@ LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch.\n");
     SmallVector<MachineOperand, 0> EmptyCond;
     TII->insertBranch(*Head0, Tail, nullptr, EmptyCond, dl);
   }
-  MakeBundle(Head0, MIB, ninstrsT0+ninstrsT1+ninstrsF1);
+//  MakeBundle(Head0, MIB, ninstrsT0+ninstrsT1+ninstrsF1);
   return true;
 }
 
@@ -456,7 +471,7 @@ LLVM_DEBUG(dbgs() << "\tconverting to unconditional branch.\n");
     SmallVector<MachineOperand, 0> EmptyCond;
     TII->insertBranch(*Head0, Tail, nullptr, EmptyCond, dl);
   }
-  MakeBundle(Head0, MIB, ninstrsT0+ninstrsT1+ninstrsF1);
+//  MakeBundle(Head0, MIB, ninstrsT0+ninstrsT1+ninstrsF1);
   return true;
 }
 
@@ -739,15 +754,19 @@ LLVM_DEBUG(dbgs() << "*** Original basic blocks ***\n");
   do {
     Mod = onePass(MF);
     Modified |= Mod;
+  } while (Mod);
+  // if we predicated anything, bundle them
+  if (Modified) {
+    for (auto &MBB : MF ) {
+      MakeBundles(&MBB);
+    }
 // begin debug
-  if (Mod) {
 LLVM_DEBUG(dbgs() << "*** Modified basic blocks ***\n");
     for (auto &MBB : MF ) {
       LLVM_DEBUG(dbgs() << MBB);
     }
-  }
 // end debug
-  } while (Mod);
+  }
   return Modified;
 }
 
