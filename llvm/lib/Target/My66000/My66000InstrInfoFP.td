@@ -9,6 +9,14 @@
 //
 // Floating point stuff
 //
+// Nodes that are not pre-defined
+def fexp :  SDNode<"ISD::FEXP", SDTFPUnaryOp>;
+def flog :  SDNode<"ISD::FLOG", SDTFPUnaryOp>;
+def flog10: SDNode<"ISD::FLOG10", SDTFPUnaryOp>;
+def ffrexp :  SDNode<"ISD::FFREXP", SDTFPUnaryOp>;
+def AssertSext : SDNode<"ISD::AssertSext", SDTUnaryOp>;
+
+
 def fpimm64 : Operand<f64>, FPImmLeaf<f64, [{ return true; }]>
 		{ let PrintMethod = "printFP64Operand"; }
 def fpimm32 : Operand<f32>, FPImmLeaf<f32, [{ return true; }]>
@@ -261,6 +269,10 @@ def FMADkr : ALU_RRR<0b000, 0b000,
 	[(set GRegs:$rd, (fmad (f64 GRegs:$rs1), (myF64I5 (simm5:$imm)), (f64 GRegs:$rs3)))]>;
 
 // Matched in DAGToDAG
+def EADDrr : ALU_RRR<0b000, 0b000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
+	"eadd\t$rd,$rs1,$rs2",
+	[(set GRegs:$rd, (fldexp (f64 GRegs:$rs1), GRegs:$rs2))]>;
 def EADDrk : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, simm5:$imm),
 	"eadd\t$rd,$rs1,#$imm",
@@ -268,6 +280,20 @@ def EADDrk : ALU_RRR<0b000, 0b000,
 def EADDrd : ALU_RRR<0b000, 0b000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"eadd\t$rd,$rs1,#$imm",
+	[]>;
+
+def FREXPr : Pseudo<
+	(outs GRegs:$rf, GRegs:$re), (ins GRegs:$rs),
+	"# FREXPr",
+	[(set GRegs:$rf, GRegs:$re, (ffrexp GRegs:$rs))]>;
+
+def EXPONr : R1<0b000110, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs),
+	"expon\t$rd,$rs",
+	[]>;
+def FRACTr : R1<0b000111, 0b00000,
+	(outs GRegs:$rd), (ins GRegs:$rs),
+	"fract\t$rd,$rs",
 	[]>;
 
 // Moves
@@ -353,7 +379,6 @@ def  RNDNE : RND<0b10010, 0b00000,
 	[]>;
 
 // Patterns for rounding and conversion
-def AssertSext : SDNode<"ISD::AssertSext", SDTUnaryOp>;
 def : Pat<(sint_to_fp (i64 (fp_to_sint (f64 GRegs:$Rn)))),
 	  (RNDTZrr (f64 GRegs:$Rn))>;
 def : Pat<(sint_to_fp (i64 (AssertSext (fp_to_sint (f64 GRegs:$Rn))))),
@@ -362,11 +387,6 @@ def : Pat<(fpextend (f32 (sint_to_fp GRegs:$Rn))),
 	  (CVTsd GRegs:$Rn)>;
 
 // Transcendentals
-//
-// For some reason some transcendentals are not pre-defined
-def fexp :  SDNode<"ISD::FEXP", SDTFPUnaryOp>;
-def flog :  SDNode<"ISD::FLOG", SDTFPUnaryOp>;
-def flog10: SDNode<"ISD::FLOG10", SDTFPUnaryOp>;
 
 // transcendentals defined in LLVM
 multiclass FTRAN<string OpName,  bits<6>OpC, bits<5>Flags,
@@ -615,6 +635,10 @@ def FMADFkr : ALU_RRR<0b000, 0b000,
 	[(set FSRegs:$rd, (fmad (f32 FSRegs:$rs1), (myF32I5 (simm5:$imm)), (f32 FSRegs:$rs3)))]>;
 
 // Matched in DAGToDAG
+def EADDFrr : ALU_RRR<0b000, 0b000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, GRegs:$rs2),
+	"eaddf\t$rd,$rs1,$rs2",
+	[(set FSRegs:$rd, (fldexp (f32 FSRegs:$rs1), GRegs:$rs2))]>;
 def EADDFrk : ALU_RRR<0b000, 0b000,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, simm5:$imm),
 	"eaddf\t$rd,$rs1,#$imm",
@@ -623,6 +647,21 @@ def EADDFrd : ALU_RRR<0b000, 0b000,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, i64imm:$imm),
 	"eaddf\t$rd,$rs1,#$imm",
 	[]>;
+
+def FREXPFr : Pseudo<
+	(outs FSRegs:$rf, GRegs:$re), (ins FSRegs:$rs),
+	"# FREXPFr",
+	[(set FSRegs:$rf, GRegs:$re, (ffrexp (f32 FSRegs:$rs)))]>;
+
+def EXPONFr : R1<0b000110, 0b00000,
+	(outs GRegs:$rd), (ins FSRegs:$rs),
+	"exponf\t$rd,$rs",
+	[]>;
+def FRACTFr : R1<0b000111, 0b00000,
+	(outs FSRegs:$rd), (ins FSRegs:$rs),
+	"fractf\t$rd,$rs",
+	[]>;
+
 
 // Moves
 let isAsCheapAsAMove = 1 in {

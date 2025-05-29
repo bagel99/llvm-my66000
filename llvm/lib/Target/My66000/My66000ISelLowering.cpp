@@ -222,6 +222,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
 
   // 64-bit floating point
   setOperationAction(ISD::ConstantFP, MVT::f64, Legal);
+  setOperationAction(ISD::FABS, MVT::f64, Legal);
   setOperationAction(ISD::FADD, MVT::f64, Legal);
   setOperationAction(ISD::FMUL, MVT::f64, Legal);
   setOperationAction(ISD::FDIV, MVT::f64, Legal);
@@ -249,15 +250,21 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BR_CC, MVT::f64, Custom);
   setOperationAction(ISD::SELECT, MVT::f64, Expand);
   if (!EnableCarry)
-    setOperationAction(ISD::FREM, MVT::f64, Expand);
+    setOperationAction(ISD::FREM, {MVT::f32, MVT::f64}, Expand);
   else
-    setOperationAction(ISD::FREM, MVT::f64, Custom);
+    setOperationAction(ISD::FREM, {MVT::f32, MVT::f64}, Custom);
+  setOperationAction(ISD::FLDEXP, {MVT::f32, MVT::f64}, Legal);
+  setOperationAction(ISD::STRICT_FLDEXP, {MVT::f32, MVT::f64}, Legal);
+  setOperationAction(ISD::FFREXP, {MVT::f32, MVT::f64}, Legal);
+  setLibcallName(RTLIB::LDEXP_F64, nullptr);
+  setLibcallName(RTLIB::LDEXP_F32, nullptr);
 
   // 32-bit floating point
   setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Expand);
   setTruncStoreAction(MVT::f64, MVT::f32, Expand);
   setOperationAction(ISD::FP_EXTEND, MVT::f64, Legal);
   setOperationAction(ISD::ConstantFP, MVT::f32, Legal);
+  setOperationAction(ISD::FABS, MVT::f32, Legal);
   setOperationAction(ISD::FADD, MVT::f32, Legal);
   setOperationAction(ISD::FMUL, MVT::f32, Legal);
   setOperationAction(ISD::FDIV, MVT::f32, Legal);
@@ -286,10 +293,6 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT, MVT::f32, Expand);
   setOperationAction(ISD::BITCAST, MVT::f32, Custom);
   setOperationAction(ISD::BITCAST, MVT::i32, Custom);
-  if (!EnableCarry)
-    setOperationAction(ISD::FREM, MVT::f32, Expand);
-  else
-    setOperationAction(ISD::FREM, MVT::f32, Custom);
 
   setOperationAction(ISD::ConstantFP, MVT::f64, Custom);
   setOperationAction(ISD::ConstantFP, MVT::f32, Custom);

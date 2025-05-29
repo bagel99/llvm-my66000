@@ -316,6 +316,8 @@ createTargetCodeGenInfo(CodeGenModule &CGM) {
     return createLoongArchTargetCodeGenInfo(
         CGM, Target.getPointerWidth(LangAS::Default), ABIFRLen);
   }
+  case llvm::Triple::my66000:
+    return createMy66000TargetCodeGenInfo(CGM);
   }
 }
 

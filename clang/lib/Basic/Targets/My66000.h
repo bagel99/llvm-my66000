@@ -22,7 +22,6 @@ namespace clang {
 namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY My66000TargetInfo : public TargetInfo {
-  static const Builtin::Info BuiltinInfo[];
 
 public:
   My66000TargetInfo(const llvm::Triple &Triple, const TargetOptions &)

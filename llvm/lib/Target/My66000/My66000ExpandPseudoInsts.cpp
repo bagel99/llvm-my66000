@@ -47,6 +47,8 @@ namespace {
 		        MachineBasicBlock::iterator MBBI, unsigned inst);
     bool ShfIO(MachineBasicBlock &MBB,
 		        MachineBasicBlock::iterator MBBI, unsigned inst);
+    bool Frexp(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+		        unsigned inste, unsigned instf);
     bool ExpandMI(MachineBasicBlock &MBB,
                   MachineBasicBlock::iterator MBBI,
                   MachineBasicBlock::iterator &NextMBBI);
@@ -175,6 +177,22 @@ LLVM_DEBUG(dbgs() << MBB);
   return true;
 }
 
+bool My66000ExpandPseudo::Frexp(MachineBasicBlock &MBB,
+				MachineBasicBlock::iterator MBBI,
+				unsigned inste, unsigned instf) {
+  MachineInstr &MI = *MBBI;
+  if (!MI.getOperand(1).isDead())
+    BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(inste))
+		.add(MI.getOperand(1))
+		.add(MI.getOperand(2));
+  if (!MI.getOperand(0).isDead())
+    BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(instf))
+		.add(MI.getOperand(0))
+		.add(MI.getOperand(2));
+  MI.eraseFromParent();
+  return true;
+}
+
 bool My66000ExpandPseudo::ExpandMI(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator MBBI,
                                MachineBasicBlock::iterator &NextMBBI) {
@@ -236,6 +254,10 @@ LLVM_DEBUG(dbgs() << "  expand " << MI);
     case My66000::SRL2ribc:	return ShfIO(MBB, MBBI, My66000::SRLri);
     case My66000::SLL2ribc:	return ShfIO(MBB, MBBI, My66000::SLLri);
     case My66000::SRA2ribc:	return ShfIO(MBB, MBBI, My66000::SRAri);
+    case My66000::FREXPr:	return Frexp(MBB, MBBI,
+					     My66000::EXPONr, My66000::FRACTr);
+    case My66000::FREXPFr:	return Frexp(MBB, MBBI,
+					     My66000::EXPONFr, My66000::FRACTFr);
   }
 }
 

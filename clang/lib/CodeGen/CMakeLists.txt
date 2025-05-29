@@ -126,6 +126,7 @@ add_clang_library(clangCodeGen
   Targets/M68k.cpp
   Targets/MSP430.cpp
   Targets/Mips.cpp
+  Targets/My66000.cpp
   Targets/NVPTX.cpp
   Targets/PNaCl.cpp
   Targets/PPC.cpp
