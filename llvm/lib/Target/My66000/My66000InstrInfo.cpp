@@ -351,6 +351,8 @@ LLVM_DEBUG(dbgs() << "My66000InstrInfo::reverseBranchCondition\n");
   } else if (Cond[0].getImm() == My66000::BRIB) {
 //dbgs() << "\tBRIB " << Cond[2].getImm() << "\n";
      MYCB::CondBits cb = static_cast<MYCB::CondBits>(Cond[2].getImm());
+     if (cb >= MYCB::SIN && cb <= MYCB::RIN)	// Not reversible
+	return true;
      Cond[2].setImm(reverseBRIB(cb));
      return false;
   } else if (Cond[0].getImm() == My66000::BRFB) {
