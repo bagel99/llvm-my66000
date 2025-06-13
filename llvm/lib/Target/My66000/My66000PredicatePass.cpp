@@ -122,10 +122,13 @@ int My66000PredBlock::checkBlock(MachineBasicBlock *MBB) {
 
   for (const MachineInstr &MI : instrs(*MBB)) {
     if (MI.isTerminator()) return NumInstrs;
+    // VVM doesn't allow calls
     if (MI.isCall()) return -1;
+    // Bad things happen if IMPLICIT_DEF is inside a bundle
+    if (MI.getOpcode() == TargetOpcode::IMPLICIT_DEF) return -1;
     // FIXME - why are CFI_INSTRUCTIONs in the code?
     // answer: because of tail merged RETs
-    if (!MI.isCFIInstruction() /* && !MI.isBundle() */) {
+    if (!MI.isCFIInstruction()) {
       NumInstrs += 1;
     }
   }
@@ -168,21 +171,24 @@ void My66000PredBlock::MakeBundle(MachineBasicBlock *MBB, MachineInstr *MI,
 //  MI->setFlag(MachineInstr::NoMerge);
   MachineBasicBlock::instr_iterator IB = MI->getIterator();
   MachineBasicBlock::instr_iterator IE = std::next(IB, N+1);
-LLVM_DEBUG(dbgs() << "\tmake bundle N=" << N << '\n');
+LLVM_DEBUG(dbgs() << "make bundle BB=" << printMBBReference(*MBB) <<
+		     " N=" << N << '\n');
+LLVM_DEBUG(dbgs() << "\tIB= " << *IB);
+LLVM_DEBUG(dbgs() << "\tIE= " << *IE);
   finalizeBundle(*MBB, IB, IE);
 }
 
 void My66000PredBlock::MakeBundles(MachineBasicBlock *MBB) {
   MachineBasicBlock::iterator I = MBB->begin();
   MachineBasicBlock::iterator E = MBB->end();
+LLVM_DEBUG(dbgs() << "My66000PredBlock::MakeBundles\n");
   while (I != E) {
+LLVM_DEBUG(dbgs() << "\tI = " << *I);
     if (I->isPredicable()) {
       unsigned N = I->getOperand(2).getImm() + I->getOperand(3).getImm();
       MakeBundle(MBB, &*I, N);
-      I = std::next(I, N+1);
     }
-    else
-      ++I;
+    ++I;	// This will increment over an entire (just made) bundle
   }
 }
 
@@ -530,9 +536,11 @@ LLVM_DEBUG(dbgs() << "\tcheck for && or ||\n");
     } else	// not a 2 level triangle or diamond
       return false;
     // Canonicalize so Succ0 has Head1 as its single predecessor.
-    if (Succ0->pred_size() != 1) {
+    if (Succ0->pred_size() == 2 && Succ1->pred_size() == 1) {
 LLVM_DEBUG(dbgs() << "\tswapped arms\n");
       std::swap(Succ0, Succ1);
+    } else if (Succ0->pred_size() != 1 || Succ1->pred_size() != 2) {
+      return false;
     }
 LLVM_DEBUG(dbgs() << "\tHead1:  " << printMBBReference(*Head1) << '\n');
 LLVM_DEBUG(dbgs() << "\tSucc0: " << printMBBReference(*Succ0) <<
@@ -758,6 +766,7 @@ LLVM_DEBUG(dbgs() << "*** Original basic blocks ***\n");
   // if we predicated anything, bundle them
   if (Modified) {
     for (auto &MBB : MF ) {
+      LLVM_DEBUG(dbgs() << MBB);
       MakeBundles(&MBB);
     }
 // begin debug
