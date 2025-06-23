@@ -236,6 +236,12 @@ LLVM_DEBUG(dbgs() << "  expand " << MI);
     case My66000::SDIVREMwrc:	return CarryO(MBB, MBBI, My66000::SDIVwr);
     case My66000::SDIVREMrdc:	return CarryO(MBB, MBBI, My66000::SDIVrd);
     case My66000::SDIVREMdrc:	return CarryO(MBB, MBBI, My66000::SDIVdr);
+    case My66000::SRL2rrbc:	return ShfIO(MBB, MBBI, My66000::SRLrr);
+    case My66000::SLL2rrbc:	return ShfIO(MBB, MBBI, My66000::SLLrr);
+    case My66000::SRA2rrbc:	return ShfIO(MBB, MBBI, My66000::SRArr);
+    case My66000::SRL2ribc:	return ShfIO(MBB, MBBI, My66000::SRLri);
+    case My66000::SLL2ribc:	return ShfIO(MBB, MBBI, My66000::SLLri);
+    case My66000::SRA2ribc:	return ShfIO(MBB, MBBI, My66000::SRAri);
     case My66000::FREMrrc:	return CarryO(MBB, MBBI, My66000::FDIVrr);
     case My66000::FREMrdc:	return CarryO(MBB, MBBI, My66000::FDIVrd);
     case My66000::FREMrfc:	return CarryO(MBB, MBBI, My66000::FDIVrf);
@@ -248,12 +254,6 @@ LLVM_DEBUG(dbgs() << "  expand " << MI);
     case My66000::FREMFrkc:	return CarryO(MBB, MBBI, My66000::FDIVFrk);
     case My66000::FREMFfrc:	return CarryO(MBB, MBBI, My66000::FDIVFfr);
     case My66000::FREMFkrc:	return CarryO(MBB, MBBI, My66000::FDIVFkr);
-    case My66000::SRL2rrbc:	return ShfIO(MBB, MBBI, My66000::SRLrr);
-    case My66000::SLL2rrbc:	return ShfIO(MBB, MBBI, My66000::SLLrr);
-    case My66000::SRA2rrbc:	return ShfIO(MBB, MBBI, My66000::SRArr);
-    case My66000::SRL2ribc:	return ShfIO(MBB, MBBI, My66000::SRLri);
-    case My66000::SLL2ribc:	return ShfIO(MBB, MBBI, My66000::SLLri);
-    case My66000::SRA2ribc:	return ShfIO(MBB, MBBI, My66000::SRAri);
     case My66000::FREXPr:	return Frexp(MBB, MBBI,
 					     My66000::EXPONr, My66000::FRACTr);
     case My66000::FREXPFr:	return Frexp(MBB, MBBI,

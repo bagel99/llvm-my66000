@@ -339,24 +339,70 @@ void My66000InstPrinter::printS32ImmOperand(const MCInst *MI, unsigned OpNo,
     printOperand(MI, OpNo, O);
 }
 
-void My66000InstPrinter::printFP32Operand(const MCInst *MI, unsigned opNum,
+void My66000InstPrinter::printFP64Operand(const MCInst *MI, unsigned opNum,
 					raw_ostream &O) {
-  uint32_t i;
   const MCOperand &Op = MI->getOperand(opNum);
-  if (Op.isSFPImm()) {
-    i = Op.getSFPImm();
-    O << format_hex(i, 9, true);
+  if (Op.isDFPImm()) {
+  uint64_t t64;
+    t64 = Op.getDFPImm();
+    O << format_hex(t64, 18, true);
   }
 }
 
-void My66000InstPrinter::printFP64Operand(const MCInst *MI, unsigned opNum,
+// The operand presented is IEEE 32-bit or IEEE 64-bit than can be exactly
+// represented by a IEEE 32-bit.
+void My66000InstPrinter::printFP32Operand(const MCInst *MI, unsigned opNum,
 					raw_ostream &O) {
-  uint64_t i;
   const MCOperand &Op = MI->getOperand(opNum);
-  if (Op.isDFPImm()) {
-    i = Op.getDFPImm();
-    O << format_hex(i, 18, true);
+  uint32_t n = 0;
+  if (Op.isSFPImm()) {
+    n = Op.getSFPImm();
+  } else if (Op.isDFPImm()) {
+    uint64_t t64 = Op.getDFPImm();
+LLVM_DEBUG(dbgs() << "t64=" << format_hex(t64, 18, true) << '\n');
+    unsigned exp = ((t64 >> 52)&0x7FF) - 1023;  // true exponent (0 .. 3)
+    n = (t64 >> 29) & 0x7FFFFF;	// shift fraction down truncate
+LLVM_DEBUG(dbgs() << "exp=" << exp);
+LLVM_DEBUG(dbgs() << " n1=" << format_hex(n, 9, true) << '\n');
+    n |= (exp+127) << 23;	// place new exponent
+    if ((int64_t)t64 < 0)
+      n |= 0x80000000;
   }
+  O << format_hex(n, 9, true);
+}
+
+// The operand presented is IEEE 32-bit or 64-bit that is an exact integer
+// between -31 and 31.
+void My66000InstPrinter::printFPkOperand(const MCInst *MI, unsigned opNum,
+					raw_ostream &O) {
+  const MCOperand &Op = MI->getOperand(opNum);
+  int n = 0;
+  if (Op.isSFPImm()) {
+    uint32_t t32 = Op.getSFPImm();
+    if (t32 != 0) {
+      unsigned exp = ((t32 >> 23)&0xFF) - 127;	  // true exponent (0 .. 4)
+      n = ((t32 >> 19) & 0xF) | 0x10;		  // fraction plus hidden bit
+LLVM_DEBUG(dbgs() << "t32=" << format_hex(t32, 9, true) << '\n');
+LLVM_DEBUG(dbgs() << "exp=" << exp << " n1=" << n);
+      n >>= (4 - exp);
+LLVM_DEBUG(dbgs() << " n2=" << n << '\n');
+      if ((int32_t)t32 < 0)
+	n = -n;
+    }
+  } else if (Op.isDFPImm()) {
+    uint64_t t64 = Op.getDFPImm();
+    if (t64 != 0) {
+      unsigned exp = ((t64 >> 52)&0x7FF) - 1023;  // true exponent (0 .. 4)
+      n = ((t64 >> 48) & 0xF) | 0x10;		  // fraction plus hidden bit
+LLVM_DEBUG(dbgs() << "t64=" << format_hex(t64, 18, true) << '\n');
+LLVM_DEBUG(dbgs() << "exp=" << exp << " n1=" << n);
+      n >>= (4 - exp);
+LLVM_DEBUG(dbgs() << " n2=" << n << '\n');
+      if ((int64_t)t64 < 0)
+	n = -n;
+    }
+  }
+  O << n;
 }
 
 void My66000InstPrinter::printMEMriOperand(const MCInst *MI, unsigned opNum,

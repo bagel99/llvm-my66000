@@ -71,9 +71,6 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::FDIVREM: return "My66000ISD::FDIVREM";
   case My66000ISD::COPYFMFS: return "My66000ISD::COPYFMFS";
   case My66000ISD::COPYTOFS: return "My66000ISD::COPYTOFS";
-  case My66000ISD::SHRUNK: return "My66000ISD::SHRUNK";
-  case My66000ISD::F64I5: return "My66000ISD::F64I5";
-  case My66000ISD::F32I5: return "My66000ISD::F32I5";
   }
   return nullptr;
 }
@@ -293,9 +290,6 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT, MVT::f32, Expand);
   setOperationAction(ISD::BITCAST, MVT::f32, Custom);
   setOperationAction(ISD::BITCAST, MVT::i32, Custom);
-
-  setOperationAction(ISD::ConstantFP, MVT::f64, Custom);
-  setOperationAction(ISD::ConstantFP, MVT::f32, Custom);
 
   MaxStoresPerMemcpy = 1;
   MaxStoresPerMemcpyOptSize = 1;
@@ -1468,58 +1462,6 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFREM\n");
   return DAG.getNode(My66000ISD::FDIVREM, DL, VTs, LHS, RHS).getValue(1);
 }
 
-static bool CanShrinkToI5(APFloat FPVal, int64_t &imm) {
-APSInt IVal(64, false);
-bool isExact;
-FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
-LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
-    ", IVal=" << IVal << '\n');
-  if (isExact) {
-    imm = IVal.getExtValue();
-    if (imm >= -31 && imm <= 31)
-      return true;
-  }
-  return false;
-}
-
-/*
- * Convert all 64-bit floating point constants that have a 32-bit
- * exact representation to 32-bit constant extended.  We will have patterns to
- * match this.  In addition, attempt to shrink to IMM5.
- */
-SDValue My66000TargetLowering::LowerConstantFP(SDValue Op,
-						SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerConstantFP\n");
-  EVT VT = Op.getValueType();
-  SDLoc DL(Op);
-  ConstantFPSDNode *CFP = cast<ConstantFPSDNode>(Op);
-  APFloat FPVal = CFP->getValueAPF();
-  int64_t imm;
-  if (VT == MVT::f64) {
-    if (CanShrinkToI5(FPVal, imm)) {
-      return DAG.getNode(My66000ISD::F64I5, DL, MVT::f64,
-			     DAG.getConstant(imm, DL, MVT::i64));
-    }
-    APFloat FPVal2 = FPVal;	// convert clobbers it
-    bool losesInfo;
-    // The following copied from ConstantFP::isValueValidForType()
-    FPVal2.convert(APFloat::IEEEsingle(), APFloat::rmNearestTiesToEven, &losesInfo);
-LLVM_DEBUG(dbgs() << "\tAttempt shrink to f32: " << losesInfo << '\n');
-    if (!losesInfo) {
-      // FPVal can be represented by a f32
-      return DAG.getNode(My66000ISD::SHRUNK, DL, MVT::f64,
-			 DAG.getConstantFP(FPVal2, DL, MVT::f32));
-    }
-  }
-  else if (VT == MVT::f32) {
-    if (CanShrinkToI5(FPVal, imm)) {
-      return DAG.getNode(My66000ISD::F32I5, DL, MVT::f32,
-			     DAG.getConstant(imm, DL, MVT::i64));
-    }
-  }
-  return DAG.getConstantFP(FPVal, DL, VT);
-}
-
 SDValue My66000TargetLowering::lowerBITCAST(SDValue Op,
 					    SelectionDAG &DAG) const {
   SDLoc DL(Op);
@@ -1547,7 +1489,6 @@ LLVM_DEBUG(Op.dump());
   case ISD::VASTART:			return LowerVASTART(Op, DAG);
   case ISD::FRAMEADDR:			return lowerFRAMEADDR(Op, DAG);
   case ISD::RETURNADDR:			return lowerRETURNADDR(Op, DAG);
-  case ISD::ConstantFP:			return LowerConstantFP(Op, DAG);
   case ISD::FREM:			return lowerFREM(Op, DAG);
   case ISD::BITCAST:			return lowerBITCAST(Op, DAG);
   default:

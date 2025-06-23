@@ -12,6 +12,7 @@
 
 #include "My66000.h"
 #include "My66000TargetMachine.h"
+#include "llvm/ADT/APSInt.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -34,6 +35,51 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "my66000-dag2dag"
+
+//
+// These predicates are used in pattern matching
+//
+static bool isFPshort(const APFloat FPVal2)
+{
+  APFloat FPVal = FPVal2;
+  bool losesInfo;
+  // The following copied from ConstantFP::isValueValidForType()
+  // FPVal gets modified
+  FPVal.convert(APFloat::IEEEsingle(), APFloat::rmNearestTiesToEven, &losesInfo);
+LLVM_DEBUG(dbgs() << "\tAttempt shrink to f32: " << losesInfo << '\n');
+  return !losesInfo;
+}
+
+static bool isFPimm5(const APFloat FPVal)
+{
+  APSInt IVal(64, false);
+  bool isExact;
+  FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
+  LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
+      ", IVal=" << IVal << '\n');
+  if (isExact) {
+    int64_t imm = IVal.getExtValue();
+    if (imm >= -31 && imm <= 31)
+      return true;
+  }
+  return false;
+}
+
+static bool isFPpimm5(const APFloat FPVal)
+{
+  APSInt IVal(64, false);
+  bool isExact;
+  FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
+  LLVM_DEBUG(dbgs() << "\tAttempt shrink to pi5: " << isExact <<
+      ", IVal=" << IVal << '\n');
+  if (isExact) {
+    int64_t imm = IVal.getExtValue();
+    if (imm >= 0 && imm <= 31)
+      return true;
+  }
+  return false;
+}
+
 
 /// My66000DAGToDAGISel - My66000 specific code to select My66000 machine
 /// instructions for SelectionDAG operations.
@@ -133,6 +179,7 @@ static bool isOpcWithIntImmediate(const SDNode *N, unsigned Opc, uint64_t &Imm) 
          && isIntImmediate(N->getOperand(1).getNode(), Imm);
 }
 
+/*
 static bool isPow2(uint64_t imm, int &Log2) {
   if (imm == 0)
     return false;
@@ -141,6 +188,7 @@ static bool isPow2(uint64_t imm, int &Log2) {
   Log2 = llvm::countr_zero(imm);
   return true;
 }
+*/
 
 static bool isMask(uint64_t imm, unsigned &Width) {
   if (imm & (imm + 1))
@@ -676,52 +724,26 @@ LLVM_DEBUG(dbgs() << "tryEADD:\n");
   SDLoc dl(N);
   SDValue Op2 = N->getOperand(1);
   EVT VT = N->getValueType(0);
-  bool isFP = true;
-  switch (Op2.getOpcode()) {
-    case ISD::ConstantFP:
-LLVM_DEBUG(dbgs() << "  normal\n");
-    break;
-    case My66000ISD::SHRUNK:
-LLVM_DEBUG(dbgs() << "  SHRUNK\n");
-      Op2 = Op2.getOperand(0);
-    break;
-    case My66000ISD::F64I5:
-LLVM_DEBUG(dbgs() << "  F64I5\n");
-      Op2 = Op2.getOperand(0);
-      isFP = false;
-    break;
-    case My66000ISD::F32I5:
-LLVM_DEBUG(dbgs() << "  F32I5\n");
-      Op2 = Op2.getOperand(0);
-      isFP = false;
-    break;
-    default:
+  if (Op2.getOpcode() != ISD::ConstantFP) {
 LLVM_DEBUG(dbgs() << "  not handled\n");
-      return false;
+    return false;
   }
   int Log2;
-  if (isFP) {
-    const ConstantFPSDNode *RNode = isConstOrConstSplatFP(Op2);
-    if (RNode && !RNode->isNegative()) {
+  const ConstantFPSDNode *RNode = isConstOrConstSplatFP(Op2);
+  if (RNode && !RNode->isNegative()) {
 LLVM_DEBUG(dbgs() << "  got constantFP\n");
-      Log2 = RNode->getValueAPF().getExactLog2Abs();
+    Log2 = RNode->getValueAPF().getExactLog2Abs();
 LLVM_DEBUG(dbgs() << "  Log2=" << Log2 << '\n');
-      if (Log2 == INT_MIN)
-	return false;
-    }
-  } else {
-    int Imm;
-    const ConstantSDNode *C = dyn_cast<const ConstantSDNode>(Op2.getNode());
-    Imm = C->getSExtValue();
-    if(Imm <= 0 || !isPow2(Imm, Log2))
+    if (Log2 == INT_MIN)
       return false;
+    if (isDiv) Log2 = -Log2;
+    unsigned OpCode = (VT == MVT::f32) ? My66000::EADDFrd : My66000::EADDrd;
+    SDValue Ops[] = { N->getOperand(0),
+		      CurDAG->getTargetConstant(Log2, dl, MVT::i32) };
+    CurDAG->SelectNodeTo(N, OpCode, VT, Ops);
+    return true;
   }
-  if (isDiv) Log2 = -Log2;
-  unsigned OpCode = (VT == MVT::f32) ? My66000::EADDFrd : My66000::EADDrd;
-  SDValue Ops[] = { N->getOperand(0),
-		    CurDAG->getTargetConstant(Log2, dl, MVT::i32) };
-	CurDAG->SelectNodeTo(N, OpCode, VT, Ops);
-  return true;
+  return false;
 }
 
 void My66000DAGToDAGISel::Select(SDNode *N) {
