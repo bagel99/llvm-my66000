@@ -368,7 +368,7 @@ LLVM_DEBUG(dbgs() << " n1=" << format_hex(n, 9, true) << '\n');
     if ((int64_t)t64 < 0)
       n |= 0x80000000;
   }
-  O << format_hex(n, 9, true);
+  O << format_hex(n, 10, true);
 }
 
 // The operand presented is IEEE 32-bit or 64-bit that is an exact integer

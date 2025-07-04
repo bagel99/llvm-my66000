@@ -27,18 +27,20 @@ def uneed32: Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 65536 && Imm <= 4294967295; }]>;
 def uneed64: Operand<i64>, ImmLeaf<i64,
 		[{ return (uint64_t)(Imm) >= 4294967296; }]>;
-def simm5 :  Operand<i64>, ImmLeaf<i64,
-		[{ return isInt<6>(Imm); }]>;
 def simm16 : Operand<i64>, ImmLeaf<i64,
 		[{ return isInt<16>(Imm); }]>;
 def simm32 : Operand<i64>, ImmLeaf<i64,
-		[{ return (int64_t)Imm == (int32_t)Imm; }]>;
-def sneed32: Operand<i64>, ImmLeaf<i64,
-		[{ return (Imm >= -2147483648 && Imm <-32768) ||
-			  (Imm <=  2147483647 && Imm > 32767); }]>;
+		[{ return isInt<32>(Imm); }]>;
+// FIXME - if 16-versions are found first, can we relax the range?
 def sneed64: Operand<i64>, ImmLeaf<i64,
 		[{ return (Imm < -2147483648 || Imm > 2147483647); }]>;
-
+// FIXME - is simm5 needed?
+def simm5 :  Operand<i64>, ImmLeaf<i64,
+               [{ return isInt<6>(Imm); }]>;
+def simmp5 :  Operand<i64>, ImmLeaf<i64,
+		[{ return Imm >= 0 && Imm <= 31; }]>;
+def simmn5 :  Operand<i64>, ImmLeaf<i64,
+		[{ return iImm < 0 && Imm >= -31; }]>;
 def shfamt : Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 0 && Imm <= 63; }]>;
 def shfinx: Operand<i64>, ImmLeaf<i64,
@@ -142,7 +144,7 @@ def myMEMSET:	    SDNode<"My66000ISD::MEMSET",
 			[SDNPHasChain, SDNPMayStore]>;
 
 //
-// ALU RI
+// ARITHMETIC AND LOGICAL 16-bit IMMEDIATE
 //
 multiclass ALUri<string OpName, bits<6>OpC, SDPatternOperator OpNode> {
   def ri : ALU_RI<OpC,
@@ -161,46 +163,138 @@ defm XOR : ALUri<"xor", 0b111001, xor>;
 defm AND : ALUri<"and", 0b111010, and>;
 
 //
-// ALU RR
+// ARITHMETIC INTEGER XOP2
 //
-multiclass ALUrr<string OpName, bits<6>OpC, bits<5>Flags, ValueType VT,
+multiclass AOPrr<string OpName, bits<6>OpC, bits<5>Flags,
 		   SDPatternOperator OpNode> {
   def rr : ALU_RR<OpC, Flags,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,$rs2"),
-	[(set (VT GRegs:$rd), (OpNode (VT GRegs:$rs1), (VT GRegs:$rs2)))]>;
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, GRegs:$rs2))]>;
   def rn : ALU_RR<OpC, Flags,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,-$rs2"),
-	[]>;
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, (ineg GRegs:$rs2)))]>;
   def nr : ALU_RR<OpC, Flags,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,$rs2"),
-	[]>;
+	[(set GRegs:$rd, (OpNode (ineg GRegs:$rs1), GRegs:$rs2))]>;
   def nn : ALU_RR<OpC, Flags,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,-$rs2"),
-	[]>;
+	[(set GRegs:$rd, (OpNode (ineg GRegs:$rs1), (ineg GRegs:$rs2)))]>;
+  def rw : ALU_RW<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, simm32:$imm))]>;
+  def rd : ALU_RD<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, sneed64:$imm))]>;
 }
-defm ADD  : ALUrr<"add",  0b100000, 0b00000, i64, add>;
-defm MUL  : ALUrr<"mul",  0b100001, 0b00000, i64, mul>;
-defm UDIV : ALUrr<"div",  0b100010, 0b00000, i64, udiv>;
-defm SDIV : ALUrr<"divs", 0b100010, 0b00010, i64, sdiv>;
+
+defm ADD  : AOPrr<"add",  0b100000, 0b00000, add>;
+defm MUL  : AOPrr<"mul",  0b100001, 0b00000, mul>;
+defm UDIV : AOPrr<"div",  0b100010, 0b00000, udiv>;
+defm SDIV : AOPrr<"divs", 0b100010, 0b00010, sdiv>;
 let isCompare = 1 in {
-defm CMP  : ALUrr<"cmp",  0b100100, 0b00000, i64, myCMP>;
+defm CMP  : AOPrr<"cmp",  0b100100, 0b00000, myCMP>;
 }
-defm OR   : ALUrr<"or",   0b101000, 0b00000, i64, or>;
-defm XOR  : ALUrr<"xor",  0b101001, 0b00000, i64, xor>;
-defm AND  : ALUrr<"and",  0b101010, 0b00000, i64, and>;
-defm UMAX : ALUrr<"max",  0b100110, 0b00000, i64, umax>;
-defm UMIN : ALUrr<"min",  0b100111, 0b00000, i64, umin>;
-defm SMAX : ALUrr<"maxs", 0b100110, 0b00010, i64, smax>;
-defm SMIN : ALUrr<"mins", 0b100111, 0b00010, i64, smin>;
+defm UMAX : AOPrr<"max",  0b100110, 0b00000, umax>;
+defm UMIN : AOPrr<"min",  0b100111, 0b00000, umin>;
+defm SMAX : AOPrr<"maxs", 0b100110, 0b00010, smax>;
+defm SMIN : AOPrr<"mins", 0b100111, 0b00010, smin>;
 
 def SUB   : Pat<(sub GRegs:$rs1, GRegs:$rs2),
 		(ADDrn GRegs:$rs1, GRegs:$rs2)>;
 def NADD  : Pat<(ineg (add GRegs:$rs1, GRegs:$rs2)),
 		(ADDnn GRegs:$rs1, GRegs:$rs2)>;
+
+//
+// ARITHMETIC INTEGER XOP2 NON-COMMUTATIVE EXTRA PATTERNS
+//
+multiclass NOPrr<string OpName, bits<6>OpC, bits<5>Flags,
+		   SDPatternOperator OpNode> {
+  def wr : ALU_WR<OpC, Flags,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
+	[(set GRegs:$rd, (OpNode simm32:$imm, GRegs:$rs2))]>;
+  def wn : ALU_WR<OpC, Flags,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,#$imm,-$rs2"),
+	[(set GRegs:$rd, (OpNode simm32:$imm, (ineg GRegs:$rs2)))]>;
+  def nw : ALU_WR<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs2, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,-$rs2,#$imm"),
+	[(set GRegs:$rd, (OpNode (ineg GRegs:$rs2), simm32:$imm))]>;
+  def dr : ALU_DR<OpC, Flags,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
+	[(set GRegs:$rd, (OpNode sneed64:$imm, GRegs:$rs2))]>;
+  def dn : ALU_DR<OpC, Flags,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,#$imm,-$rs2"),
+	[(set GRegs:$rd, (OpNode sneed64:$imm, (ineg GRegs:$rs2)))]>;
+  def nd : ALU_WR<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs2, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,-$rs2,#$imm"),
+	[(set GRegs:$rd, (OpNode (ineg GRegs:$rs2), sneed64:$imm))]>;
+}
+defm UDIV : NOPrr<"div",  0b100010, 0b00000, udiv>;
+defm SDIV : NOPrr<"divs", 0b100010, 0b00010, sdiv>;
+let isCompare = 1 in {
+defm CMP  : NOPrr<"cmp",  0b100100, 0b00000, myCMP>;
+}
+// FIXME - can these be done with Pat<>
+def SUBwr : ALU_WR<0b100000, 0b00100,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	"add\t$rd,#$imm,-$rs2",
+	[(set GRegs:$rd, (sub simm32:$imm, GRegs:$rs2))]>;
+def SUBdr : ALU_DR<0b100000, 0b00100,
+	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
+	"add\t$rd,#$imm,-$rs2",
+	[(set GRegs:$rd, (sub sneed64:$imm, GRegs:$rs2))]>;
+
+//
+// LOGICAL XOP2
+//
+multiclass LOPrr<string OpName, bits<6>OpC, bits<5>Flags,
+		   SDPatternOperator OpNode> {
+  def rr : ALU_RR<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,$rs1,$rs2"),
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, GRegs:$rs2))]>;
+  def rn : ALU_RR<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,$rs1,-$rs2"),
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, (not GRegs:$rs2)))]>;
+  def nr : ALU_RR<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,-$rs1,$rs2"),
+	[(set GRegs:$rd, (OpNode (not GRegs:$rs1), GRegs:$rs2))]>;
+  def nn : ALU_RR<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,-$rs1,-$rs2"),
+	[(set GRegs:$rd, (OpNode (not GRegs:$rs1), (not GRegs:$rs2)))]>;
+  def rw : ALU_RW<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, simm32:$imm))]>;
+  def rd : ALU_RD<OpC, Flags,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
+	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, sneed64:$imm))]>;
+}
+defm OR   : LOPrr<"or",   0b101000, 0b00000, or>;
+defm XOR  : LOPrr<"xor",  0b101001, 0b00000, xor>;
+defm AND  : LOPrr<"and",  0b101010, 0b00000, and>;
+
+def NOR   : Pat<(not (or GRegs:$rs1, GRegs:$rs2)),
+		(ANDnn GRegs:$rs1, GRegs:$rs2)>;
+def NAND  : Pat<(not (and GRegs:$rs1, GRegs:$rs2)),
+		(ORnn GRegs:$rs1, GRegs:$rs2)>;
+
+
 
 // both a*-b and -a*b are expressed as -(a*b)
 def       : Pat<(ineg (mul GRegs:$rs1, GRegs:$rs2)),
@@ -215,123 +309,8 @@ def       : Pat<(sdiv (ineg GRegs:$rs1), GRegs:$rs2),
 		(SDIVnr GRegs:$rs1, GRegs:$rs2)>;
 def       : Pat<(sdiv (ineg GRegs:$rs1), (ineg GRegs:$rs2)),
 		(SDIVnn GRegs:$rs1, GRegs:$rs2)>;
-def NOR   : Pat<(not (or GRegs:$rs1, GRegs:$rs2)),
-		(ANDnn GRegs:$rs1, GRegs:$rs2)>;
-def ORN   : Pat<(or (not GRegs:$rs1), GRegs:$rs2),
-		(ORnr GRegs:$rs1, GRegs:$rs2)>;
-def NAND  : Pat<(not (and GRegs:$rs1, GRegs:$rs2)),
-		(ORnn GRegs:$rs1, GRegs:$rs2)>;
-def ANDN  : Pat<(and GRegs:$rs1, (not GRegs:$rs2)),
-		(ANDrn GRegs:$rs1, GRegs:$rs2)>;
-def XORN  : Pat<(xor (not GRegs:$rs1), GRegs:$rs2),
-		(XORnr GRegs:$rs1, GRegs:$rs2)>;
 
-//
-// ALU RW - have 16-bit immediate versions
-//
-multiclass ALUrw<string OpName, bits<6>OpC, bits<5>Flags,
-		   SDPatternOperator OpNode> {
-  def rw : ALU_RW<OpC, Flags,
-	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
-	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
-	[(set GRegs:$rd, (OpNode GRegs:$rs1, sneed32:$imm))]>;
-}
-defm ADD  : ALUrw<"add",  0b100000, 0b10000, add>;
-defm MUL  : ALUrw<"mul",  0b100001, 0b10000, mul>;
-defm UDIV : ALUrw<"div",  0b100010, 0b10000, udiv>;
-defm SDIV : ALUrw<"divs", 0b100010, 0b10010, sdiv>;
-let isCompare = 1 in {
-defm CMP  : ALUrw<"cmp",  0b100100, 0b10000, myCMP>;
-}
-defm OR   : ALUrw<"or",   0b101000, 0b10000, or>;
-defm XOR  : ALUrw<"xor",  0b101001, 0b10000, xor>;
-defm AND  : ALUrw<"and",  0b101010, 0b10000, and>;
 
-//
-// ALU XR - don't have 16-bit immediate versions
-// Because they commute and have a version with 5-bit immediate
-// as the first operand, we generate the immediate that way.
-//
-multiclass ALUxr<string OpName, bits<6>OpC, bits<5>Flags,
-		   SDPatternOperator OpNode> {
-  def xr : ALU_WR<OpC, Flags,
-	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
-	!strconcat(OpName, "\t$rd,#$imm,$rs1"),
-	[(set GRegs:$rd, (OpNode GRegs:$rs1, simm32:$imm))]>;
-}
-defm UMAX : ALUxr<"max",  0b100110, 0b00000, umax>;
-defm UMIN : ALUxr<"min",  0b100111, 0b00000, umin>;
-defm SMAX : ALUxr<"maxs", 0b100110, 0b00010, smax>;
-defm SMIN : ALUxr<"mins", 0b100111, 0b00010, smin>;
-
-//
-// ALU RX - don't have 16-bit immediate versions and don't commute
-//
-multiclass ALUrx<string OpName, bits<6>OpC, bits<5>Flags,
-		   SDPatternOperator OpNode> {
-  def rx : ALU_RW<OpC, Flags,
-	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
-	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
-	[(set GRegs:$rd, (OpNode GRegs:$rs1, simm32:$imm))]>;
-}
-defm SDIV : ALUrx<"divs", 0b100010, 0b10010, sdiv>;
-
-//
-// ALU RD
-//
-multiclass ALUrd<string OpName, bits<6>OpC, bits<5>Flags,
-		   SDPatternOperator OpNode> {
-  def rd : ALU_RD<OpC, Flags,
-	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
-	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
-	[(set GRegs:$rd, (OpNode GRegs:$rs1, sneed64:$imm))]>;
-}
-defm ADD  : ALUrd<"add",  0b100000, 0b10000, add>;
-defm MUL  : ALUrd<"mul",  0b100001, 0b10000, mul>;
-defm UDIV : ALUrd<"div",  0b100010, 0b00000, udiv>;
-defm SDIV : ALUrd<"divs", 0b100010, 0b00010, sdiv>;
-defm OR   : ALUrd<"or",   0b101000, 0b10000, or>;
-defm XOR  : ALUrd<"xor",  0b101001, 0b10000, xor>;
-defm AND  : ALUrd<"and",  0b101010, 0b10000, and>;
-let isCompare = 1 in {
-defm CMP  : ALUrd<"cmp",  0b100100, 0b10000, myCMP>;
-}
-
-//
-// ALU WR
-// Only non-commutative operations need apply
-//
-multiclass ALUwr<string OpName, bits<6>OpC, bits<5>Flags,
-		   SDPatternOperator OpNode> {
-  def wr : ALU_WR<OpC, Flags,
-	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
-	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
-	[(set GRegs:$rd, (OpNode simm32:$imm, GRegs:$rs2))]>;
-}
-defm UDIV : ALUwr<"div",  0b100010, 0b10000, udiv>;
-defm SDIV : ALUwr<"divs", 0b100010, 0b10010, sdiv>;
-def SUBwr : ALU_WR<0b100000, 0b00100,
-	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
-	"add\t$rd,#$imm,-$rs2",
-	[(set GRegs:$rd, (sub simm32:$imm, GRegs:$rs2))]>;
-
-//
-// ALU DR
-// Only non-commutative operations need apply
-//
-multiclass ALUdr<string OpName, bits<6>OpC, bits<5>Flags,
-		   SDPatternOperator OpNode> {
-  def dr : ALU_DR<OpC, Flags,
-	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs1),
-	!strconcat(OpName, "\t$rd,#$imm,$rs1"),
-	[(set GRegs:$rd, (OpNode sneed64:$imm, GRegs:$rs1))]>;
-}
-defm UDIV : ALUdr<"div",  0b100010, 0b10000, udiv>;
-defm SDIV : ALUdr<"divs", 0b100010, 0b10010, sdiv>;
-def SUBdr : ALU_DR<0b100000, 0b00100,
-	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
-	"add\t$rd,#$imm,-$rs2",
-	[(set GRegs:$rd, (sub sneed64:$imm, GRegs:$rs2))]>;
 
 //
 // MOVs
@@ -712,6 +691,7 @@ def EXIT : ALU_RI<0b101100,
 // Floating point
 //
 include "My66000InstrInfoFP.td"
+include "My66000InstrInfoFS.td"
 
 //
 // Flow control
@@ -906,7 +886,7 @@ def UMULHILOric : Pseudo<
 def UMULHILOrwc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
 	"# UMULHILOrwc",
-	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, sneed32:$rhs))]>;
+	[(set GRegs:$lo, GRegs:$hi, (umul_lohi GRegs:$lhs, simm32:$rhs))]>;
 def UMULHILOrdc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
 	"# UMULHILOrdc",
@@ -922,7 +902,7 @@ def SMULHILOric : Pseudo<
 def SMULHILOrwc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
 	"# SMULHILOrwc",
-	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, sneed32:$rhs))]>;
+	[(set GRegs:$lo, GRegs:$hi, (smul_lohi GRegs:$lhs, simm32:$rhs))]>;
 def SMULHILOrdc : Pseudo<
 	(outs GRegs:$lo, GRegs:$hi), (ins GRegs:$lhs, i64imm:$rhs),
 	"# SMULHILOrdc",
@@ -967,7 +947,7 @@ def SDIVREMnnc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, GRegs:$rhs),
 	"# SDIVREMnnc",
 	[]>;
-def SDIVREMrxc : Pseudo<
+def SDIVREMrwc : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$rhs),
 	"# SDIVREMrwc",
 	[]>;
@@ -1020,7 +1000,7 @@ def UDIVREMri : Pseudo<
 def UDIVREMrw : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins GRegs:$lhs, i64imm:$rhs),
 	"# UDIVREMrw",
-	[(set GRegs:$div, GRegs:$rem, (udivrem GRegs:$lhs, sneed32:$rhs))]>;
+	[(set GRegs:$div, GRegs:$rem, (udivrem GRegs:$lhs, simm32:$rhs))]>;
 def UDIVREMwr : Pseudo<
 	(outs GRegs:$div, GRegs:$rem), (ins i64imm:$lhs, GRegs:$rhs),
 	"# UDIVREMwr",

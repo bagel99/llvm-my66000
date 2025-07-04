@@ -265,8 +265,8 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FADD, MVT::f32, Legal);
   setOperationAction(ISD::FMUL, MVT::f32, Legal);
   setOperationAction(ISD::FDIV, MVT::f32, Legal);
-  setOperationAction(ISD::FMA,  MVT::f32, Legal);	// this or FMAD?
-  setOperationAction(ISD::FMAD, MVT::f32, Legal);	// this or FMA
+  setOperationAction(ISD::FMA,  MVT::f32, Legal);
+  setOperationAction(ISD::FMAD, MVT::f32, Legal);
   setOperationAction(ISD::FMINNUM, MVT::f32, Legal);
   setOperationAction(ISD::FMAXNUM, MVT::f32, Legal);
   setOperationAction(ISD::FMINIMUM, MVT::f32, Legal);
@@ -1580,7 +1580,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
   case My66000::SDIVREMnn:
 	return emitDIVREM(MI, BB, My66000::SDIVnn, My66000::SDIVREMnnc);
   case My66000::SDIVREMrx:
-	return emitDIVREM(MI, BB, My66000::SDIVrx, My66000::SDIVREMrxc);
+	return emitDIVREM(MI, BB, My66000::SDIVrw, My66000::SDIVREMrwc);
   case My66000::SDIVREMwr:
 	return emitDIVREM(MI, BB, My66000::SDIVwr, My66000::SDIVREMwrc);
   case My66000::SDIVREMrd:
