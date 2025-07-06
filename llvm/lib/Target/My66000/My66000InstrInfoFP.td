@@ -16,7 +16,7 @@ def flog10: SDNode<"ISD::FLOG10", SDTFPUnaryOp>;
 def ffrexp :  SDNode<"ISD::FFREXP", SDTFPUnaryOp>;
 def AssertSext : SDNode<"ISD::AssertSext", SDTUnaryOp>;
 
-
+def fpimm0  : FPImmLeaf<fAny, [{ return Imm.isExactlyValue(+0.0); }]>;
 def fpimm1  : PatLeaf<(fpimm), [{ return N->isExactlyValue(+1.0); }]>;
 def fpimm64 : Operand<f64>, FPImmLeaf<f64, [{ return true; }]>
 		{ let PrintMethod = "printFP64Operand"; }
@@ -163,9 +163,9 @@ def FNEG : ALU_DR<0b110001, 0b10101,
 
 // Non-commutative ops with constants on the left
 def FSUBkr : ALU_DR<0b110001, 0b10101,
-	(outs GRegs:$rd), (ins fpimmi5:$imm, GRegs:$rs2),
+	(outs GRegs:$rd), (ins fpimmpi5:$imm, GRegs:$rs2),
 	"fadd\t$rd,#$imm,-$rs2",
-	[(set GRegs:$rd, (fsub fpimmi5:$imm, (f64 GRegs:$rs2)))]>;
+	[(set GRegs:$rd, (fsub fpimmpi5:$imm, (f64 GRegs:$rs2)))]>;
 def FSUBfr : ALU_DR<0b110001, 0b10101,
 	(outs GRegs:$rd), (ins fpimms32:$imm, GRegs:$rs2),
 	"fadd\t$rd,#$imm,-$rs2",
@@ -251,6 +251,11 @@ def FRACTr : R1<0b000111, 0b00000,
 
 // Moves
 let isAsCheapAsAMove = 1 in {
+def FMOVrz : ALU_RRR<0b000, 0b111,
+	(outs GRegs:$rd), (ins fpimm64:$imm),
+	"mov\t$rd,#0",
+	[(set (f64 GRegs:$rd), fpimm0:$imm)]>
+	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
 def FMOVrk : ALU_RRR<0b000, 0b111,
 	(outs GRegs:$rd), (ins fpimmi5:$imm),
 	"cvtsd\t$rd,#$imm",

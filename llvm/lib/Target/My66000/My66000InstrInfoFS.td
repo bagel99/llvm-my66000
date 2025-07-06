@@ -112,21 +112,22 @@ def FNEGF : ALU_DR<0b110001, 0b10111,
 	"faddf\t$rd,#0,-$rs2",
 	[(set FSRegs:$rd, (fneg (f32 FSRegs:$rs2)))]>;
 
-def       : Pat<(fmul (f32 FSRegs:$rs1), (fneg (f32 FSRegs:$rs2))),
-		(FMULFrn FSRegs:$rs1, FSRegs:$rs2)>;
-def       : Pat<(fdiv (f32 FSRegs:$rs1), (fneg (f32 FSRegs:$rs2))),
-		(FDIVFrn FSRegs:$rs1, FSRegs:$rs2)>;
-def       : Pat<(fdiv (fneg (f32 FSRegs:$rs1)), (f32 FSRegs:$rs2)),
-		(FDIVFnr FSRegs:$rs1, FSRegs:$rs2)>;
-
+// Non-commutative ops with constants on the left
+def FSUBFkr : ALU_DR<0b110001, 0b10101,
+	(outs FSRegs:$rd), (ins fsimmpi5:$imm, FSRegs:$rs2),
+	"fadd\t$rd,#$imm,-$rs2",
+	[(set FSRegs:$rd, (fsub fsimmpi5:$imm, (f32 FSRegs:$rs2)))]>;
+def FSUBFfr : ALU_DR<0b110001, 0b10101,
+	(outs FSRegs:$rd), (ins fpimm32:$imm, FSRegs:$rs2),
+	"fadd\t$rd,#$imm,-$rs2",
+	[(set FSRegs:$rd, (fsub fpimm32:$imm, (f32 FSRegs:$rs2)))]>;
 
 multiclass FMAFrrr<bits<3> OpC, bits<3>Flags, SDPatternOperator OpNode> {
   def rr : ALU_RRR<OpC, Flags,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, FSRegs:$rs3),
 	"fmacf\t$rd,$rs1,$rs2,$rs3",
 	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), (f32 FSRegs:$rs2),
-				  (f32 FSRegs:$rs3)))]>
-;
+				  (f32 FSRegs:$rs3)))]>;
   def rn : ALU_RRR<0b000, 0b001,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, FSRegs:$rs3),
 	"fmacf\t$rd,$rs1,$rs2,-$rs3",
@@ -187,6 +188,11 @@ def FRACTFr : R1<0b000111, 0b00000,
 
 // Moves
 let isAsCheapAsAMove = 1 in {
+def FMOVFrz : ALU_RRR<0b000, 0b111,
+	(outs FSRegs:$rd), (ins fpimm32:$imm),
+	"mov\t$rd,#0",
+	[(set (f32 FSRegs:$rd), fpimm0:$imm)]>
+	{ let rs1 = 0b00000; let rs2 = 0b00000; let rs3 = 0b00000; }
 def FMOVFrk : ALU_RRR<0b000, 0b111,
 	(outs FSRegs:$rd), (ins fsimmi5:$imm),
 	"cvtsf\t$rd,#$imm",
