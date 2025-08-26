@@ -109,7 +109,7 @@ private:
   bool tryRotateI(SDNode *N, SDNode *NOR, unsigned Width);
   bool tryRotateR(SDNode *N, SDNode *NOR, unsigned Width);
   bool trySLLmask(SDNode *N, uint64_t Imm);
-  bool trySLA(SDNode *N, unsigned Width);
+  bool trySRA(SDNode *N, unsigned Width);
   bool tryOR(SDNode *N);
   bool tryAND(SDNode *N);
   bool trySex(SDNode *N);
@@ -553,26 +553,20 @@ LLVM_DEBUG(dbgs() << "\tmasked static shift left w=" << Width << " o=" << Shfimm
   return false;
 }
 
-// Found SexReg(SLL(..))
-bool My66000DAGToDAGISel::trySLA(SDNode *N, unsigned Width) {
+// Found SexReg(SRL(..))
+bool My66000DAGToDAGISel::trySRA(SDNode *N, unsigned Width) {
   SDLoc dl(N);
   uint64_t Shfimm = 0;
-LLVM_DEBUG(dbgs() << "Possible SLA\n");
+LLVM_DEBUG(dbgs() << "Possible SRA\n");
   if (isIntImmediate(N->getOperand(0).getOperand(1).getNode(), Shfimm)) {
-LLVM_DEBUG(dbgs() << "\tstatic shift left arith w=" << Width << " o=" << Shfimm << '\n');
+LLVM_DEBUG(dbgs() << "\tstatic shift right arith w=" << Width << " o=" << Shfimm << '\n');
     SDValue Ops[] = { N->getOperand(0).getOperand(0),
 		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
 		      CurDAG->getTargetConstant(Shfimm, dl, MVT::i64) };
-    CurDAG->SelectNodeTo(N, My66000::SLAri, MVT::i64, Ops);
-    return true;
-  } else {
-LLVM_DEBUG(dbgs() << "\tdynamic shift left arith w=" << Width << '\n');
-    SDValue Ops[] = { N->getOperand(0).getOperand(0),
-		      CurDAG->getTargetConstant(Width, dl, MVT::i64),
-		      N->getOperand(0).getOperand(1) };
-    CurDAG->SelectNodeTo(N, My66000::SLArr, MVT::i64, Ops);
+    CurDAG->SelectNodeTo(N, My66000::SRAri, MVT::i64, Ops);
     return true;
   }
+LLVM_DEBUG(dbgs() << "\tdynamic shift right arith not implemented\n");
   return false;
 }
 
@@ -644,19 +638,29 @@ LLVM_DEBUG(dbgs() << "\tbit clear idiom not implemented\n");
       }
     }
   } else if (isOpcWithIntImmediate(N, ISD::SRA, Shfimm)) {
-LLVM_DEBUG(dbgs() << "\tSRA extract not implemented\n");
-/*
     uint64_t Shf2imm;
     if (isOpcWithIntImmediate(N->getOperand(0).getNode(), ISD::SHL, Shf2imm)) {
-LLVM_DEBUG(dbgs() << "\tsigned extract pattern #4: w=" << Shfimm <<  " o=" << Shf2imm << "\n");
+      unsigned Width = 64-Shfimm;
+LLVM_DEBUG(dbgs() << "\tSRA extract\n");
+      unsigned Offset = Shfimm - Shf2imm;
       SDValue Ops[] = { N->getOperand(0).getOperand(0),
-                        CurDAG->getTargetConstant(Shfimm, dl, MVT::i64),
-                        CurDAG->getTargetConstant(Shf2imm, dl, MVT::i64) };
+                        CurDAG->getTargetConstant(Width, dl, MVT::i64),
+                        CurDAG->getTargetConstant(Offset, dl, MVT::i64) };
       CurDAG->SelectNodeTo(N, My66000::SRAri, MVT::i64, Ops);
       return true;
-*/
-  } else if (N->getOpcode() == ISD::SRL) {
-LLVM_DEBUG(dbgs() << "\tSRL extract not implemented\n");
+    }
+  } else if (isOpcWithIntImmediate(N, ISD::SRL, Shfimm)) {
+    if (isOpcWithIntImmediate(N->getOperand(0).getNode(), ISD::AND, Andimm)) {
+      unsigned Width;
+      if (isMask(Andimm >> Shfimm, Width)) {
+LLVM_DEBUG(dbgs() << "\tSRL extract\n");
+	SDValue Ops[] = { N->getOperand(0).getOperand(0),
+			  CurDAG->getTargetConstant(Width, dl, MVT::i64),
+			  CurDAG->getTargetConstant(Shfimm, dl, MVT::i64) };
+	CurDAG->SelectNodeTo(N, My66000::SRLri, MVT::i64, Ops);
+	return true;
+      }
+    }
   }
   return false;
 }
@@ -707,8 +711,8 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryInsert " << N->getOperationName(0)
 bool My66000DAGToDAGISel::trySex(SDNode *N) {
   SDLoc dl(N);
   unsigned Width = cast<VTSDNode>(N->getOperand(1))->getVT().getSizeInBits();
-  if (N->getOperand(0).getOpcode() == ISD::SHL) {
-    if (trySLA(N, Width))
+  if (N->getOperand(0).getOpcode() == ISD::SRL) {
+    if (trySRA(N, Width))
       return true;
   }
 LLVM_DEBUG(dbgs() << "Sign extend pattern: w=" << Width << "\n");

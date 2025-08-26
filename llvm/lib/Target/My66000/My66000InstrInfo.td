@@ -242,6 +242,9 @@ multiclass NOPrr<string OpName, bits<6>OpC, bits<5>Flags,
 }
 defm UDIV : NOPrr<"div",  0b100010, 0b00000, udiv>;
 defm SDIV : NOPrr<"divs", 0b100010, 0b00010, sdiv>;
+defm SRL  : NOPrr<"srl",  0b100010, 0b00000, srl>;
+defm SRA  : NOPrr<"sra",  0b100010, 0b00000, sra>;
+defm SLL  : NOPrr<"sll",  0b100010, 0b00000, shl>;
 let isCompare = 1 in {
 defm CMP  : NOPrr<"cmp",  0b100100, 0b00000, myCMP>;
 }

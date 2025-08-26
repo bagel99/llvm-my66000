@@ -22,6 +22,7 @@ class My66000ABIInfo : public ABIInfo {
 public:
   My66000ABIInfo(CodeGenTypes &CGT) : ABIInfo(CGT) {}
 
+  bool isPromotableTypeForABI(QualType Ty) const;
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy) const;
   bool isHomogeneousAggregateBaseType(QualType Ty) const override;
@@ -33,45 +34,79 @@ public:
 };
 } // end anonymous namespace
 
+// Return true if the ABI requires Ty to be passed sign- or zero-
+// extended to 64 bits.
+bool
+My66000ABIInfo::isPromotableTypeForABI(QualType Ty) const {
+  // Treat an enum type as its underlying type.
+  if (const EnumType *EnumTy = Ty->getAs<EnumType>())
+    Ty = EnumTy->getDecl()->getIntegerType();
+
+  // Promotable integer types are required to be promoted by the ABI.
+  if (isPromotableIntegerTypeForABI(Ty))
+    return true;
+
+  // In addition to the usual promotable integer types, we also need to
+  // extend all 32-bit types, since the ABI requires promotion to 64 bits.
+  if (const BuiltinType *BT = Ty->getAs<BuiltinType>())
+    switch (BT->getKind()) {
+    case BuiltinType::Int:
+    case BuiltinType::UInt:
+      return true;
+    default:
+      break;
+    }
+
+  if (const auto *EIT = Ty->getAs<BitIntType>())
+    if (EIT->getNumBits() < 64)
+      return true;
+
+  return false;
+}
+
 ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
 
-  if (!isAggregateTypeForABI(Ty)) {
-    if (const EnumType *EnumTy = Ty->getAs<EnumType>())
-      Ty = EnumTy->getDecl()->getIntegerType();
-
-    if (const auto *EIT = Ty->getAs<BitIntType>())
-      if (EIT->getNumBits() > 128)
-        return getNaturalAlignIndirect(Ty);
-
+  if (Ty->isAnyComplexType())
     return ABIArgInfo::getDirect();
-  }
 
-  const Type *Base = nullptr;
-  uint64_t Members = 0;
-  if (isHomogeneousAggregate(Ty, Base, Members)) {
-    unsigned Align =
-        getContext().getTypeUnadjustedAlignInChars(Ty).getQuantity();
-    Align = (Align >= 16) ? 16 : 8;
-    return ABIArgInfo::getDirect(
-        llvm::ArrayType::get(CGT.ConvertType(QualType(Base, 0)), Members), 0,
-        nullptr, true, Align);
-  }
+  if (const auto *EIT = Ty->getAs<BitIntType>())
+    if (EIT->getNumBits() > 128)
+      return getNaturalAlignIndirect(Ty, /*ByVal=*/true);
 
-  uint64_t Size = getContext().getTypeSize(Ty);
-  // Aggregates <= 16 bytes are passed directly in registers or on the stack.
-  if (Size <= 128) {
-    unsigned Alignment = getContext().getTypeAlign(Ty);
-    Size = llvm::alignTo(Size, Alignment);
+  if (isAggregateTypeForABI(Ty)) {
+    uint64_t ABIAlign = 8;	// FIXME - is this correct?
+    uint64_t TyAlign = getContext().getTypeAlignInChars(Ty).getQuantity();
+    // If an aggregate may end up fully in registers, we do not
+    // use the ByVal method, but pass the aggregate as array.
+    // This is usually beneficial since we avoid forcing the
+    // back-end to store the argument to memory.
+    uint64_t Bits = getContext().getTypeSize(Ty);
+    if (Bits > 0 && Bits <= 8 * 64) {
+      llvm::Type *CoerceTy;
 
-    // We use a pair of i64 for 16-byte aggregate with 8-byte alignment.
-    // For aggregates with 16-byte alignment, we use i128.
-    llvm::Type *BaseTy = llvm::Type::getIntNTy(getVMContext(), Alignment);
-    return ABIArgInfo::getDirect(
-        Size == Alignment ? BaseTy
-                          : llvm::ArrayType::get(BaseTy, Size / Alignment));
+      // Types up to 8 bytes are passed as integer type (which will be
+      // properly aligned in the argument save area doubleword).
+      if (Bits <= 64)
+        CoerceTy =
+            llvm::IntegerType::get(getVMContext(), llvm::alignTo(Bits, 8));
+      // Larger types are passed as arrays, with the base type selected
+      // according to the required alignment in the save area.
+      else {
+        uint64_t RegBits = ABIAlign * 8;
+        uint64_t NumRegs = llvm::alignTo(Bits, RegBits) / RegBits;
+        llvm::Type *RegTy = llvm::IntegerType::get(getVMContext(), RegBits);
+        CoerceTy = llvm::ArrayType::get(RegTy, NumRegs);
+      }
+      return ABIArgInfo::getDirect(CoerceTy);
+    }
+    // All other aggregates are passed ByVal.
+    return ABIArgInfo::getIndirect(CharUnits::fromQuantity(ABIAlign),
+                                   /*ByVal=*/true,
+                                   /*Realign=*/TyAlign > ABIAlign);
   }
-  return getNaturalAlignIndirect(Ty, /*ByVal=*/false);
+  return (isPromotableTypeForABI(Ty) ? ABIArgInfo::getExtend(Ty)
+                                     : ABIArgInfo::getDirect());
 }
 
 ABIArgInfo My66000ABIInfo::classifyReturnType(QualType RetTy) const {
@@ -79,40 +114,44 @@ ABIArgInfo My66000ABIInfo::classifyReturnType(QualType RetTy) const {
   if (RetTy->isVoidType())
     return ABIArgInfo::getIgnore();
 
- if (!isAggregateTypeForABI(RetTy)) {
-    // Treat an enum type as its underlying type.
-    if (const EnumType *EnumTy = RetTy->getAs<EnumType>())
-      RetTy = EnumTy->getDecl()->getIntegerType();
-
-    if (const auto *EIT = RetTy->getAs<BitIntType>())
-      if (EIT->getNumBits() > 128)
-        return getNaturalAlignIndirect(RetTy);
-
-    return ABIArgInfo::getDirect();
-  }
-
-  const Type *Base = nullptr;
-  uint64_t Members = 0;
-  if (isHomogeneousAggregate(RetTy, Base, Members))
-    // Homogeneous Floating-point Aggregates (HFAs) are returned directly.
+  if (RetTy->isAnyComplexType())
     return ABIArgInfo::getDirect();
 
-  uint64_t Size = getContext().getTypeSize(RetTy);
-  // Aggregates <= 16 bytes are returned directly in registers or on the stack.
-  if (Size <= 128) {
-    unsigned Alignment = getContext().getTypeAlign(RetTy);
-    Size = llvm::alignTo(Size, Alignment);
+  if (const auto *EIT = RetTy->getAs<BitIntType>())
+    if (EIT->getNumBits() > 128)
+      return getNaturalAlignIndirect(RetTy);
 
-    // We use a pair of i64 for 16-byte aggregate with 8-byte alignment.
-    // For aggregates with 16-byte alignment, we use i128.
-    if (Alignment < 128 && Size == 128) {
-      llvm::Type *BaseTy = llvm::Type::getInt64Ty(getVMContext());
-      return ABIArgInfo::getDirect(llvm::ArrayType::get(BaseTy, Size / 64));
+  if (isAggregateTypeForABI(RetTy)) {
+    // homogeneous aggregates are returned as array types.
+    const Type *Base = nullptr;
+    uint64_t Members = 0;
+    if (isHomogeneousAggregate(RetTy, Base, Members)) {
+      llvm::Type *BaseTy = CGT.ConvertType(QualType(Base, 0));
+      llvm::Type *CoerceTy = llvm::ArrayType::get(BaseTy, Members);
+      return ABIArgInfo::getDirect(CoerceTy);
     }
-    return ABIArgInfo::getDirect(llvm::IntegerType::get(getVMContext(), Size));
-  }
 
-  return getNaturalAlignIndirect(RetTy);
+    // small aggregates are returned in up to two registers.
+    uint64_t Bits = getContext().getTypeSize(RetTy);
+    if (Bits <= 2 * 64) {
+      if (Bits == 0)
+        return ABIArgInfo::getIgnore();
+
+      llvm::Type *CoerceTy;
+      if (Bits > 64) {
+        CoerceTy = llvm::IntegerType::get(getVMContext(), 64);
+        CoerceTy = llvm::StructType::get(CoerceTy, CoerceTy);
+      } else
+        CoerceTy =
+            llvm::IntegerType::get(getVMContext(), llvm::alignTo(Bits, 8));
+      return ABIArgInfo::getDirect(CoerceTy);
+    }
+
+    // All other aggregates are returned indirectly.
+    return getNaturalAlignIndirect(RetTy);
+  }
+  return (isPromotableTypeForABI(RetTy) ? ABIArgInfo::getExtend(RetTy)
+                                        : ABIArgInfo::getDirect());
 }
 
 bool My66000ABIInfo::isHomogeneousAggregateBaseType(QualType Ty) const {

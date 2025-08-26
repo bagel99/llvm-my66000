@@ -582,13 +582,14 @@ LLVM_DEBUG(dbgs() << "optimizeIntCmp\n");
   ISD::CondCode CC = oldCC;
   uint64_t imm;
   if (isIntImmediate(RHS.getNode(), imm)) {
+LLVM_DEBUG(dbgs() << "\timm=" << (int64_t)imm << '\n');
     if (isa<LoadSDNode>(LHS) &&
         cast<LoadSDNode>(LHS)->getExtensionType() == ISD::ZEXTLOAD) {
       EVT VT = cast<LoadSDNode>(LHS)->getMemoryVT();
       if (VT == MVT::i32) {
 	int32_t ValueofRHS = cast<ConstantSDNode>(RHS)->getZExtValue();
 	if (ValueofRHS < 0) {
-LLVM_DEBUG(dbgs() << "Sign extend LHS load 32\n");
+LLVM_DEBUG(dbgs() << "\tsign extend LHS load 32\n");
 	  LHS = DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, MVT::i64, LHS,
 			    DAG.getValueType(MVT::i32));
 	  RHS = DAG.getConstant(ValueofRHS, dl, RHS.getValueType());
@@ -596,7 +597,7 @@ LLVM_DEBUG(dbgs() << "Sign extend LHS load 32\n");
       } else if (VT == MVT::i16) {
 	int16_t ValueofRHS = cast<ConstantSDNode>(RHS)->getZExtValue();
 	if (ValueofRHS < 0) {
-LLVM_DEBUG(dbgs() << "Sign extend LHS load 16\n");
+LLVM_DEBUG(dbgs() << "\tsign extend LHS load 16\n");
 	  LHS = DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, MVT::i64, LHS,
 			    DAG.getValueType(MVT::i16));
 	  RHS = DAG.getConstant(ValueofRHS, dl, RHS.getValueType());
@@ -604,20 +605,31 @@ LLVM_DEBUG(dbgs() << "Sign extend LHS load 16\n");
       } else if (VT == MVT::i8) {
 	int8_t ValueofRHS = cast<ConstantSDNode>(RHS)->getZExtValue();
 	if (ValueofRHS < 0) {
-LLVM_DEBUG(dbgs() << "Sign extend LHS load 8\n");
+LLVM_DEBUG(dbgs() << "\tsign extend LHS load 8\n");
 	  LHS = DAG.getNode(ISD::SIGN_EXTEND_INREG, dl, MVT::i64, LHS,
 			    DAG.getValueType(MVT::i8));
 	  RHS = DAG.getConstant(ValueofRHS, dl, RHS.getValueType());
 	}
       }
     }
-    if (CC == ISD::SETLT && isOneConstant(RHS)) {
-LLVM_DEBUG(dbgs() << "Convert LT 1 into LE 0\n");
-      RHS = DAG.getConstant(0, dl, MVT::i64);
+    // Fix unhelpful optimization that converted negated operand
+    if (LHS.getOpcode() == ISD::ADD && isAllOnesConstant(LHS.getOperand(1))) {
+LLVM_DEBUG(dbgs() << "\tconvert LHS is ADD of -1\n");
+	imm = -imm - 1;	// might be used in subsequent fixuup
+	LHS = DAG.getNode(ISD::SUB, dl, MVT::i64,
+			  DAG.getConstant(0, dl, MVT::i64),
+			  LHS.getOperand(0));
+	RHS = DAG.getConstant(imm, dl, MVT::i64);
+	CC = ISD::getSetCCSwappedOperands(CC);
+    }
+    // Fix unhelpful optimization that preferred LT and GT and shrink constant
+    if (CC == ISD::SETLT && (int64_t)imm > 0) {
+LLVM_DEBUG(dbgs() << "\tconvert LT x into LE x-1 (x > 0)\n");
+      RHS = DAG.getConstant(imm-1, dl, MVT::i64);
       CC = ISD::SETLE;
-    } else if (CC == ISD::SETGT && isAllOnesConstant(RHS)) {
-LLVM_DEBUG(dbgs() << "Convert GT -1 into GE 0\n");
-      RHS = DAG.getConstant(0, dl, MVT::i64);
+    } else if (CC == ISD::SETGT && (int64_t)imm < 0) {
+LLVM_DEBUG(dbgs() << "\tconvert GT x into GE x+1 (x < 0)\n");
+      RHS = DAG.getConstant(imm+1, dl, MVT::i64);
       CC = ISD::SETGE;
     }
   }
