@@ -76,7 +76,6 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
   void addPreRegAlloc() override;
-  void addMachineLateOptimization() override;
   void addPreSched2() override;
 
 };
@@ -117,9 +116,6 @@ void My66000PassConfig::addPreRegAlloc() {
   initializeMy66000VVMLoopPass(*PassRegistry::getPassRegistry());
   insertPass(&RegisterCoalescerID, &My66000VVMLoopID);
   insertPass(&My66000VVMLoopID, &DeadMachineInstructionElimID);
-}
-
-void My66000PassConfig::addMachineLateOptimization() {
 }
 
 // Predication pass must be done after COPY pseudos lowered
