@@ -76,6 +76,7 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
   void addPreRegAlloc() override;
+  void addMachineLateOptimization() override;
   void addPreSched2() override;
 
 };
@@ -116,6 +117,25 @@ void My66000PassConfig::addPreRegAlloc() {
   initializeMy66000VVMLoopPass(*PassRegistry::getPassRegistry());
   insertPass(&RegisterCoalescerID, &My66000VVMLoopID);
   insertPass(&My66000VVMLoopID, &DeadMachineInstructionElimID);
+}
+
+void My66000PassConfig::addMachineLateOptimization() {
+  // Cleanup of redundant immediate/address loads.
+  addPass(&MachineLateInstrsCleanupID);
+
+  // Branch folding must be run after regalloc and prolog/epilog insertion.
+  addPass(&BranchFolderPassID);
+
+  // Tail duplication.
+  // Note that duplicating tail just increases code size and degrades
+  // performance for targets that require Structured Control Flow.
+  // In addition it can also make CFG irreducible. Thus we disable it.
+//  if (!TM->requiresStructuredCFG())
+    addPass(&TailDuplicateID);
+
+  // Copy propagation.
+  // FIXME - this breaks things, deletes returned value
+//  addPass(&MachineCopyPropagationID);
 }
 
 // Predication pass must be done after COPY pseudos lowered

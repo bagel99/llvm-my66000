@@ -219,14 +219,22 @@ def MUXFSrrw :  ALU_RRR<0b001, 0b100,
 	[(set (f32 FSRegs:$rd), (myMUX fpimm32:$imm, FSRegs:$rs1, GRegs:$rs3))]>;
 
 // Converts
-def CVTfd : CVT<0b010001, 0b00000,
+def CVTfdr : CVT<0b010001, 0b00000,
 	(outs GRegs:$rd), (ins FSRegs:$rs1),
 	"cvtfd\t$rd,$rs1",
 	[(set (f64 GRegs:$rd), (fpextend (f32 FSRegs:$rs1)))]>;
-def CVTdf : CVT<0b110001, 0b00000,
+def CVTfdn : CVT<0b010001, 0b00000,
+	(outs GRegs:$rd), (ins FSRegs:$rs1),
+	"cvtfd\t$rd,-$rs1",
+	[(set (f64 GRegs:$rd), (fpextend (fneg (f32 FSRegs:$rs1))))]>;
+def CVTdfr : CVT<0b110001, 0b00000,
 	(outs FSRegs:$rd), (ins GRegs:$rs1),
 	"cvtdf\t$rd,$rs1",
 	[(set (f32 FSRegs:$rd), (fpround (f64 GRegs:$rs1)))]>;
+def CVTdfn : CVT<0b110001, 0b00000,
+	(outs FSRegs:$rd), (ins GRegs:$rs1),
+	"cvtdf\t$rd,-$rs1",
+	[(set (f32 FSRegs:$rd), (fneg (fpround (f64 GRegs:$rs1))))]>;
 def CVTuf : CVT<0b110000, 0b00000,
 	(outs FSRegs:$rd), (ins GRegs:$rs1),
 	"cvtuf\t$rd,$rs1",

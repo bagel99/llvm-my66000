@@ -68,7 +68,7 @@ def SDT_BRcond :	SDTypeProfile<0, 3, [SDTCisVT<0, OtherVT>,
 def SDT_BRcc :		SDTypeProfile<0, 3, [SDTCisVT<0, OtherVT>,
 					     SDTCisVT<1, i64>,
 					     SDTCisVT<2, i64>]>;
-def SDT_CALL : 		SDTypeProfile<0, 1, [SDTCisPtrTy<0>]>;
+def SDT_CALL : 		SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
 def SDT_BR_JT :		SDTypeProfile<0, 4, [SDTCisVT<0, i64>,
 					     SDTCisVT<1, i64>,
 					     SDTCisVT<2, i64>,
@@ -720,37 +720,11 @@ def BRU : BR<0b011110,
 	[(br bb:$adr)]>;
 }
 
-// Jump tables.
-def InlineJT8 : Operand<i64> {
-  let PrintMethod = "printInlineJT8";
-}
-def InlineJT16 : Operand<i64> {
-  let PrintMethod = "printInlineJT16";
-}
-def InlineJT32 : Operand<i64> {
-  let PrintMethod = "printInlineJT32";
-}
-
 let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1 in {
 def BRI : Simple<0b001101, 0b00000000000100000000000000,
        (outs), (ins GRegs:$rs),
        "jmp\t$rs",
        [(brind GRegs:$rs)]>;
-}
-// Because JTx can fall through (if out of range) what should we do?
-let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1 in {
-def JT8 : Pseudo<
-	(outs), (ins InlineJT8:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
-	"jttb\t$i,#$n\n$t",
-	[(myJT8 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
-def JT16 : Pseudo<
-	(outs), (ins InlineJT16:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
-	"jtth\t$i,#$n\n$t",
-	[(myJT16 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
-def JT32 : Pseudo<
-	(outs), (ins InlineJT32:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
-	"jttw\t$i,#$n\n$t",
-	[(myJT32 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
 }
 
 let isBranch = 1, isTerminator = 1 in {
@@ -772,23 +746,63 @@ def BBIT : BB<0b01100,
 	[(myBRbit bb:$adr, GRegs:$rs1, shfamt:$bit)]>;
 }
 
+// Jump tables.
+def InlineJT8 : Operand<i64> {
+  let PrintMethod = "printInlineJT8";
+}
+def InlineJT16 : Operand<i64> {
+  let PrintMethod = "printInlineJT16";
+}
+def InlineJT32 : Operand<i64> {
+  let PrintMethod = "printInlineJT32";
+}
+
+// Because JTx can fall through (if out of range) what should we do?
+let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1 in {
+def JT8 : Pseudo<
+	(outs), (ins InlineJT8:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
+	"jttb\t$i,#$n\n$t",
+	[(myJT8 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
+def JT16 : Pseudo<
+	(outs), (ins InlineJT16:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
+	"jtth\t$i,#$n\n$t",
+	[(myJT16 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
+def JT32 : Pseudo<
+	(outs), (ins InlineJT32:$t, GRegs:$i, i64imm:$n, brtarget:$dft),
+	"jttw\t$i,#$n\n$t",
+	[(myJT32 tjumptable:$t, GRegs:$i, uimm16:$n, bb:$dft)]>;
+}
+
 let isCall = 1, isBarrier = 1, Defs = [R0] in {
 def CALL :  BR<0b011111,
 	(outs), (ins calltarget:$adr),
 	"call\t$adr",
 	[(myCALL tglobaladdr:$adr)]>;
-def CALLI : HR<0b00000, 0b10,
+let mayLoad = 1 in {
+def CALLXri : LDST_RX<0b100011, 0b00000,
+	(outs), (ins MEMri:$addr),
+	"calx\t[$addr]",
+	[]>;
+def CALLXrr : LDST_RX<0b100011, 0b00000,
+	(outs), (ins MEMrr:$addr),
+	"calx\t[$addr]",
+	[]>;
+}
+def CALLA : HR<0b00000, 0b10,
 	(outs), (ins GRegs:$rs),
-	"calli\t$rs",
+	"cala\t[$rs]",
 	[(myCALLI i64:$rs)]>;
 }
+def : Pat<(myCALL texternalsym:$adr), (CALL texternalsym:$adr)>;
+def : Pat<(myCALLI (load ADDRri:$addr)), (CALLXri ADDRri:$addr)>;
+def : Pat<(myCALLI (load ADDRrr:$addr)), (CALLXrr ADDRrr:$addr)>;
+
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 def TAIL :  BR<0b011110,
 	(outs), (ins calltarget:$adr),
 	"br\t$adr",
 	[(myTAIL tglobaladdr:$adr)]>;
 }
-def : Pat<(myCALL texternalsym:$adr), (CALL texternalsym:$adr)>;
 def : Pat<(myTAIL texternalsym:$adr), (TAIL texternalsym:$adr)>;
 def : Pat<(myTAILI GRegs:$rs), (BRI GRegs:$rs)>;
 
