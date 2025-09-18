@@ -39,12 +39,14 @@ static const Register SPReg = My66000::SP;
 bool My66000FrameLowering::hasFP(const MachineFunction &MF) const {
   const TargetRegisterInfo *RegInfo = MF.getSubtarget().getRegisterInfo();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
+/*
 LLVM_DEBUG(dbgs() << "My66000FrameLowering::hasFP: "
 << MF.getTarget().Options.DisableFramePointerElim(MF)
 << RegInfo->hasStackRealignment(MF)
 << MFI.hasVarSizedObjects()
 << MFI.isFrameAddressTaken()
 << '\n');
+*/
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
          RegInfo->hasStackRealignment(MF) || MFI.hasVarSizedObjects() ||
          MFI.isFrameAddressTaken();
@@ -54,9 +56,11 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::hasFP: "
 void My66000FrameLowering::determineFrameLayout(MachineFunction &MF) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
   const My66000RegisterInfo *RI = STI.getRegisterInfo();
+LLVM_DEBUG(dbgs() << "determineFrameLayout\n");
 
   // Get the number of bytes to allocate from the FrameInfo.
   uint64_t FrameSize = MFI.getStackSize();
+LLVM_DEBUG(dbgs() << "\tinitialStackSize=" << FrameSize << '\n');
 
   // Get the alignment.
   Align StackAlign = getStackAlign();
@@ -75,6 +79,7 @@ void My66000FrameLowering::determineFrameLayout(MachineFunction &MF) const {
 
   // Update frame info.
   MFI.setStackSize(FrameSize);
+LLVM_DEBUG(dbgs() << "\tfinalStackSize=" << FrameSize << '\n');
 }
 
 void My66000FrameLowering::adjustReg(MachineBasicBlock &MBB,
@@ -102,7 +107,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::adjustReg: " << Val << "\n");
 
 void My66000FrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
-LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
+LLVM_DEBUG(dbgs() << "emitPrologue: " << MF.getName() << '\n');
   assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -121,6 +126,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
   // FIXME (note copied from Lanai): This appears to be overallocating.  Needs
   // investigation. Get the number of bytes to allocate from the FrameInfo.
   uint64_t StackSize = MFI.getStackSize();
+LLVM_DEBUG(dbgs() << "\tStackSize=" << StackSize << '\n');
   // Early exit if there is no need to allocate on the stack
   // FIXME - varargsregs?
   if (StackSize == 0 && !MFI.adjustsStack())
@@ -148,21 +154,23 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
     NSave += 1;
   }
   if (NSave == 1) LoReg = HiReg;
+LLVM_DEBUG(dbgs() << "\tNSave=" << NSave << '\n');
   My66000FunctionInfo *XFI = MF.getInfo<My66000FunctionInfo>();
-  XFI->setHiSavedReg(HiReg);	// save for epilogue
+  XFI->setHiSavedReg(HiReg);	// save for epilogue without vararg regs
   XFI->setLoSavedReg(LoReg);	// save for epilogue
   int64_t VarArgsSaveSize = XFI->getVarArgsSaveSize();
-  if (VarArgsSaveSize != 0)	// space for spilling varargs registers
-    adjustReg(MBB, MBBI, DL, SPReg, SPReg,
-	      -VarArgsSaveSize, MachineInstr::FrameSetup);
-  Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
-  if (NSave) {
+  if (VarArgsSaveSize != 0) {	// space for spilling varargs registers
+    if (NSave == 0)
+      LoReg = My66000::R1;
+    HiReg = My66000::R8;	// push R1-R8
+  }
+  Offset = StackSize - (NSave*8) - VarArgsSaveSize;
+  if (NSave != 0 || VarArgsSaveSize != 0) {
     bool isLive = MBB.isLiveIn(LoReg);
     unsigned flags = 0;	// default to don't save SP
     if (MFI.hasTailCall()) {
 	flags |= 1;	// tail call saving multiple registers, save SP also
     }
-    Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
     BuildMI(MBB, MBBI, DL, TII->get(My66000::ENTER))
 	      .addReg(LoReg, getKillRegState(!isLive))
 	      .addReg(HiReg, getKillRegState(!isLive))
@@ -175,7 +183,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitPrologue\n");
   }
   // Generate new FP.
   if (hasFP(MF)) {
-LLVM_DEBUG(dbgs() << "Prologue uses FP: " << MF.getName() << '\n');
+LLVM_DEBUG(dbgs() << "\tprologue uses FP: " << MF.getName() << '\n');
     // copy unadjusted SP to FP
     adjustReg(MBB, MBBI, DL, FPReg, SPReg, StackSize, MachineInstr::FrameSetup);
   }
@@ -183,7 +191,7 @@ LLVM_DEBUG(dbgs() << "Prologue uses FP: " << MF.getName() << '\n');
 
 void My66000FrameLowering::emitEpilogue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
-LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitEpilogue\n");
+LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitEpilogue "<< MF.getName() << '\n');
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   const My66000RegisterInfo *RI = STI.getRegisterInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -241,12 +249,13 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
   My66000FunctionInfo *XFI = MF.getInfo<My66000FunctionInfo>();
   Register HiReg = XFI->getHiSavedReg();
   Register LoReg = XFI->getLoSavedReg();
-  int64_t Offset = StackSize - (NSave*8) - XFI->getVarArgsSaveSize();
   int64_t VarArgsSaveSize = XFI->getVarArgsSaveSize();
+  int64_t Offset = StackSize - (NSave*8) - VarArgsSaveSize;
+  int64_t Recover = VarArgsSaveSize;	// reclaim at least this much stack
   if (NSave) {
     unsigned flags = 0;
     if (MFI.hasTailCall()) flags |= 5;	// restore to LR not IP, SP saved
-    if (VarArgsSaveSize != 0) flags |= 4;	// restore to LR
+    if (VarArgsSaveSize != 0) flags |= 4;      // restore to LR
     BuildMI(MBB, MBBI, DL, TII->get(My66000::EXIT))
 	      .addReg(LoReg, RegState::Define)
 	      .addReg(HiReg, RegState::Define)
@@ -255,11 +264,10 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
     if (!MFI.hasTailCall() && VarArgsSaveSize == 0)
 	MBB.erase(MBBI); 	// remove the return
   } else if (Offset != 0) {
-    adjustReg(MBB, MBBI, DL, SPReg, SPReg, Offset, MachineInstr::FrameSetup);
+    Recover += Offset;
   }
-  if (VarArgsSaveSize != 0)	// space for spilling varargs registers
-    adjustReg(MBB, MBBI, DL, SPReg, SPReg,
-	      VarArgsSaveSize, MachineInstr::FrameSetup);
+  if (Recover != 0)
+    adjustReg(MBB, MBBI, DL, SPReg, SPReg, Recover, MachineInstr::FrameSetup);
 /*
   // After restoring $sp, we need to adjust CFA to $(sp + 0)
   // Emit ".cfi_def_cfa_offset 0"

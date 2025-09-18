@@ -644,7 +644,7 @@ SDValue My66000TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   SDLoc dl(Op);
   unsigned inst;
   MYCB::CondBits CB;
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSETCC\n");
+LLVM_DEBUG(dbgs() << "LowerSETCC\n");
   if (LHS.getValueType().isInteger()) {
     // Check for cmpne (and ry,(shl 1,rx),0) which is a bit test
     // Turn it into (and (srl ry,rx),1)
@@ -683,7 +683,7 @@ SDValue My66000TargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) con
   SDLoc dl(Op);
   unsigned inst;
   MYCB::CondBits CB;
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSELECT_CC\n");
+LLVM_DEBUG(dbgs() << "LowerSELECT_CC\n");
   if (LHS.getValueType().isInteger()) {
     if (isNullConstant(RHS) && (CC == ISD::SETEQ || CC == ISD::SETNE)) {
       if (CC == ISD::SETEQ)
@@ -726,7 +726,7 @@ SDValue My66000TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   SDValue LHS = Op.getOperand(2);
   SDValue RHS = Op.getOperand(3);
   SDValue Dest = Op.getOperand(4);
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBR_CC CC=" << getCCName(CC) << '\n');
+LLVM_DEBUG(dbgs() << "LowerBR_CC CC=" << getCCName(CC) << '\n');
   SDLoc dl(Op);
   EVT VT = LHS.getValueType();
   if (VT.isInteger()) {
@@ -777,7 +777,7 @@ SDValue My66000TargetLowering::LowerSIGN_EXTEND_INREG(SDValue Op,
                                                   SelectionDAG &DAG) const {
   SDValue Op0 = Op.getOperand(0);
   SDLoc dl(Op);
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerSIGN_EXTEND_INREG\n");
+LLVM_DEBUG(dbgs() << "LowerSIGN_EXTEND_INREG\n");
   assert(Op.getValueType() == MVT::i64 && "Unhandled target sign_extend_inreg.");
   unsigned Width = cast<VTSDNode>(Op.getOperand(1))->getVT().getSizeInBits();
   return DAG.getNode(My66000::SRAri, dl, MVT::i64, Op0,
@@ -816,8 +816,7 @@ SDValue My66000TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
   bool &IsTailCall = CLI.IsTailCall;;
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerCall"
-		  << " TailCall=" << CLI.IsTailCall
+LLVM_DEBUG(dbgs() << "LowerCall" << " TailCall=" << CLI.IsTailCall
 		  << " VarArg=" << CLI.IsVarArg << '\n');
 
   MachineFunction &MF = DAG.getMachineFunction();
@@ -966,7 +965,7 @@ static SDValue lowerCallResult(SDValue Chain, SDValue Glue,
                                SDLoc dl, SelectionDAG &DAG,
                                SmallVectorImpl<SDValue> &InVals) {
   SmallVector<std::pair<int, unsigned>, 4> ResultMemLocs;
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::lowerCallResult"
+LLVM_DEBUG(dbgs() << "lowerCallResult"
 		  << " reg=" << RVLocs.size() << '\n');
   // Copy results out of physical registers.
   for (unsigned i = 0, e = RVLocs.size(); i != e; ++i) {
@@ -1034,9 +1033,9 @@ SDValue My66000TargetLowering::LowerFormalArguments(
     SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &dl,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
-
   MachineFunction &MF = DAG.getMachineFunction();
+LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
+
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
   My66000FunctionInfo *FI = MF.getInfo<My66000FunctionInfo>();
@@ -1110,39 +1109,21 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerFormalArguments\n");
     ArrayRef<MCPhysReg> ArgRegs = ArrayRef(ArgGPRs);
     auto *XFI = MF.getInfo<My66000FunctionInfo>();
     unsigned FirstVAReg = CCInfo.getFirstUnallocated(ArgGPRs);
-    LLVM_DEBUG(dbgs() << "\tIsVarArg FirstVAReg=" << FirstVAReg << '\n');
     LLVM_DEBUG(dbgs() << "\tFirstVAReg=" << FirstVAReg << '\n');
-    LLVM_DEBUG(dbgs() << "\tlengthof(ArgRegs)=" << ArgRegs.size() << '\n');
-    // Save remaining registers possibly containing varags.
-    int Offset;
-    int VaSaveSize = (ArgRegs.size() - FirstVAReg) * 8;
-    if (VaSaveSize == 0)
-      Offset = CCInfo.getStackSize();
-    else
-      Offset = -VaSaveSize;
-    // Record the frame index of the first variable argument
-    // which is a value necessary to VASTART.
+    LLVM_DEBUG(dbgs() << "\tNVarregs=" << ArgRegs.size() << '\n');
+    int Offset = -(8 * 8);
     int VaFI = MFI.CreateFixedObject(8, Offset, true);
-    XFI->setVarArgsFrameIndex(VaFI);
-    if (VaSaveSize > 0) {
-      // FIXME - use STM if more than one
-      for (unsigned i = FirstVAReg; i < ArgRegs.size(); i++) {
-        // Move argument from phys reg -> virt reg
-        unsigned VReg = RegInfo.createVirtualRegister(&My66000::GRegsRegClass);
-        RegInfo.addLiveIn(ArgRegs[i], VReg);
-        SDValue Val = DAG.getCopyFromReg(Chain, dl, VReg, MVT::i64);
-	VaFI = MFI.CreateFixedObject(8, Offset, true);
-	SDValue PtrOff = DAG.getFrameIndex(VaFI, MVT::i64);
-        // Move argument from virt reg -> stack
-        SDValue Store =
-            DAG.getStore(Chain, dl, Val, PtrOff, MachinePointerInfo());
-        cast<StoreSDNode>(Store.getNode())->getMemOperand()
-	    ->setValue((Value *)nullptr);
-        MemOps.push_back(Store);
-        Offset += 8;
-      }
-      XFI->setVarArgsSaveSize(VaSaveSize);
+    // All registers R1-R8 pushed by ENTER
+    for (unsigned i = 0; i < 8; i++) {
+      VaFI = MFI.CreateFixedObject(8, Offset, true);
+      if (i == FirstVAReg)
+	XFI->setVarArgsFrameIndex(VaFI);
+      Offset += 8;
     }
+    int VaSaveSize = 8 * 8;
+    LLVM_DEBUG(dbgs() << "\tVaSaveSize=" << VaSaveSize << '\n');
+    // But the AP has to point at the first saved VA reg
+    XFI->setVarArgsSaveSize(VaSaveSize);
   }
 
   // 2. Chain CopyFromReg nodes into a TokenFactor.
@@ -1179,6 +1160,32 @@ LLVM_DEBUG(dbgs() << "End LowerFormalArguments\n");
   return Chain;
 }
 
+/*
+ * The varargs stuff assumes the offset to the saved varargs
+ * is at the top (offset 0). But we save all the arg registers,
+ * so we have to figure out how far down the varargs starts.
+ */
+SDValue My66000TargetLowering::LowerVASTART(SDValue Op,
+					    SelectionDAG &DAG) const {
+LLVM_DEBUG(dbgs() << "LowerVASTART\n");
+  MachineFunction &MF = DAG.getMachineFunction();
+  auto *XFI = MF.getInfo<My66000FunctionInfo>();
+  SDLoc DL(Op);
+  SDValue FI = DAG.getFrameIndex(XFI->getVarArgsFrameIndex(),
+                                 getPointerTy(MF.getDataLayout()));
+LLVM_DEBUG(Op.getOperand(0).getNode()->dump(););
+LLVM_DEBUG(Op.getOperand(1).getNode()->dump(););
+LLVM_DEBUG(Op.getOperand(2).getNode()->dump(););
+LLVM_DEBUG(FI.getNode()->dump(););
+  // vastart just stores the address of the VarArgsFrameIndex slot into the
+  // memory location argument.
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  return DAG.getStore(Op.getOperand(0) /*chain*/, DL,
+		      FI/*Val*/, Op.getOperand(1)/*Ptr*/,
+                      MachinePointerInfo(SV)/*PtrInfo*/);
+}
+
+
 //===----------------------------------------------------------------------===//
 //               Return Value Calling Convention Implementation
 //===----------------------------------------------------------------------===//
@@ -1203,7 +1210,7 @@ My66000TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                const SDLoc &dl, SelectionDAG &DAG) const {
   auto *AFI = DAG.getMachineFunction().getInfo<My66000FunctionInfo>();
   MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerReturn\n");
+LLVM_DEBUG(dbgs() << "LowerReturn\n");
 
   // CCValAssign - represent the assignment of
   // the return value to a location
@@ -1332,7 +1339,7 @@ SDValue My66000TargetLowering::LowerFRAMEADDR(SDValue Op,
 
 SDValue My66000TargetLowering::LowerGlobalAddress(SDValue Op,
                                               SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerGlobalAddress\n");
+LLVM_DEBUG(dbgs() << "LowerGlobalAddress\n");
 
   const GlobalAddressSDNode *GN = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = GN->getGlobal();
@@ -1349,7 +1356,7 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerGlobalAddress\n");
 
 SDValue My66000TargetLowering::LowerBlockAddress(SDValue Op,
                                                  SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBlockAddress\n");
+LLVM_DEBUG(dbgs() << "LowerBlockAddress\n");
   const BlockAddressSDNode *Node = cast<BlockAddressSDNode>(Op);
   SDLoc DL(Node);
   const BlockAddress *BA = Node->getBlockAddress();
@@ -1367,7 +1374,7 @@ unsigned My66000TargetLowering::getJumpTableEncoding() const {
 
 SDValue My66000TargetLowering::LowerBR_JT(SDValue Op,
                                               SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBR_JT\n");
+LLVM_DEBUG(dbgs() << "LowerBR_JT\n");
   SDValue Chain = Op.getOperand(0);
   SDValue Table = Op.getOperand(1);
   SDValue Index = Op.getOperand(2);
@@ -1393,22 +1400,6 @@ LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerBR_JT\n");
   const auto &MBBs = MJTI->getJumpTables()[JTI].MBBs;
   SDValue DefMBB = DAG.getBasicBlock(*MBBs.begin());
   return DAG.getNode(OpCode, DL, MVT::Other, Chain, TargetJT, Index, Size, DefMBB);
-}
-
-SDValue My66000TargetLowering::LowerVASTART(SDValue Op,
-                                              SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerVASTART\n");
-  MachineFunction &MF = DAG.getMachineFunction();
-  auto *XFI = MF.getInfo<My66000FunctionInfo>();
-  SDLoc DL(Op);
-  SDValue FI = DAG.getFrameIndex(XFI->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout()));
-
-  // vastart just stores the address of the VarArgsFrameIndex slot into the
-  // memory location argument.
-  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
-  return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
-                      MachinePointerInfo(SV));
 }
 
 SDValue My66000TargetLowering::lowerFRAMEADDR(SDValue Op,
@@ -1488,7 +1479,7 @@ SDValue My66000TargetLowering::lowerBITCAST(SDValue Op,
 }
 
 SDValue My66000TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::LowerOperation: ");
+LLVM_DEBUG(dbgs() << "LowerOperation: ");
 LLVM_DEBUG(Op.dump());
   switch (Op.getOpcode()) {
   case ISD::BR_CC:			return LowerBR_CC(Op, DAG);
@@ -1511,7 +1502,7 @@ LLVM_DEBUG(Op.dump());
 void My66000TargetLowering::ReplaceNodeResults(SDNode *N,
 					       SmallVectorImpl<SDValue> &Results,
 		                               SelectionDAG &DAG) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::ReplaceNodeResults\n");
+LLVM_DEBUG(dbgs() << "ReplaceNodeResults\n");
   SDLoc DL(N);
   EVT VT = N->getValueType(0);
   switch (N->getOpcode()) {
@@ -1567,7 +1558,7 @@ static MachineBasicBlock *emitCPFS(MachineInstr &MI, MachineBasicBlock *BB) {
 MachineBasicBlock *My66000TargetLowering::EmitInstrWithCustomInserter(
 			MachineInstr &MI,
 			MachineBasicBlock *BB) const {
-LLVM_DEBUG(dbgs() << "My66000TargetLowering::EmitInstrWithCustomInserter\n");
+LLVM_DEBUG(dbgs() << "EmitInstrWithCustomInserter\n");
   switch (MI.getOpcode()) {
   default:
     llvm_unreachable("Unexpected instr type to insert");
