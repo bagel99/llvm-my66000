@@ -72,8 +72,12 @@ public:
   bool isAsCheapAsAMove(const MachineInstr &MI) const override;
 
   const My66000RegisterInfo &getRegisterInfo() const { return RI; }
+
+  bool isSEXTW(const MachineInstr &MI) const;
+
+  bool isZEXTW(const MachineInstr &MI) const;
 };
 
-}
+}  // end namespace llvm
 
 #endif

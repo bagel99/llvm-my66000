@@ -155,7 +155,7 @@ LLVM_DEBUG(dbgs() << "\tStackSize=" << StackSize << '\n');
   }
   if (NSave == 1) LoReg = HiReg;
 LLVM_DEBUG(dbgs() << "\tNSave=" << NSave << '\n');
-  My66000FunctionInfo *XFI = MF.getInfo<My66000FunctionInfo>();
+  My66000MachineFunctionInfo *XFI = MF.getInfo<My66000MachineFunctionInfo>();
   XFI->setHiSavedReg(HiReg);	// save for epilogue without vararg regs
   XFI->setLoSavedReg(LoReg);	// save for epilogue
   int64_t VarArgsSaveSize = XFI->getVarArgsSaveSize();
@@ -205,7 +205,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitEpilogue "<< MF.getName() << '\n
   // unknown.
   if (RI->hasStackRealignment(MF) || MFI.hasVarSizedObjects()) {
     assert(hasFP(MF) && "frame pointer should not have been eliminated");
-    auto *XFI = MF.getInfo<My66000FunctionInfo>();
+    auto *XFI = MF.getInfo<My66000MachineFunctionInfo>();
     uint64_t FPOffset = StackSize - XFI->getVarArgsSaveSize();
 LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
     adjustReg(MBB, MBBI, DL, SPReg, FPReg, -FPOffset,
@@ -246,7 +246,7 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
     NSave += 1;
   }
 
-  My66000FunctionInfo *XFI = MF.getInfo<My66000FunctionInfo>();
+  My66000MachineFunctionInfo *XFI = MF.getInfo<My66000MachineFunctionInfo>();
   Register HiReg = XFI->getHiSavedReg();
   Register LoReg = XFI->getLoSavedReg();
   int64_t VarArgsSaveSize = XFI->getVarArgsSaveSize();
@@ -300,7 +300,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::spillCalleeSavedRegisters\n");
     return true;
   MachineFunction *MF = MBB.getParent();
 //  const TargetInstrInfo &TII = *MF->getSubtarget().getInstrInfo();
-  My66000FunctionInfo *XFI = MF->getInfo<My66000FunctionInfo>();
+  My66000MachineFunctionInfo *XFI = MF->getInfo<My66000MachineFunctionInfo>();
   bool emitFrameMoves = My66000RegisterInfo::needsFrameMoves(*MF);
 
   DebugLoc DL;
@@ -334,7 +334,7 @@ getFrameIndexReference(const MachineFunction &MF, int FI,
 			    Register &FrameReg) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetRegisterInfo *RI = MF.getSubtarget().getRegisterInfo();
-  const auto *XFI = MF.getInfo<My66000FunctionInfo>();
+  const auto *XFI = MF.getInfo<My66000MachineFunctionInfo>();
 LLVM_DEBUG(dbgs() << "My66000FrameLowering::getFrameIndexReference\n");
 
   // Callee-saved registers should be referenced relative to the stack

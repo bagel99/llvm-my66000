@@ -376,3 +376,15 @@ bool My66000InstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   }
   return MI.isAsCheapAsAMove();
 }
+
+bool My66000InstrInfo::isSEXTW(const MachineInstr &MI) const {
+  return MI.getOpcode() == My66000::SRAri && MI.getOperand(1).isReg() &&
+    MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 32 &&
+    MI.getOperand(3).isImm() && MI.getOperand(3).getImm() == 0;
+}
+
+bool My66000InstrInfo::isZEXTW(const MachineInstr &MI) const {
+  return MI.getOpcode() == My66000::SRLri && MI.getOperand(1).isReg() &&
+    MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 32 &&
+    MI.getOperand(3).isImm() && MI.getOperand(3).getImm() == 0;
+}

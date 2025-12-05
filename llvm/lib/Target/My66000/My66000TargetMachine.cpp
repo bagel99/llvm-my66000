@@ -75,6 +75,7 @@ public:
 
   void addIRPasses() override;
   bool addInstSelector() override;
+  void addMachineSSAOptimization() override;
   void addPreRegAlloc() override;
   void addMachineLateOptimization() override;
   void addPreSched2() override;
@@ -90,7 +91,7 @@ TargetPassConfig *My66000TargetMachine::createPassConfig(PassManagerBase &PM) {
 MachineFunctionInfo *My66000TargetMachine::createMachineFunctionInfo(
     BumpPtrAllocator &Allocator, const Function &F,
     const TargetSubtargetInfo *STI) const {
-  return My66000FunctionInfo::create<My66000FunctionInfo>(Allocator, F, STI);
+  return My66000MachineFunctionInfo::create<My66000MachineFunctionInfo>(Allocator, F, STI);
 }
 
 void My66000PassConfig::addIRPasses() {
@@ -108,6 +109,10 @@ bool My66000PassConfig::addInstSelector() {
   addPass(createMy66000ISelDag(getMy66000TargetMachine(), getOptLevel()));
   addPass(createMy66000FixJumpTablePass());
   return false;
+}
+
+void My66000PassConfig::addMachineSSAOptimization() {
+    addPass(createMy66000OptWInstrsPass());
 }
 
 // Really would like to run Predicate before VVM.

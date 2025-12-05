@@ -131,6 +131,8 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::ROTR, MVT::i64, Legal);
   setOperationAction(ISD::ROTL, MVT::i64, Legal);
   setOperationAction(ISD::BSWAP, MVT::i64, Legal);
+  setOperationAction(ISD::UDIV, MVT::i64, Legal);
+  setOperationAction(ISD::SDIV, MVT::i64, Legal);
   // We don't have a modulo instruction use div+carry
   setOperationAction(ISD::UREM, MVT::i64, Expand);
   setOperationAction(ISD::SREM, MVT::i64, Expand);
@@ -138,15 +140,11 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::MULHU, MVT::i64, Expand);
   setOperationAction(ISD::MULHS, MVT::i64, Expand);
   if (!EnableCarry) {
-    setOperationAction(ISD::UDIV, MVT::i64, Legal);
-    setOperationAction(ISD::SDIV, MVT::i64, Legal);
     setOperationAction(ISD::UDIVREM, MVT::i64, Expand);
     setOperationAction(ISD::SDIVREM, MVT::i64, Expand);
     setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
     setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
   } else {  // Operations that require the CARRY instruction
-    setOperationAction(ISD::UDIV, MVT::i64, Expand);
-    setOperationAction(ISD::SDIV, MVT::i64, Expand);
     setOperationAction(ISD::UDIVREM, MVT::i64, Legal);
     setOperationAction(ISD::SDIVREM, MVT::i64, Legal);
     setOperationAction(ISD::UMUL_LOHI, MVT::i64, Legal);
@@ -164,7 +162,11 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i32, Legal);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Legal);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Legal);
-//  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Custom);
+  // Zero extend
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i32, Legal);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i16, Legal);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i8, Legal);
+
   for (MVT VT : MVT::integer_valuetypes()) {
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
@@ -713,11 +715,16 @@ LLVM_DEBUG(dbgs() << "LowerSELECT_CC\n");
     inst = My66000ISD::FCMP;
     CB = ISDCCtoMy66000CBF(CC);
   }
+#ifdef USE_MUX
+  unsigned OpExt = My66000ISD::EXTS;  unsigned OpMov = My66000ISD::MUX;
+#else
+  unsigned OpExt = My66000ISD::EXT;  unsigned OpMov = My66000ISD::CMOV;
+#endif
   SDValue Cmp = DAG.getNode(inst, dl, MVT::i64, LHS, RHS);
-  SDValue Ext = DAG.getNode(My66000ISD::EXTS, dl, MVT::i64, Cmp,
+  SDValue Ext = DAG.getNode(OpExt, dl, MVT::i64, Cmp,
 		     DAG.getConstant(1, dl, MVT::i64),
 		     DAG.getConstant(CB, dl, MVT::i64));
-  return DAG.getNode(My66000ISD::MUX, dl, TVal.getValueType(), TVal, FVal, Ext);
+  return DAG.getNode(OpMov, dl, TVal.getValueType(), TVal, FVal, Ext);
 }
 
 SDValue My66000TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
@@ -1038,7 +1045,7 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
-  My66000FunctionInfo *FI = MF.getInfo<My66000FunctionInfo>();
+  My66000MachineFunctionInfo *FI = MF.getInfo<My66000MachineFunctionInfo>();
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
@@ -1083,6 +1090,10 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
         RegInfo.addLiveIn(VA.getLocReg(), VReg);
         ArgIn = DAG.getCopyFromReg(Chain, dl, VReg, RegVT);
         CFRegNode.push_back(ArgIn.getValue(ArgIn->getNumValues() - 1));
+        if (Ins[i].Flags.isSExt())
+	    FI->addSExtRegister(VReg);
+        if (Ins[i].Flags.isZExt())
+	    FI->addZExtRegister(VReg);
       }
     } else {      		// Arguments passed in memory
       assert(VA.isMemLoc());      // sanity check
@@ -1107,7 +1118,7 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
   if (IsVarArg) {
     // Argument registers
     ArrayRef<MCPhysReg> ArgRegs = ArrayRef(ArgGPRs);
-    auto *XFI = MF.getInfo<My66000FunctionInfo>();
+    auto *XFI = MF.getInfo<My66000MachineFunctionInfo>();
     unsigned FirstVAReg = CCInfo.getFirstUnallocated(ArgGPRs);
     LLVM_DEBUG(dbgs() << "\tFirstVAReg=" << FirstVAReg << '\n');
     LLVM_DEBUG(dbgs() << "\tNVarregs=" << ArgRegs.size() << '\n');
@@ -1169,7 +1180,7 @@ SDValue My66000TargetLowering::LowerVASTART(SDValue Op,
 					    SelectionDAG &DAG) const {
 LLVM_DEBUG(dbgs() << "LowerVASTART\n");
   MachineFunction &MF = DAG.getMachineFunction();
-  auto *XFI = MF.getInfo<My66000FunctionInfo>();
+  auto *XFI = MF.getInfo<My66000MachineFunctionInfo>();
   SDLoc DL(Op);
   SDValue FI = DAG.getFrameIndex(XFI->getVarArgsFrameIndex(),
                                  getPointerTy(MF.getDataLayout()));
@@ -1208,7 +1219,7 @@ My66000TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                const SmallVectorImpl<ISD::OutputArg> &Outs,
                                const SmallVectorImpl<SDValue> &OutVals,
                                const SDLoc &dl, SelectionDAG &DAG) const {
-  auto *AFI = DAG.getMachineFunction().getInfo<My66000FunctionInfo>();
+  auto *AFI = DAG.getMachineFunction().getInfo<My66000MachineFunctionInfo>();
   MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
 LLVM_DEBUG(dbgs() << "LowerReturn\n");
 

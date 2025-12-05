@@ -384,7 +384,7 @@ void My66000InstPrinter::printFPkOperand(const MCInst *MI, unsigned opNum,
       n = ((t32 >> 19) & 0xF) | 0x10;		  // fraction plus hidden bit
 LLVM_DEBUG(dbgs() << "t32=" << format_hex(t32, 9, true) << '\n');
 LLVM_DEBUG(dbgs() << "exp=" << exp << " n1=" << n);
-      n >>= (4 - exp);
+      n >>= (3 - exp);
 LLVM_DEBUG(dbgs() << " n2=" << n << '\n');
       if ((int32_t)t32 < 0)
 	n = -n;
@@ -396,13 +396,13 @@ LLVM_DEBUG(dbgs() << " n2=" << n << '\n');
       n = ((t64 >> 48) & 0xF) | 0x10;		  // fraction plus hidden bit
 LLVM_DEBUG(dbgs() << "t64=" << format_hex(t64, 18, true) << '\n');
 LLVM_DEBUG(dbgs() << "exp=" << exp << " n1=" << n);
-      n >>= (4 - exp);
+      n >>= (3 - exp);
 LLVM_DEBUG(dbgs() << " n2=" << n << '\n');
       if ((int64_t)t64 < 0)
 	n = -n;
     }
   }
-  O << n;
+  O << n/2 << '.' << ((n&1)*5);
 }
 
 void My66000InstPrinter::printMEMriOperand(const MCInst *MI, unsigned opNum,

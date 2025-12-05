@@ -10,11 +10,31 @@
 
 using namespace llvm;
 
-void My66000FunctionInfo::anchor() { }
+#define DEBUG_TYPE "my66000-lower"
 
-MachineFunctionInfo *My66000FunctionInfo::clone(
+void My66000MachineFunctionInfo::anchor() { }
+
+MachineFunctionInfo *My66000MachineFunctionInfo::clone(
     BumpPtrAllocator &Allocator, MachineFunction &DestMF,
     const DenseMap<MachineBasicBlock *, MachineBasicBlock *> &Src2DstMBB)
     const {
-  return DestMF.cloneInfo< My66000FunctionInfo>(*this);
+  return DestMF.cloneInfo< My66000MachineFunctionInfo>(*this);
+}
+
+void My66000MachineFunctionInfo::addSExtRegister(Register Reg) {
+LLVM_DEBUG(dbgs() << "addSExtRegister: " << Reg <<'\n');
+  SExtRegisters.push_back(Reg);
+}
+
+bool My66000MachineFunctionInfo::isSExtRegister(Register Reg) const {
+LLVM_DEBUG(dbgs() << "isSExtRegister: " << Reg <<'\n');
+  return is_contained(SExtRegisters, Reg);
+}
+
+void My66000MachineFunctionInfo::addZExtRegister(Register Reg) {
+  ZExtRegisters.push_back(Reg);
+}
+
+bool My66000MachineFunctionInfo::isZExtRegister(Register Reg) const {
+  return is_contained(ZExtRegisters, Reg);
 }

@@ -20,6 +20,14 @@ class My66000Inst<dag outs, dag ins, string asmstr, list<dag> pattern>
   let AsmString   = asmstr;
   let Pattern = pattern;
   let Inst{31-26} = Opcode;
+
+  // Target specific flags
+  // Indicates that the result can be considered sign extended from bit 31.
+  bit IsSignExtendingOp = 0;
+  let TSFlags{1} = IsSignExtendingOp;
+  // Indicates that the result can be considered zero extended from bit 31.
+  bit IsZeroExtendingOp = 0;
+  let TSFlags{2} = IsZeroExtendingOp;
 }
 
 class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
@@ -35,87 +43,241 @@ class Simple<bits<6> major, bits<26> minor, dag outs, dag ins, string asmstr,
   let Inst{25-0} = minor;
 }
 
-class ALU_RR<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
+class ALU_RI<bits<6> major, dag outs, dag ins, string asmstr, list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src1 register
+  bits<16> imm;		// 16-bit immediate
+  let Opcode = major;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = rs1;
+  let Inst{15-0}  = imm;
+  let hasSideEffects = 0;
+  let Size = 4;
+}
+class XOP<bits<6>opcode, bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {
   bits<5> rd;		// dst register
   bits<5> rs1;		// src1 register
   bits<5> rs2;		// src2 register
-  let Opcode = 0b001010;
+  let Opcode = opcode;
   let Inst{25-21} = rd;
   let Inst{20-16} = rs1;
-  let Inst{15-11} = flags;
-  let Inst{10-5}  = minor;
+  let Inst{15-9}  = minor;
+  let Inst{8-5}   = flags;
   let Inst{4-0}   = rs2;
   let hasSideEffects = 0;
   let Size = 4;
 }
 
-class ALU_RW<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
+//
+// XOP0 integer
+//
+class XOP0_R<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  bits<5> rs2;		// src2 register
-  let Opcode = 0b001010;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = !or(flags,0b10000);
-  let Inst{10-5}  = minor;
-  let Inst{4-0}   = rs2;
-  let hasSideEffects = 0;
+    : XOP<0b001000, minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 4;
+}
+
+class XOP0_W<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : XOP<0b001000, minor, flags, outs, ins, asmstr, pattern> {
   let Size = 8;
 }
 
-class ALU_RD<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
+class XOP0_D<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  bits<5> rs2;		// src2 register
-  let Opcode = 0b001010;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = !or(flags,0b10001);
-  let Inst{10-5}  = minor;
-  let Inst{4-0}   = rs2;
-  let hasSideEffects = 0;
+    : XOP<0b001000, minor, flags, outs, ins, asmstr, pattern> {
   let Size = 12;
 }
 
-class ALU_WR<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
+//
+// XOP1 integer
+//
+class XOP1_R<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  bits<5> rs2;		// src2 register
-  let Opcode = 0b001010;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = !or(flags,0b10000);
-  let Inst{10-5}  = minor;
-  let Inst{4-0}   = rs2;
-  let hasSideEffects = 0;
+    : XOP<0b001001, minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 4;
+}
+
+class XOP1_W<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : XOP<0b001001, minor, flags, outs, ins, asmstr, pattern> {
   let Size = 8;
 }
 
-class ALU_DR<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
+class XOP1_D<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
+    : XOP<0b001001, minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 12;
+}
+
+//
+// XOP3 floating point
+//
+class XOP3_R<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : XOP<0b001011, minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 4;
+}
+
+class XOP3_W<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : XOP<0b001011, minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 8;
+}
+
+class XOP3_D<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : XOP<0b001011, minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 12;
+}
+
+//
+// XOP3 CVT - FIXME experimental
+//
+class CVT_R<bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : XOP<0b001011, minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 4;
+}
+
+// SHIFTS rs1,#o,#w
+class SHF_RI<bits<4> minor, dag outs, dag ins, string asmstr, list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src1 register
+  bits<6> o;
+  bits<6> w;
+  let Opcode = 0b110101;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = rs1;
+  let Inst{15-10} = w;
+  let Inst{9-6} = minor;
+  let Inst{5-0} = o;
+  let hasSideEffects = 0;
+  let Size = 4;
+}
+
+// SHIFTS rs1,#o
+class XOM7_SHF<bits<6> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src1 register
+  bits<6> o;
+  let Opcode = 0b000111;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = rs1;
+  let Inst{15-12} = flags;
+  let Inst{11-6} = minor;
+  let Inst{5-0} = o;
+  let hasSideEffects = 0;
+  let Size = 4;
+}
+
+class XOM7_R<bits<6> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src1 register
+  bits<6> o;
+  let Opcode = 0b000111;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = rs1;
+  let Inst{15-12} = flags;
+  let Inst{11-6} = minor;
+  let Inst{5-0} = o;
+  let hasSideEffects = 0;
+  let Size = 4;
+}
+
+// SHIFTS, rs1,rs2
+class XOP0_SHF<bits<6> minor, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {
   bits<5> rd;		// dst register
   bits<5> rs1;		// src1 register
   bits<5> rs2;		// src2 register
-  let Opcode = 0b001011;
+  let Opcode = 0b001000;
   let Inst{25-21} = rd;
   let Inst{20-16} = rs1;
-  let Inst{15-11} = !or(flags,0b10001);
-  let Inst{10-5}  = minor;
+  let Inst{15-12} = flags;
+  let Inst{11-6}  = minor;
+  let Inst{5}     = 0;
   let Inst{4-0}   = rs2;
   let hasSideEffects = 0;
+}
+
+// XOP6 - 1OP
+class XOP6<bits<7> minor, bits<5> func, bits<4> flags, dag outs, dag ins, string asmstr,
+		  list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src2 register
+  let Inst{25-21} = rd;
+  let Opcode = 0b001110;
+  let Inst{20-16} = func;	// in rs1 position
+  let Inst{15-9} =  minor;
+  let Inst{8-5}   = flags;
+  let Inst{4-0}   = rs1;	// in rs2 position
+}
+
+class XOP6_R<bits<7> minor, bits<5> func, bits<4> flags, dag outs, dag ins, string asmstr,
+		  list<dag> pattern>
+    : XOP6<minor, func, flags, outs, ins, asmstr, pattern> {
+  let Size = 4;
+}
+
+class XOP6_W<bits<7> minor, bits<5> func, bits<4> flags, dag outs, dag ins, string asmstr,
+		  list<dag> pattern>
+    : XOP6<minor, func, flags, outs, ins, asmstr, pattern> {
+  let Size = 8;
+}
+
+class XOP6_D<bits<7> minor, bits<5> func, bits<4> flags, dag outs, dag ins, string asmstr,
+		  list<dag> pattern>
+    : XOP6<minor, func, flags, outs, ins, asmstr, pattern> {
   let Size = 12;
 }
 
-class ALU_RRR<bits<3> minor, bits<3> flags, dag outs, dag ins, string asmstr,
+class MUX<bits<2>size, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<5> rs1;		// src1 register
+  bits<5> rs2;		// src2 register
+  bits<5> rs3;		// src3 register, the control
+  let Opcode = 0b010010;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = rs1;
+  let Inst{15-11} = rs3;
+  let Inst{10-9}  = size;
+  let Inst{8-5}   = flags;
+  let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
+}
+
+class MUX_R<bits<2>size, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : MUX<size, flags, outs, ins, asmstr, pattern> {
+  let Size = 4;
+}
+class MUX_W<bits<2>size, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : MUX<size, flags, outs, ins, asmstr, pattern> {
+  let Size = 8;
+}
+
+class MUX_D<bits<2>size, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : MUX<size, flags, outs, ins, asmstr, pattern> {
+  let Size = 12;
+}
+
+// FIXME
+class INS<bits<3> minor, bits<3> flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {
   bits<5> rd;		// dst register
@@ -133,68 +295,38 @@ class ALU_RRR<bits<3> minor, bits<3> flags, dag outs, dag ins, string asmstr,
   let Size = 4;
 }
 
-class ALU_RRM<bits<3> minor, bits<3> flags, dag outs, dag ins, string asmstr,
-                  list<dag> pattern>
+class FMA<bits<2>minor, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {
   bits<5> rd;		// dst register
   bits<5> rs1;		// src1 register
   bits<5> rs2;		// src2 register
-  bits<5> rs3;		// src3 register
-  let Opcode = 0b001001;
+  bits<5> rs3;		// src3 register, the control
+  let Opcode = 0b010100;
   let Inst{25-21} = rd;
   let Inst{20-16} = rs1;
-  let Inst{15-13} = flags;
-  let Inst{12-10} = minor;
-  let Inst{9-5}   = rs3;
+  let Inst{15-11} = rs3;
+  let Inst{10-9}  = minor;
+  let Inst{8-5}   = flags;
   let Inst{4-0}   = rs2;
   let hasSideEffects = 0;
-  let Size = 4;
 }
 
-class ALU_RI<bits<6> major, dag outs, dag ins, string asmstr, list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  bits<16> imm;		// 16-bit immediate
-  let Opcode = major;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-0}  = imm;
-  let hasSideEffects = 0;
+class FMA_R<bits<2>minor, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : MUX<minor, flags, outs, ins, asmstr, pattern> {
   let Size = 4;
 }
-
-class SHF_RI<bits<4> minor, dag outs, dag ins, string asmstr, list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  bits<6> o;
-  bits<6> w;
-  let Opcode = 0b000111;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-12} = minor;
-  let Inst{11-6} = w;
-  let Inst{5-0} = o;
-  let hasSideEffects = 0;
-  let Size = 4;
+class FMA_W<bits<2>minor, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : MUX<minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 8;
 }
 
-class SHF_RR<bits<4> minor, dag outs, dag ins, string asmstr, list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  bits<5> rs2;		// src2 register
-  bits<6> w;
-  let Opcode = 0b000111;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-12} = minor;
-  let Inst{11-6} = w;
-  let Inst{5} = 0;
-  let Inst{4-0} = rs1;
-  let hasSideEffects = 0;
-  let Size = 4;
+class FMA_D<bits<2>minor, bits<4>flags, dag outs, dag ins, string asmstr,
+		list<dag> pattern>
+    : MUX<minor, flags, outs, ins, asmstr, pattern> {
+  let Size = 12;
 }
 
 class LDST_BD<bits<6> major, dag outs, dag ins, string asmstr, list<dag> pattern>
@@ -209,17 +341,28 @@ class LDST_BD<bits<6> major, dag outs, dag ins, string asmstr, list<dag> pattern
   let Size = 4;
 }
 
-class LDST_RX<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
+// XOP5 MM/MS
+class XOP5_R<bits<7> minor, bits<4> flags, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : XOP<0b001000, minor, flags, outs, ins, asmstr, pattern> {
+  let Opcode = 0b001101;
+  let Size = 4;
+}
+
+// XOP5 LD/ST
+class LDST_RX<bits<7> minor, bits<2> flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {
   bits<5> rd;		// dst register
   bits<5> rb;		// base register
   bits<5> rx;		// index register
-  let Opcode = 0b001001;
+  bits<2> ss;		// shift size
+  let Opcode = 0b001011;
   let Inst{25-21} = rd;
   let Inst{20-16} = rb;
-  let Inst{15-11} = flags;
-  let Inst{10-5}  = minor;
+  let Inst{15-14} = flags;
+  let Inst{13-12} = ss;
+  let Inst{11-5}  = minor;
   let Inst{4-0}   = rx;
 }
 
@@ -280,100 +423,23 @@ class PB<bits<5> major, dag outs, dag ins, string asmstr,
   let Inst{11-0}  = imm;
 }
 
-class LOOP_RRR<bits<2> kind, bits<4> flags, dag outs, dag ins, string asmstr,
+// FIXME
+class LOOP<bits<3> minor, bits<3> flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> cnd;		// condition
+  bits<5> rd;		// dst register
   bits<5> rs1;		// src1 register
   bits<5> rs2;		// src2 register
   bits<5> rs3;		// src3 register
-  let Opcode = 0b010101;
-  let Inst{25-21} = cnd;
+  let Opcode = 0b001100;
+  let Inst{25-21} = rd;
   let Inst{20-16} = rs1;
-  let Inst{15-12} = flags;
-  let Inst{11-10} = kind;
+  let Inst{15-13} = flags;
+  let Inst{12-10} = minor;
   let Inst{9-5}   = rs3;
   let Inst{4-0}   = rs2;
+  let hasSideEffects = 0;
   let Size = 4;
-}
-
-class HR<bits<5> minor, bits<2> rw, dag outs, dag ins, string asmstr,
-                  list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  let Opcode = 0b001101;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15}    = 0;
-  let Inst{14-13} = rw;
-  let Inst{12-5}  = 0b00000000;
-  let Inst{4-0}   = minor;
-}
-
-class R1<bits<6> minor, bits<5> flags, dag outs, dag ins, string asmstr,
-                  list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  let Opcode = 0b001101;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = flags;
-  let Inst{10-5}  = minor;
-  let Inst{4-0}   = 0b00000;
-}
-
-class CVT<bits<6> func, bits<5> flags, dag outs, dag ins, string asmstr,
-		  list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  let Opcode = 0b001101;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = flags;
-  let Inst{10-6}  = 0b01000;
-  let Inst{5-0}   = func;
-}
-
-class RND<bits<5> func, bits<5> flags, dag outs, dag ins, string asmstr,
-		  list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  let Opcode = 0b001101;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = flags;
-  let Inst{10-5}  = 0b010100;
-  let Inst{4-0}   = func;
-}
-
-class TRAN<bits<6> func, bits<5> flags, dag outs, dag ins, string asmstr,
-		  list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  let Opcode = 0b001101;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = flags;
-  let Inst{10-6}  = 0b11000;
-  let Inst{5-0}   = func;
-}
-
-class ABS<bits<6> minor, bits<5> func, bits<5> flags, dag outs, dag ins, string asmstr,
-		  list<dag> pattern>
-    : My66000Inst<outs, ins, asmstr, pattern> {
-  bits<5> rd;		// dst register
-  bits<5> rs1;		// src1 register
-  let Opcode = 0b001101;
-  let Inst{25-21} = rd;
-  let Inst{20-16} = rs1;
-  let Inst{15-11} = flags;
-  let Inst{10-5}  = minor;
-  let Inst{4-0}   = func;
 }
 
 class VECF<bits<6> major, dag outs, dag ins, string asmstr,

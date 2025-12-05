@@ -30,6 +30,7 @@ add_llvm_target(My66000CodeGen
   My66000FixJumpTable.cpp
   My66000VVMPass1.cpp
   My66000VVMPass2.cpp
+  My66000OptWInstrs.cpp
 
   LINK_COMPONENTS
   Analysis

@@ -54,7 +54,9 @@ static bool isFPimm5(const APFloat FPVal)
 {
   APSInt IVal(64, false);
   bool isExact;
-  FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
+  APFloat TVal = FPVal;
+  TVal.add(TVal, APFloat::rmTowardZero);		// times 2
+  TVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
   LLVM_DEBUG(dbgs() << "\tAttempt shrink to i5: " << isExact <<
       ", IVal=" << IVal << '\n');
   if (isExact) {
@@ -69,7 +71,9 @@ static bool isFPpimm5(const APFloat FPVal)
 {
   APSInt IVal(64, false);
   bool isExact;
-  FPVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
+  APFloat TVal = FPVal;
+  TVal.add(TVal, APFloat::rmTowardZero);		// times 2
+  TVal.convertToInteger(IVal, APFloat::rmTowardZero, &isExact);
   LLVM_DEBUG(dbgs() << "\tAttempt shrink to pi5: " << isExact <<
       ", IVal=" << IVal << '\n');
   if (isExact) {
@@ -522,9 +526,9 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotateR\n");
   unsigned WhichOp;
 
   if (OpL->getOpcode() == ISD::SHL && OpR->getOpcode() == ISD::SRL)
-    WhichOp = My66000::RORrr;
+    WhichOp = My66000::RORrri;
   else if (OpL->getOpcode() == ISD::SRL && OpR->getOpcode() == ISD::SHL)
-    WhichOp = My66000::ROLrr;
+    WhichOp = My66000::ROLrri;
   else
     return false;	// not a rotate
 LLVM_DEBUG(dbgs() << "\tshifts are good\n");
@@ -727,7 +731,7 @@ LLVM_DEBUG(dbgs() << "\tdynamic extract #2\n");
        SDValue Ops[] = { N->getOperand(0).getOperand(0),
 			 CurDAG->getTargetConstant(Width, dl, MVT::i64),
 			 N->getOperand(0).getOperand(1) };
-        CurDAG->SelectNodeTo(N, My66000::SRLrr, MVT::i64, Ops);
+        CurDAG->SelectNodeTo(N, My66000::SRLri, MVT::i64, Ops);
         return true;
       }
       else if (N->getOperand(0).getNode()->getOpcode() == ISD::OR) {
@@ -739,6 +743,8 @@ LLVM_DEBUG(dbgs() << "\tdynamic extract #2\n");
       // We have AND with a mask.
       if (Width > 15 || Width == 8)
       { // A large mask is better done by SRLri than AND imm
+	if (Width == 32)
+	  return false;		// for pattern matching
 LLVM_DEBUG(dbgs() << "\textract pattern #3\n");
 	SDValue Ops[] = { N->getOperand(0),
 			  CurDAG->getTargetConstant(Width, dl, MVT::i64),
@@ -810,15 +816,17 @@ LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryInsert " << N->getOperationName(0)
     if (VT == MVT::i32) Andimm |= 0xFFFFFFFF00000000;
     if (VT == MVT::i16) Andimm |= 0xFFFFFFFFFFFF0000;
     if (VT == MVT::i8)  Andimm |= 0xFFFFFFFFFFFFFF00;
-//dbgs() << "\tmask1="; dbgs().write_hex(Andimm) << '\n';
-//dbgs() << "\tshfimm=" << Shfimm << '\n';
+LLVM_DEBUG(dbgs() << "\tmask1="; dbgs().write_hex(Andimm) << '\n');
+LLVM_DEBUG(dbgs() << "\tshfimm=" << Shfimm << '\n');
+LLVM_DEBUG(dbgs() << "\tshfmask="; dbgs().write_hex(Andimm>>Shfimm) << '\n');
     unsigned Width = llvm::countr_zero(Andimm >> Shfimm);
+    if (Width == 64) Width = 64 - Shfimm;
     if (Width == 0 || !isShiftedMask_64(~Andimm)) {
 //dbgs() << "\tfail, not a mask\n";
       return false;
     }
     unsigned Offset = Shfimm;
-//dbgs() << "\tinsert pattern #1: w=" << Width << " o=" << Offset << '\n';
+LLVM_DEBUG(dbgs() << "\tinsert pattern #1: w=" << Width << " o=" << Offset << '\n');
     SDValue Ops[] = { Op1, Op2,
 		      CurDAG->getTargetConstant(Width, dl, MVT::i32),
 		      CurDAG->getTargetConstant(Offset, dl, MVT::i32) };
@@ -836,12 +844,15 @@ bool My66000DAGToDAGISel::trySex(SDNode *N) {
     if (trySRA(N, Width))
       return true;
   }
+  if (Width != 32) {
 LLVM_DEBUG(dbgs() << "sign extend w=" << Width << "\n");
-  SDValue Ops[] = { N->getOperand(0),
-		    CurDAG->getTargetConstant(Width, dl, MVT::i64),
-		    CurDAG->getTargetConstant(0, dl, MVT::i64) };
-  CurDAG->SelectNodeTo(N, My66000::SRAri, MVT::i64, Ops);
-  return true;
+    SDValue Ops[] = {N->getOperand(0),
+		     CurDAG->getTargetConstant(Width, dl, MVT::i64),
+		     CurDAG->getTargetConstant(0, dl, MVT::i64) };
+    CurDAG->SelectNodeTo(N, My66000::SRAri, MVT::i64, Ops);
+    return true;
+  }
+  return false;			// let patterns take care of it
 }
 
 bool My66000DAGToDAGISel::tryEADD(SDNode *N, bool isDiv) {
