@@ -304,6 +304,18 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
 //===----------------------------------------------------------------------===//
 //  Tuning knobs
 //===----------------------------------------------------------------------===//
+
+bool My66000TargetLowering::isTruncateFree(EVT SrcVT, EVT DstVT) const {
+  // The W instructions make promoting back to i64 free in many cases.
+  if (SrcVT.isVector() || DstVT.isVector() || !SrcVT.isInteger() ||
+      !DstVT.isInteger())
+    return false;
+  unsigned SrcBits = SrcVT.getSizeInBits();
+  unsigned DestBits = DstVT.getSizeInBits();
+LLVM_DEBUG(dbgs() << "isTruncateFree2 src=" << SrcBits << " dst=" << DestBits << '\n');
+  return (SrcBits == 64 && DestBits == 32);
+}
+
 bool My66000TargetLowering::isIntDivCheap(EVT VT, AttributeList Attr) const {
   return true;
 }

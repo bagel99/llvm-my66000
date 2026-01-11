@@ -321,6 +321,18 @@ printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
   printExpr(Op.getExpr(), &MAI, O);
 }
 
+// Print sign extended 5-bit immediate
+void My66000InstPrinter::printS5ImmOperand(const MCInst *MI, unsigned OpNo,
+                                        raw_ostream &O) {
+  if (MI->getOperand(OpNo).isImm()) {
+    int64_t t64 = MI->getOperand(OpNo).getImm();
+    t64 = (t64 << (64 - 6)) >> (64 - 6);
+//dbgs() << "My66000InstPrinter::printS5ImmOperand " << t64 << '\n';
+    O << t64;
+  } else
+    printOperand(MI, OpNo, O);
+}
+
 void My66000InstPrinter::printS16ImmOperand(const MCInst *MI, unsigned OpNo,
                                         raw_ostream &O) {
 //dbgs() << "My66000InstPrinter::printS16ImmOperand\n";
@@ -369,6 +381,22 @@ LLVM_DEBUG(dbgs() << " n1=" << format_hex(n, 9, true) << '\n');
       n |= 0x80000000;
   }
   O << format_hex(n, 10, true);
+}
+
+void My66000InstPrinter::printFP16Operand(const MCInst *MI, unsigned opNum,
+					raw_ostream &O) {
+  const MCOperand &Op = MI->getOperand(opNum);
+  uint16_t n = 0;
+  if (Op.isSFPImm()) {
+    uint32_t t32 = Op.getSFPImm();
+    n =  (t32 >> 13) & 0x3FFF;
+    n |= (t32 >> 16) & 0xC000;
+  } else if (Op.isDFPImm()) {
+    uint64_t t64 = Op.getDFPImm();
+    n =  (t64 >> 42) & 0x3FFF;
+    n |= (t64 >> 48) & 0xC000;
+  }
+  O << format_hex(n, 6, true);
 }
 
 // The operand presented is IEEE 32-bit or 64-bit that is an exact integer

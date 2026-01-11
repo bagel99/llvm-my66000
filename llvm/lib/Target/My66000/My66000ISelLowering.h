@@ -150,6 +150,7 @@ class My66000TargetLowering : public TargetLowering {
 			LLVMContext &Context) const override;
 
   // Tuning knobs
+  bool isTruncateFree(EVT SrcVT, EVT DstVT) const override;
   bool isIntDivCheap(EVT VT, AttributeList Attr) const override;
   bool isFMAFasterThanFMulAndFAdd(const MachineFunction &MF, EVT VT)
 					    const override;
@@ -160,6 +161,7 @@ class My66000TargetLowering : public TargetLowering {
   bool reduceSelectOfFPConstantLoads(EVT CmpOpVT) const override;
   bool decomposeMulByConstant(LLVMContext &Context, EVT VT,
 					    SDValue C) const override;
+  bool convertStoreOfFPConstant() const override { return false; }
 
 };
 

@@ -55,6 +55,18 @@ class ALU_RI<bits<6> major, dag outs, dag ins, string asmstr, list<dag> pattern>
   let hasSideEffects = 0;
   let Size = 4;
 }
+class MOV_RI<bits<6> major, bits<5> minor, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : My66000Inst<outs, ins, asmstr, pattern> {
+  bits<5> rd;		// dst register
+  bits<16> imm;		// 16-bit immediate
+  let Opcode = major;
+  let Inst{25-21} = rd;
+  let Inst{20-16} = minor;
+  let Inst{15-0}  = imm;
+  let hasSideEffects = 0;
+  let Size = 4;
+}
 class XOP<bits<6>opcode, bits<7> minor, bits<4>flags, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
     : My66000Inst<outs, ins, asmstr, pattern> {

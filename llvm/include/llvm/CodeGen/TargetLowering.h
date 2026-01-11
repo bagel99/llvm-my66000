@@ -675,6 +675,10 @@ public:
   /// gen prepare.
   virtual bool preferZeroCompareBranch() const { return false; }
 
+  /// Return true if stores of floating point constants should be
+  /// convert to stores of integers.
+  virtual bool convertStoreOfFPConstant() const { return true; }
+
   /// Return true if it is cheaper to split the store of a merged int val
   /// from a pair of smaller values into multiple stores.
   virtual bool isMultiStoresCheaperThanBitsMerge(EVT LTy, EVT HTy) const {

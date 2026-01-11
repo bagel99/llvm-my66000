@@ -9,6 +9,8 @@
 
 def fpimm32 : Operand<f32>, FPImmLeaf<f32, [{ return true; }]>
 		{ let PrintMethod = "printFP32Operand"; }
+def fsimm16  : Operand<f32>, FPImmLeaf<f32, [{ return isFPhalf(Imm); }]>
+		{ let PrintMethod = "printFP16Operand"; }
 def fsimmpi5 : Operand<f32>, FPImmLeaf<f32, [{ return isFPpimm5(Imm); }]>
 		{ let PrintMethod = "printFPkOperand"; }
 def fsimmi5 : Operand<f32>, FPImmLeaf<f32, [{ return isFPimm5(Imm); }]>
@@ -25,26 +27,26 @@ multiclass FSrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	!strconcat(OpName, "\t$rd,$rs1,$rs2"),
 	[(set (f32 FSRegs:$rd), (OpNode (f32 FSRegs:$rs1),
 				        (f32 FSRegs:$rs2)))]>;
-  def rn : XOP3_R<OpC, 0b0001,
+  def rn : XOP3_R<OpC, 0b0100,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,-$rs2"),
 	[(set (f32 FSRegs:$rd), (OpNode (f32 FSRegs:$rs1),
 					(fneg (f32 FSRegs:$rs2))))]>;
-  def nr : XOP3_R<OpC, 0b0010,
+  def nr : XOP3_R<OpC, 0b1000,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,$rs2"),
 	[(set (f32 FSRegs:$rd), (OpNode (fneg (f32 FSRegs:$rs1)),
 				        (f32 FSRegs:$rs2)))]>;
-  def nn : XOP3_R<OpC, 0b0011,
+  def nn : XOP3_R<OpC, 0b1100,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,-$rs2"),
 	[(set (f32 FSRegs:$rd), (OpNode (fneg (f32 FSRegs:$rs1)),
 					(fneg (f32 FSRegs:$rs2))))]>;
-  def rk : XOP3_W<OpC, 0b0100,
+  def rk : XOP3_W<OpC, 0b0001,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, fsimmi5:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), fsimmi5:$imm))]>;
-  def rf : XOP3_W<OpC, 0b1000,
+  def rf : XOP3_W<OpC, 0b0010,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), fpimm32:$imm))]>;
@@ -52,7 +54,7 @@ multiclass FSrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	(outs FSRegs:$rd), (ins fsimmpi5:$imm, FSRegs:$rs2),
 	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
 	[(set FSRegs:$rd, (OpNode fsimmpi5:$imm, (f32 FSRegs:$rs2)))]>;
-  def fr : XOP3_W<OpC, 0b1001,
+  def fr : XOP3_W<OpC, 0b0110,
 	(outs FSRegs:$rd), (ins fpimm32:$imm, FSRegs:$rs2),
 	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
 	[(set FSRegs:$rd, (OpNode fpimm32:$imm, (f32 FSRegs:$rs2)))]>;
@@ -72,30 +74,30 @@ def FCMPFrr : XOP3_R<0b1101000, 0b0000,
        (outs GRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
        "fcmpf\t$rd,$rs1,$rs2",
        [(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1), (f32 FSRegs:$rs2)))]>;
-def FCMPFrn : XOP3_R<0b1101000, 0b0001,
+def FCMPFrn : XOP3_R<0b1101000, 0b0100,
        (outs GRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
        "fcmpf\t$rd,$rs1,-$rs2",
        [(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1),
                                       (fneg (f32 FSRegs:$rs2))))]>;
-def FCMPFnr : XOP3_R<0b1101000, 0b0010,
+def FCMPFnr : XOP3_R<0b1101000, 0b1000,
        (outs GRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
        "fcmpf\t$rd,-$rs1,$rs2",
        [(set (i64 GRegs:$rd), (myFCMP (fneg (f32 FSRegs:$rs1)),
                                       (f32 FSRegs:$rs2)))]>;
-def FCMPFnn : XOP3_R<0b1101000, 0b0011,
+def FCMPFnn : XOP3_R<0b1101000, 0b1100,
        (outs GRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2),
        "fcmpf\t$rd,-$rs1,-$rs2",
        [(set (i64 GRegs:$rd), (myFCMP (fneg (f32 FSRegs:$rs1)),
                                       (fneg (f32 FSRegs:$rs2))))]>;
-def FCMPFrk : XOP3_R<0b1101000, 0b0100,
+def FCMPFrk : XOP3_R<0b1101000, 0b0001,
        (outs GRegs:$rd), (ins FSRegs:$rs1, fsimmi5:$imm),
        "fcmpf\t$rd,$rs1,#$imm",
        [(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1), fsimmi5:$imm))]>;
-def FCMPFrw : XOP3_W<0b1101000, 0b1000,
+def FCMPFrw : XOP3_W<0b1101000, 0b0010,
        (outs GRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm),
        "fcmpf\t$rd,$rs1,#$imm",
        [(set (i64 GRegs:$rd), (myFCMP (f32 FSRegs:$rs1), fpimm32:$imm))]>;
- }
+}
 
 
 def FSUBF : Pat<(fsub (f32 FSRegs:$rs1), (f32 FSRegs:$rs2)),
@@ -143,11 +145,21 @@ multiclass FMAFrrr<SDPatternOperator OpNode> {
 	"fmacf\t$rd,$rs2,-$rs1,-$rs3",	// must swap rs1 and rs2
 	[(set FSRegs:$rd, (OpNode (fneg FSRegs:$rs1), (f32 FSRegs:$rs2),
 				  (fneg (f32 FSRegs:$rs3))))]>;
-  def rf : FMA_R<0b01, 0b0100,
+  def rk : FMA_R<0b01, 0b0100,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, fpimm32:$imm),
+	"fmacf\t$rd,$rs1,$rs2,#$imm",
+	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), (f32 FSRegs:$rs2),
+				   fsimmi5:$imm))]>;
+  def rf : FMA_R<0b01, 0b0101,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, FSRegs:$rs2, fpimm32:$imm),
 	"fmacf\t$rd,$rs1,$rs2,#$imm",
 	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), (f32 FSRegs:$rs2),
 				   fpimm32:$imm))]>;
+  def jr : FMA_R<0b01, 0b0110,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm, FSRegs:$rs3),
+	"fmacf\t$rd,$rs1,#$imm,$rs3",
+	[(set FSRegs:$rd, (OpNode (f32 FSRegs:$rs1), fsimmpi5:$imm,
+				  (f32 FSRegs:$rs3)))]>;
   def fr : FMA_R<0b01, 0b0110,
 	(outs FSRegs:$rd), (ins FSRegs:$rs1, fpimm32:$imm, FSRegs:$rs3),
 	"fmacf\t$rd,$rs1,#$imm,$rs3",
@@ -164,7 +176,11 @@ def EADDFrr : XOP3_R<0b1001001, 0b0000,
 	"eaddf\t$rd,$rs1,$rs2",
 	[(set FSRegs:$rd, (fldexp (f32 FSRegs:$rs1), (i64 GRegs:$rs2)))]>;
 def EADDFrk : XOP3_R<0b1001001, 0b0001,
-	(outs FSRegs:$rd), (ins FSRegs:$rs1, simm5:$imm),
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, simmp5:$imm),
+	"eaddf\t$rd,$rs1,#$imm",
+	[]>;
+def EADDFrj : XOP3_R<0b1001001, 0b0001,
+	(outs FSRegs:$rd), (ins FSRegs:$rs1, simmn5:$imm),
 	"eaddf\t$rd,$rs1,#$imm",
 	[]>;
 def EADDFrd : XOP3_R<0b1001001, 0b0011,
@@ -188,15 +204,15 @@ def FRACTFr : XOP6_R<0b0111001, 0b00011, 0b0000,
 
 // Moves
 let isAsCheapAsAMove = 1 in {
-def FMOVFrz : ALU_RI<0b111011,
+def FMOVFrz : MOV_RI<0b111011, 0b00000,
 	(outs FSRegs:$rd), (ins fpimm32:$imm),
 	"mov\t$rd,#0",
 	[(set (f32 FSRegs:$rd), fpimm0:$imm)]>;
-def FMOVFrk : CVT_R<0b0110001, 0b1000,
-	(outs FSRegs:$rd), (ins fsimmi5:$imm),
-	"cvtsf\t$rd,#$imm",
-	[(set (f32 FSRegs:$rd), fsimmi5:$imm)]>;
-def FMOVFrf : ALU_RI<0b111011,
+def FMOVFrh : MOV_RI<0b111011, 0b00010,
+	(outs FSRegs:$rd), (ins fsimm16:$imm),
+	"movf\t$rd,#$imm",
+	[(set (f32 FSRegs:$rd), fsimm16:$imm)]>;
+def FMOVFrf : XOP6_W<0b0111100, 0b00000, 0b0010,
 	(outs FSRegs:$rd), (ins fpimm32:$imm),
 	"mov\t$rd,#$imm",
 	[(set (f32 FSRegs:$rd), fpimm32:$imm)]>;
@@ -379,6 +395,10 @@ multiclass LoadFS<string OpName, bits<6>OpCri, bits<7>OpCrr,
 	!strconcat(OpName, "\t$rd,[$addr]"),
 	[(set (f32 FSRegs:$rd), (OpNode ADDRrr:$addr))]>;
 }
+let mayLoad = 1 in {
+  defm LDF : LoadFS<"lduw", 0b100010, 0b0000000, load>;
+}
+
 multiclass StoreFS<string OpName, bits<6>OpCri, bits<7>OpCrr,
 		 SDPatternOperator OpNode> {
   def ri : LDST_BD<OpCri,
@@ -390,10 +410,16 @@ multiclass StoreFS<string OpName, bits<6>OpCri, bits<7>OpCrr,
 	!strconcat(OpName, "\t$rd,[$addr]"),
 	[(OpNode (f32 FSRegs:$rd), ADDRrr:$addr)]>;
 }
-let mayLoad = 1 in {
-  defm LDF : LoadFS<"lduw", 0b100010, 0b0000000, load>;
-}
-
 let mayStore = 1 in {
   defm STF : StoreFS<"stw", 0b101010, 0b0000010, store>;
 }
+// Because ADDRrr rejects anything ADDRri can handle, we need a pattern for both.
+// But they both map to LDST_RX
+def STFZri : LDST_RX<0b1111000, 0b01,
+	(outs), (ins fpimm32:$imm, MEMri:$addr),
+	"stw\t#0,[$addr]",
+	[(store (f32 fpimm0:$imm), ADDRri:$addr)]>;
+def STFZrr : LDST_RX<0b1111000, 0b01,
+	(outs), (ins fpimm32:$imm, MEMrr:$addr),
+	"stw\t#0,[$addr]",
+	[(store (f32 fpimm0:$imm), ADDRrr:$addr)]>;

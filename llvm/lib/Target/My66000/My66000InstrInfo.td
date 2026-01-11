@@ -34,12 +34,16 @@ def simm32 : Operand<i64>, ImmLeaf<i64,
 def sneed64: Operand<i64>, ImmLeaf<i64,
 		[{ return (Imm < -2147483648 || Imm > 2147483647); }]>;
 
-def simm5 :  Operand<i64>, ImmLeaf<i64,
-               [{ return isInt<6>(Imm); }]>;
 def simmp5 :  Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 0 && Imm <= 31; }]>;
 def simmn5 :  Operand<i64>, ImmLeaf<i64,
-		[{ return iImm < 0 && Imm >= -31; }]>;
+		[{ return isInt<6>(Imm) && Imm < 0;}]>;
+def simmn5w :  Operand<i32>, ImmLeaf<i64,
+		[{ return Imm >= 4294967265 && Imm <= 4294967295;}]>;
+def simmn5h :  Operand<i16>, ImmLeaf<i64,
+		[{ return Imm >= 65505 && Imm <= 65535;}]>;
+def simmn5b :  Operand<i8>, ImmLeaf<i64,
+		[{ return Imm >= 225 && Imm <= 255;}]>;
 def shfamt : Operand<i64>, ImmLeaf<i64,
 		[{ return Imm >= 0 && Imm <= 63; }]>;
 def shfinx: Operand<i64>, ImmLeaf<i64,
@@ -50,6 +54,9 @@ def calltarget : Operand<iPTR>;
 def ccode : Operand<i64>;
 
 // Operand definitions for machine instructions
+def s5imm64  : Operand<i64> {
+  let PrintMethod = "printS5ImmOperand";
+}
 def s16imm64 : Operand<i64> {
   let PrintMethod = "printS16ImmOperand";
 }
@@ -171,23 +178,23 @@ multiclass AOPrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,$rs2"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), (i64 GRegs:$rs2)))]>;
-  def rn : XOP1_R<OpC, 0b0001,
+  def rn : XOP1_R<OpC, 0b0100,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,-$rs2"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), (ineg (i64 GRegs:$rs2))))]>;
-  def nr : XOP1_R<OpC, 0b0010,
+  def nr : XOP1_R<OpC, 0b1000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,$rs2"),
 	[(set GRegs:$rd, (OpNode (ineg (i64 GRegs:$rs1)), (i64 GRegs:$rs2)))]>;
-  def nn : XOP1_R<OpC, 0b0011,
+  def nn : XOP1_R<OpC, 0b1100,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,-$rs2"),
 	[(set GRegs:$rd, (OpNode (ineg (i64 GRegs:$rs1)), (ineg (i64 GRegs:$rs2))))]>;
-  def rw : XOP1_W<OpC, 0b1000,
+  def rw : XOP1_W<OpC, 0b0010,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), simm32:$imm))]>;
-  def rd : XOP1_D<OpC, 0b1100,
+  def rd : XOP1_D<OpC, 0b0011,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), sneed64:$imm))]>;
@@ -219,11 +226,11 @@ def NADD  : Pat<(ineg (add (i64 GRegs:$rs1), (i64 GRegs:$rs2))),
 // ARITHMETIC INTEGER XOP1 NON-COMMUTATIVE EXTRA PATTERNS
 //
 multiclass NOPrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
-  def wr : XOP1_W<OpC, 0b1001,
+  def wr : XOP1_W<OpC, 0b0110,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
 	[(set GRegs:$rd, (OpNode simm32:$imm, (i64 GRegs:$rs2)))]>;
-  def wn : XOP1_W<OpC, 0b1011,
+  def wn : XOP1_W<OpC, 0b1110,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,#$imm,-$rs2"),
 	[(set GRegs:$rd, (OpNode simm32:$imm, (ineg (i64 GRegs:$rs2))))]>;
@@ -231,7 +238,7 @@ multiclass NOPrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	!strconcat(OpName, "\t$rd,-$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (ineg (i64 GRegs:$rs1)), simm32:$imm))]>;
-  def dr : XOP1_W<OpC, 0b1101,
+  def dr : XOP1_W<OpC, 0b0111,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
 	[(set GRegs:$rd, (OpNode sneed64:$imm, (i64 GRegs:$rs2)))]>;
@@ -239,7 +246,7 @@ multiclass NOPrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,#$imm,-$rs2"),
 	[(set GRegs:$rd, (OpNode sneed64:$imm, (ineg (i64 GRegs:$rs2))))]>;
-  def nd : XOP1_D<OpC, 0b1110,
+  def nd : XOP1_D<OpC, 0b1011,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	!strconcat(OpName, "\t$rd,-$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (ineg (i64 GRegs:$rs1)), sneed64:$imm))]>;
@@ -265,23 +272,23 @@ multiclass LOPrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,$rs2"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), (i64 GRegs:$rs2)))]>;
-  def rn : XOP1_R<OpC, 0b0001,
+  def rn : XOP1_R<OpC, 0b0100,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,-$rs2"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), (not (i64 GRegs:$rs2))))]>;
-  def nr : XOP1_R<OpC, 0b0010,
+  def nr : XOP1_R<OpC, 0b1000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,$rs2"),
 	[(set GRegs:$rd, (OpNode (not (i64 GRegs:$rs1)), (i64 GRegs:$rs2)))]>;
-  def nn : XOP1_R<OpC, 0b0011,
+  def nn : XOP1_R<OpC, 0b1100,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,-$rs2"),
 	[(set GRegs:$rd, (OpNode (not (i64 GRegs:$rs1)), (not (i64 GRegs:$rs2))))]>;
-  def rw : XOP1_W<OpC, 0b1000,
+  def rw : XOP1_W<OpC, 0b0010,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), simm32:$imm))]>;
-  def rd : XOP1_D<OpC, 0b1100,
+  def rd : XOP1_D<OpC, 0b0011,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), sneed64:$imm))]>;
@@ -393,10 +400,15 @@ defm ROL  : SHFrr<"rol",  0b1101000, rotl>;
 let IsSignExtendingOp = 1 in {
 // Immediate 16-bit signed extended
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
-def MOVri : ALU_RI<0b111011,
+def MOVri : MOV_RI<0b111011, 0b00000,
 	(outs GRegs:$rd), (ins s16imm64:$imm),
 	"mov\t$rd,#$imm",
 	[(set GRegs:$rd, simm16:$imm)]>;
+
+def MOVru : MOV_RI<0b111011, 0b00001,
+	(outs GRegs:$rd), (ins i64imm:$imm),
+	"movh\t$rd,#$imm",
+	[(set GRegs:$rd, uimm16:$imm)]>;
 }
 
 // Immediate 32-bit signed extended
@@ -485,7 +497,7 @@ def CTLZ : XOP6_R<0b1001000, 0b00000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"clz\t$rd,$rs1",
 	[(set (i64 GRegs:$rd), (ctlz (i64 GRegs:$rs1)))]>;
-def CTLO : XOP6_R<0b1001000, 0b00000, 0b0001,
+def CTLO : XOP6_R<0b1001000, 0b00000, 0b0100,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"clz\t$rd,-$rs1",
 	[(set (i64 GRegs:$rd), (ctlz (xor (i64 GRegs:$rs1) ,-1)))]>;
@@ -493,7 +505,7 @@ def CTTZ : XOP6_R<0b1001000, 0b00011, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"ctz\t$rd,$rs1",
 	[(set (i64 GRegs:$rd), (cttz (i64 GRegs:$rs1)))]>;
-def CTTO : XOP6_R<0b1001000, 0b00011, 0b0001,
+def CTTO : XOP6_R<0b1001000, 0b00011, 0b0100,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"ctz\t$rd,-$rs1",
 	[(set (i64 GRegs:$rd), (cttz (xor (i64 GRegs:$rs1) ,-1)))]>;
@@ -505,7 +517,7 @@ def POPO : XOP6_R<0b1000000, 0b00000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"pop\t$rd,$rs1",
 	[(set (i64 GRegs:$rd), (ctpop (i64 GRegs:$rs1)))]>;
-def POPZ : XOP6_R<0b1000000, 0b00000, 0b0001,
+def POPZ : XOP6_R<0b1000000, 0b00000, 0b0100,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
 	"pop\t$rd,-$rs1",
 	[(set (i64 GRegs:$rd), (ctpop (xor (i64 GRegs:$rs1) ,-1)))]>;
@@ -632,47 +644,31 @@ let mayStore = 1 in {
 }
 
 // Because ADDRrr rejects anything ADDRri can handle, we need a pattern for both.
-multiclass StImm5<string OpName, bits<7>Op, SDPatternOperator OpNode> {
-  def kii : LDST_RX<Op, 0b00,
+// But they both map to LDST_RX
+multiclass StImm5<string OpName, bits<7>Op, DAGOperand match, SDPatternOperator OpNode> {
+  def ki : LDST_RX<Op, 0b00,
 	(outs), (ins i64imm:$imm, MEMri:$addr),
 	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode simm5:$imm, ADDRri:$addr)]>;
-  def kir : LDST_RX<Op, 0b00,
+	[(OpNode simmp5:$imm, ADDRri:$addr)]>;
+  def kr : LDST_RX<Op, 0b00,
 	(outs), (ins i64imm:$imm, MEMrr:$addr),
 	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode simm5:$imm, ADDRrr:$addr)]>;
+	[(OpNode simmp5:$imm, ADDRrr:$addr)]>;
+  def ji : LDST_RX<Op, 0b00,
+	(outs), (ins s5imm64:$imm, MEMri:$addr),
+	!strconcat(OpName, "\t#$imm,[$addr]"),
+	[(OpNode match:$imm, ADDRri:$addr)]>;
+  def jr : LDST_RX<Op, 0b00,
+	(outs), (ins s5imm64:$imm, MEMrr:$addr),
+	!strconcat(OpName, "\t#$imm,[$addr]"),
+	[(OpNode match:$imm, ADDRrr:$addr)]>;
 }
 let mayStore = 1 in {
-  defm STB : StImm5<"stb", 0b1111011, truncstorei8>;
-  defm STH : StImm5<"sth", 0b0111010, truncstorei16>;
-  defm STW : StImm5<"stw", 0b1111001, truncstorei32>;
-  defm STD : StImm5<"std", 0b1111000, store>;
+  defm STB : StImm5<"stb", 0b1111011, simmn5b, truncstorei8>;
+  defm STH : StImm5<"sth", 0b0111010, simmn5h, truncstorei16>;
+  defm STW : StImm5<"stw", 0b1111001, simmn5w, truncstorei32>;
+  defm STD : StImm5<"std", 0b1111000, simmn5, store>;
 }
-multiclass StImm<string OpName, bits<7>Op, SDPatternOperator OpNode> {
-  def wii : LDST_RX<Op, 0b00,
-	(outs), (ins i64imm:$imm, MEMri:$addr),
-	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode simm32:$imm, ADDRri:$addr)]>;
-  def wir : LDST_RX<Op, 0b00,
-	(outs), (ins i64imm:$imm, MEMrr:$addr),
-	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode simm32:$imm, ADDRrr:$addr)]>;
-  def dii : LDST_RX<Op, 0b00,
-	(outs), (ins i64imm:$imm, MEMri:$addr),
-	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode sneed64:$imm, ADDRri:$addr)]>;
-  def dir : LDST_RX<Op, 0b00,
-	(outs), (ins i64imm:$imm, MEMrr:$addr),
-	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode sneed64:$imm, ADDRrr:$addr)]>;
-}
-let mayStore = 1 in {
-  defm STB : StImm<"stb", 0b1110011, truncstorei8>;
-  defm STH : StImm<"sth", 0b1110010, truncstorei16>;
-  defm STW : StImm<"stw", 0b1110001, truncstorei32>;
-  defm STD : StImm<"std", 0b1110000, store>;
-}
-
 
 def LDM : LDST_BD<0b010011,
 	(outs), (ins GRegs:$rd, GRegs:$rs, MEMrr:$addr),
@@ -711,15 +707,27 @@ def MEMSETrd: XOP5_R<0b1011100, 0b0011,
 def MEMSETkr: XOP5_R<0b1111100, 0b0000,
 	(outs), (ins GRegs:$dst, i64imm:$src, GRegs:$len),
 	"ms\t$dst,#$src,$len",
-	[(memset GRegs:$dst, simm5:$src, GRegs:$len)]>;
+	[(memset GRegs:$dst, simmp5:$src, GRegs:$len)]>;
 def MEMSETkw: XOP5_R<0b1111100, 0b0010,
 	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
 	"ms\t$dst,#$src,#$len",
-	[(memset GRegs:$dst, simm5:$src, simm32:$len)]>;
+	[(memset GRegs:$dst, simmp5:$src, simm32:$len)]>;
 def MEMSETkd: XOP5_R<0b1111100, 0b0011,
 	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
 	"ms\t$dst,#$src,#$len",
-	[(memset GRegs:$dst, simm5:$src, sneed64:$len)]>;
+	[(memset GRegs:$dst, simmp5:$src, sneed64:$len)]>;
+def MEMSETjr: XOP5_R<0b1111100, 0b0000,
+	(outs), (ins GRegs:$dst, i64imm:$src, GRegs:$len),
+	"ms\t$dst,#$src,$len",
+	[(memset GRegs:$dst, simmn5:$src, GRegs:$len)]>;
+def MEMSETjw: XOP5_R<0b1111100, 0b0010,
+	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
+	"ms\t$dst,#$src,#$len",
+	[(memset GRegs:$dst, simmn5:$src, simm32:$len)]>;
+def MEMSETjd: XOP5_R<0b1111100, 0b0011,
+	(outs), (ins GRegs:$dst, i64imm:$src, i64imm:$len),
+	"ms\t$dst,#$src,#$len",
+	[(memset GRegs:$dst, simmn5:$src, sneed64:$len)]>;
 
 // ENTER/EXIT
 let mayStore = 1 in {

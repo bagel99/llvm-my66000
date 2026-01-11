@@ -50,6 +50,14 @@ LLVM_DEBUG(dbgs() << "\tAttempt shrink to f32: " << losesInfo << '\n');
   return !losesInfo;
 }
 
+static bool isFPhalf(const APFloat FPVal2)
+{
+  APFloat FPVal = FPVal2;
+  bool losesInfo;
+  FPVal.convert(APFloat::IEEEhalf(), APFloat::rmNearestTiesToEven, &losesInfo);
+  return !losesInfo;
+}
+
 static bool isFPimm5(const APFloat FPVal)
 {
   APSInt IVal(64, false);
