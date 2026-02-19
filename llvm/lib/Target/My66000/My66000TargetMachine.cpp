@@ -76,7 +76,6 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
   void addMachineSSAOptimization() override;
-  void addPreRegAlloc() override;
   void addMachineLateOptimization() override;
   void addPreSched2() override;
 
@@ -112,16 +111,8 @@ bool My66000PassConfig::addInstSelector() {
 }
 
 void My66000PassConfig::addMachineSSAOptimization() {
-    addPass(createMy66000OptWInstrsPass());
-}
-
-// Really would like to run Predicate before VVM.
-// Running DeadMachineInstructionElim after My66000VVMLoop
-// will elimiate instruction made dead by the loop transform.
-void My66000PassConfig::addPreRegAlloc() {
-  initializeMy66000VVMLoopPass(*PassRegistry::getPassRegistry());
-  insertPass(&RegisterCoalescerID, &My66000VVMLoopID);
-  insertPass(&My66000VVMLoopID, &DeadMachineInstructionElimID);
+  TargetPassConfig::addMachineSSAOptimization();
+  addPass(createMy66000OptWInstrsPass());
 }
 
 void My66000PassConfig::addMachineLateOptimization() {
@@ -147,7 +138,7 @@ void My66000PassConfig::addMachineLateOptimization() {
 void My66000PassConfig::addPreSched2() {
   addPass(createMy66000ExpandPseudoPass());
   addPass(createMy66000PredBlockPass());
-  addPass(createMy66000VVMFixupPass());
+  addPass(createMy66000VVMLoopPass());
 }
 
 // Force static initialization.

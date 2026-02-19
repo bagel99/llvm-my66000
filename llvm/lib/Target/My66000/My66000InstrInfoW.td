@@ -1,29 +1,31 @@
 //
 // 32-bit extension
 //
+def rolw : SDNode<"My66000ISD::ROLW", SDTIntBinOp>;
+def rorw : SDNode<"My66000ISD::RORW", SDTIntBinOp>;
 def imm0 : Operand<i64>, ImmLeaf<i64,
 		[{ return Imm == 0; }]>;
 
 // Note: not sure why "ineg X" is not in DAG rather than "sub imm0,X"
 
 multiclass AWOPrr<string OpName, bits<7>OpC> {
-  def rr : XOP1_R<OpC, 0b0000,
+  def rr : XOP1_RR<OpC, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,$rs2"),
 	[]>;
-  def rn : XOP1_R<OpC, 0b0001,
+  def rn : XOP1_RR<OpC, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,$rs1,-$rs2"),
 	[]>;
-  def nr : XOP1_R<OpC, 0b0010,
+  def nr : XOP1_RR<OpC, 0b0010,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,$rs2"),
 	[]>;
-  def nn : XOP1_R<OpC, 0b0011,
+  def nn : XOP1_RR<OpC, 0b0011,
 	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
 	!strconcat(OpName, "\t$rd,-$rs1,-$rs2"),
 	[]>;
-//  def rw : XOP1_W<OpC, 0b1000,
+//  def rw : XOP1_RW<OpC, 0b1000,
 //	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 //	!strconcat(OpName, "\t$rd,$rs1,#$imm"),
 //	[]>;
@@ -54,15 +56,15 @@ def : Pat<(sext_inreg (add (ineg GRegs:$rs1), GRegs:$rs2), i32),
 def : Pat<(sext_inreg (sub imm0, (add GRegs:$rs1, GRegs:$rs2)), i32),
 	    (ADDSWnn GRegs:$rs1, GRegs:$rs2)>;
 let IsSignExtendingOp = 1 in {
-def ADDSWrw : XOP1_W<0b0001101, 0b0001,
+def ADDSWrw : XOP1_RW<0b0001101, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"addws\t$rd,$rs1,#$imm",
 	[(set GRegs:$rd, (sext_inreg (add GRegs:$rs1, simm32:$imm), i32))]>;
-def ADDSWnw : XOP1_W<0b0001101, 0b1001,
+def ADDSWnw : XOP1_RW<0b0001101, 0b1001,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs1),
 	"addws\t$rd,-$rs1,#$imm",
 	[(set GRegs:$rd, (sext_inreg (sub simm32:$imm, GRegs:$rs1), i32))]>;
-//def ADDSWwn : XOP1_W<0b0001101, 0b1001,
+//def ADDSWwn : XOP1_WR<0b0001101, 0b1001,
 //	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs1),
 //	"addws\t$rd,$rs1,#$imm",
 //	[(set GRegs:$rd, (sext_inreg (add simm32:$imm, (ineg GRegs:$rs1)), i32))]>;
@@ -77,11 +79,11 @@ def : Pat<(and (add (ineg GRegs:$rs1), GRegs:$rs2), 4294967295),
 	    (ADDUWnr GRegs:$rs1, GRegs:$rs2)>;
 def : Pat<(and (sub imm0, (add GRegs:$rs1, GRegs:$rs2)), 4294967295),
 	    (ADDUWnn GRegs:$rs1, GRegs:$rs2)>;
-def ADDUWrw : XOP1_W<0b0001101, 0b0001,
+def ADDUWrw : XOP1_RW<0b0001101, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"addw\t$rd,$rs1,#$imm",
 	[(set GRegs:$rd, (and (add GRegs:$rs1, simm32:$imm), 4294967295))]>;
-def ADDUWnw : XOP1_W<0b0001101, 0b1001,
+def ADDUWnw : XOP1_RW<0b0001101, 0b1001,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs1),
 	"addw\t$rd,-$rs1,#$imm",
 	[(set GRegs:$rd, (and (sub simm32:$imm, GRegs:$rs1), 4294967295))]>;
@@ -93,12 +95,12 @@ def : Pat<(sext_inreg (mul GRegs:$rs1, GRegs:$rs2), i32),
 def : Pat<(sext_inreg (sub imm0, (mul GRegs:$rs1, GRegs:$rs2)), i32),
 	    (MULSWrn GRegs:$rs1, GRegs:$rs2)>;
 let IsSignExtendingOp = 1 in {
-def MULSWrw : XOP1_W<0b0010001, 0b0001,
+def MULSWrw : XOP1_RW<0b0010001, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"mulws\t$rd,$rs1,#$imm",
 	[(set GRegs:$rd, (sext_inreg (mul GRegs:$rs1, simm32:$imm), i32))]>;
 }
-//def MULSWnw : XOP1_W<0b0010001, 0b0001,
+//def MULSWnw : XOP1_RW<0b0010001, 0b0001,
 //	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 //	"mulws\t$rd,-$rs1,#$imm",
 //	[(set GRegs:$rd, (sext_inreg
@@ -110,11 +112,11 @@ def : Pat<(and (mul GRegs:$rs1, GRegs:$rs2), 4294967295),
 	    (MULUWrr GRegs:$rs1, GRegs:$rs2)>;
 def : Pat<(and (sub imm0, (mul GRegs:$rs1, GRegs:$rs2)), 4294967295),
 	    (MULUWrn GRegs:$rs1, GRegs:$rs2)>;
-def MULUWrw : XOP1_W<0b0010001, 0b0001,
+def MULUWrw : XOP1_RW<0b0010001, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"mulw\t$rd,$rs1,#$imm",
 	[(set GRegs:$rd, (and (mul GRegs:$rs1, simm32:$imm), 4294967295))]>;
-def MULUWnw : XOP1_W<0b0010001, 0b0001,
+def MULUWnw : XOP1_RW<0b0010001, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"mulw\t$rd,-$rs1,#$imm",
 	[(set GRegs:$rd, (mul (and (sub imm0, GRegs:$rs1), 4294967295),
@@ -134,20 +136,20 @@ def : Pat<(sext_inreg (sdiv (sext_inreg (sub imm0, GRegs:$rs1), i32),
 		(sext_inreg (sub imm0, GRegs:$rs2), i32)), i32),
 	    (DIVSWnn GRegs:$rs1, GRegs:$rs2)>;
 let IsSignExtendingOp = 1 in {
-def DIVSWrw : XOP1_W<0b0011101, 0b0001,
+def DIVSWrw : XOP1_RW<0b0011101, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"divws\t$rd,$rs1,#$imm",
 	[(set GRegs:$rd, (sext_inreg (sdiv GRegs:$rs1, simm32:$imm), i32))]>;
-def DIVSWnw : XOP1_W<0b0011101, 0b0001,
+def DIVSWnw : XOP1_RW<0b0011101, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"divws\t$rd,-$rs1,#$imm",
 	[(set GRegs:$rd, (sext_inreg (sdiv
 		(sext_inreg (sub imm0, GRegs:$rs1), i32), simm32:$imm), i32))]>;
-def DIVSWwr : XOP1_W<0b0011101, 0b0001,
+def DIVSWwr : XOP1_WR<0b0011101, 0b0001,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	"divws\t$rd,#$imm,$rs2",
 	[(set GRegs:$rd, (sext_inreg (sdiv simm32:$imm, GRegs:$rs2), i32))]>;
-def DIVSWwn : XOP1_W<0b0011101, 0b0001,
+def DIVSWwn : XOP1_WR<0b0011101, 0b0001,
 	(outs GRegs:$rd), (ins i64imm:$imm, GRegs:$rs2),
 	"divws\t$rd,#$imm,-$rs2",
 	[(set GRegs:$rd, (sext_inreg (sdiv simm32:$imm,
@@ -179,13 +181,28 @@ def : Pat<(sext_inreg (smin GRegs:$rs1, GRegs:$rs2), i32),
 	   (MINSWrr GRegs:$rs1, GRegs:$rs2)>;
 
 // CMPW
-def CMPWrw : XOP1_W<0b0100000, 0b0001,
+def CMPWrw : XOP1_RW<0b0100000, 0b0001,
 	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
 	"cmpw\t$rd,$rs1,#$imm",
 	[(set GRegs:$rd, (cmp (sext_inreg GRegs:$rs1, i32), simm32:$imm))]>;
 def : Pat<(cmp GRegs:$rs1, (and GRegs:$rs2, 4294967295)),
 	    (CMPWrr GRegs:$rs1, GRegs:$rs2)>;
 
+// RORW, ROLW
+multiclass LWOPrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
+  def rr : XOP1_RR<OpC, 0b0000,
+	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
+	!strconcat(OpName, "\t$rd,$rs1,$rs2"),
+	[(set GRegs:$rd, (OpNode GRegs:$rs1, GRegs:$rs2))]>;
+  def ri : XOM7_R<OpC, 0b00,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$o),
+	!strconcat(OpName, "\t$rd,$rs1,#$o"),
+	[(set GRegs:$rd, (OpNode (i64 GRegs:$rs1), shfamt:$o))]>;
+}
+let IsZeroExtendingOp = 1 in {
+defm RORW : LWOPrr<"rorw", 0b1100001, rorw>;
+defm ROLW : LWOPrr<"rolw", 0b1101001, rolw>;
+}
 
 // SEXTW
 def : Pat<(sext_inreg  GRegs:$rs1, i32),

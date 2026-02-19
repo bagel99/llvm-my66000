@@ -257,6 +257,10 @@ void My66000AsmPrinter::emitInstruction(const MachineInstr *MI) {
   do {
     if (I->isBundle())    // Skip the BUNDLE pseudo instruction
       continue;
+//    OutStreamer->AddComment(Twine("SZ ")
+//			      .concat(utostr(I->getDesc().getSize()))
+//			      .concat(": ")
+//			      .concat(I->getOpcode())));
     MCInst TmpInst;
     MCInstLowering.Lower(&*I, TmpInst);
     EmitToStreamer(*OutStreamer, TmpInst);

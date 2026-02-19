@@ -73,6 +73,8 @@ public:
 
   const My66000RegisterInfo &getRegisterInfo() const { return RI; }
 
+  unsigned getInstSizeInBytes(const MachineInstr &MI) const override;
+
   bool isSEXTW(const MachineInstr &MI) const;
 
   bool isZEXTW(const MachineInstr &MI) const;

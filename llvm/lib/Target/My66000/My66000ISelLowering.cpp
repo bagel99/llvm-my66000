@@ -56,8 +56,9 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::FCMP: return "My66000ISD::FCMP";
   case My66000ISD::EXT: return "My66000ISD::EXT";
   case My66000ISD::EXTS: return "My66000ISD::EXTS";
+  case My66000ISD::RORW: return "My66000ISD::RORW";
+  case My66000ISD::ROLW: return "My66000ISD::ROLW";
   case My66000ISD::CMOV: return "My66000ISD::CMOV";
-  case My66000ISD::MUX: return "My66000ISD::MUX";
   case My66000ISD::BRcc: return "My66000ISD::BRcc";
   case My66000ISD::BRfcc: return "My66000ISD::BRfcc";
   case My66000ISD::BRbit: return "My66000ISD::BRbit";
@@ -166,6 +167,9 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::ZERO_EXTEND, MVT::i32, Legal);
   setOperationAction(ISD::ZERO_EXTEND, MVT::i16, Legal);
   setOperationAction(ISD::ZERO_EXTEND, MVT::i8, Legal);
+  // Subword operations
+  setOperationAction(ISD::ROTL, MVT::i32, Custom);
+  setOperationAction(ISD::ROTR, MVT::i32, Custom);
 
   for (MVT VT : MVT::integer_valuetypes()) {
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::i1, Promote);
@@ -727,16 +731,11 @@ LLVM_DEBUG(dbgs() << "LowerSELECT_CC\n");
     inst = My66000ISD::FCMP;
     CB = ISDCCtoMy66000CBF(CC);
   }
-#ifdef USE_MUX
-  unsigned OpExt = My66000ISD::EXTS;  unsigned OpMov = My66000ISD::MUX;
-#else
-  unsigned OpExt = My66000ISD::EXT;  unsigned OpMov = My66000ISD::CMOV;
-#endif
   SDValue Cmp = DAG.getNode(inst, dl, MVT::i64, LHS, RHS);
-  SDValue Ext = DAG.getNode(OpExt, dl, MVT::i64, Cmp,
+  SDValue Ext = DAG.getNode(My66000ISD::EXT, dl, MVT::i64, Cmp,
 		     DAG.getConstant(1, dl, MVT::i64),
 		     DAG.getConstant(CB, dl, MVT::i64));
-  return DAG.getNode(OpMov, dl, TVal.getValueType(), TVal, FVal, Ext);
+  return DAG.getNode(My66000ISD::CMOV, dl, TVal.getValueType(), TVal, FVal, Ext);
 }
 
 SDValue My66000TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
@@ -1522,6 +1521,21 @@ LLVM_DEBUG(Op.dump());
   }
 }
 
+// Converts the given i8/i16/i32 operation to a target-specific SelectionDAG
+// node. Because i8/i16/i32 isn't a legal type for us, these operations would
+// otherwise be promoted to i64, making it difficult to select.
+static SDValue customLegalizeToWOp(SDNode *N, SelectionDAG &DAG,
+				   const My66000ISD::NodeType OpCode,
+                                   unsigned ExtOpc = ISD::ANY_EXTEND) {
+  SDLoc DL(N);
+  SDValue NewOp0 = DAG.getNode(ExtOpc, DL, MVT::i64, N->getOperand(0));
+  SDValue NewOp1 = DAG.getNode(ExtOpc, DL, MVT::i64, N->getOperand(1));
+  SDValue NewRes = DAG.getNode(OpCode, DL, MVT::i64, NewOp0, NewOp1);
+  // ReplaceNodeResults requires we maintain the same type for the return value.
+  return DAG.getNode(ISD::TRUNCATE, DL, N->getValueType(0), NewRes);
+}
+
+
 void My66000TargetLowering::ReplaceNodeResults(SDNode *N,
 					       SmallVectorImpl<SDValue> &Results,
 		                               SelectionDAG &DAG) const {
@@ -1537,6 +1551,12 @@ LLVM_DEBUG(dbgs() << "ReplaceNodeResults\n");
       Results.push_back(DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Copy));
     }
   }
+  break;
+  case ISD::ROTL:
+    Results.push_back(customLegalizeToWOp(N, DAG, My66000ISD::ROLW));
+  break;
+  case ISD::ROTR:
+    Results.push_back(customLegalizeToWOp(N, DAG, My66000ISD::RORW));
   break;
   } // end switch
 }

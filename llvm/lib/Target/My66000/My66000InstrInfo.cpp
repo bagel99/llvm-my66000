@@ -90,8 +90,10 @@ static inline bool IsCondBranch(unsigned Opc) {
 }
 
 static inline bool IsUncondBranch(unsigned Opc) {
-  return Opc == My66000::BRU || Opc == My66000::BRI;
+  return Opc == My66000::BRU ||
+	 Opc == My66000::JMPXri || Opc == My66000::JMPXrr;
 }
+
 static inline bool IsBranch(unsigned Opc) {
   return IsUncondBranch(Opc) || IsCondBranch(Opc);
 }
@@ -109,8 +111,8 @@ static void parseCondBranch(MachineInstr &LastInst, MachineBasicBlock *&Target,
     case My66000::LOOP1ri:
     case My66000::LOOP1ir:
     case My66000::LOOP1ii:
+    case My66000::LOOP2rr:
     case My66000::LOOP2ri:
-    case My66000::LOOP2ii:
     case My66000::LOOP3rr:
     case My66000::LOOP3ri:
     case My66000::LOOP3ii:
@@ -240,8 +242,8 @@ LLVM_DEBUG(dbgs() << "\tconditional " << Opc << "\n");
     case My66000::LOOP1ri:
     case My66000::LOOP1ir:
     case My66000::LOOP1ii:
+    case My66000::LOOP2rr:
     case My66000::LOOP2ri:
-    case My66000::LOOP2ii:
     case My66000::LOOP3rr:
     case My66000::LOOP3ri:
     case My66000::LOOP3ii:
@@ -375,6 +377,15 @@ bool My66000InstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
     return true;
   }
   return MI.isAsCheapAsAMove();
+}
+
+unsigned My66000InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
+  if (MI.isInlineAsm()) {
+    const MachineFunction *MF = MI.getParent()->getParent();
+    const char *AsmStr = MI.getOperand(0).getSymbolName();
+    return getInlineAsmLength(AsmStr, *MF->getTarget().getMCAsmInfo());
+  }
+  return MI.getDesc().getSize();
 }
 
 bool My66000InstrInfo::isSEXTW(const MachineInstr &MI) const {

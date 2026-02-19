@@ -210,6 +210,7 @@ static bool isMask(uint64_t imm, unsigned &Width) {
   return true;
 }
 
+/*
 static bool isANDMask(const SDNode *N, unsigned &Width) {
   uint64_t Imm;
   if (isOpcWithIntImmediate(N, ISD::AND, Imm)) {
@@ -217,6 +218,7 @@ static bool isANDMask(const SDNode *N, unsigned &Width) {
   }
   return false;
 }
+*/
 
 // isExtractBit - This tests if the node is an EXT of a single bit
 // and returns the bit number.
@@ -467,7 +469,8 @@ void My66000DAGToDAGISel::PreprocessISelDAG() {
     SDNode *N = &*I++; // Preincrement iterator to avoid invalidation issues.
 
     // Following copied from X86
-    if (N->getOpcode() == My66000ISD::CALLI) {
+    if (N->getOpcode() == My66000ISD::CALLI ||
+        N->getOpcode() == My66000ISD::TAILI) {
       /// Also try moving call address load from outside callseq_start to just
       /// before the call to allow it to be folded.
       ///
@@ -504,6 +507,7 @@ LLVM_DEBUG(dbgs() << "Moving load into call area\n");
     CurDAG->RemoveDeadNodes();
 }
 
+/*
 static bool isRotDiff(SDNode *N, unsigned Width, SDValue Op) {
   uint64_t Subimm;
   if (N->getOpcode() == ISD::SUB &&
@@ -523,10 +527,12 @@ LLVM_DEBUG(dbgs() << "\toperands match\n");
   }
   return false;
 }
+*/
 
-bool My66000DAGToDAGISel::tryRotateR(SDNode *N,	 /* the node to replace */
-				     SDNode *NOR,	/* the OR node */
-				     unsigned MWidth) {	/* mask width */
+/*
+bool My66000DAGToDAGISel::tryRotateR(SDNode *N,	 // the node to replace
+				     SDNode *NOR,	// the OR node
+				     unsigned MWidth) {	// mask width
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryRotateR\n");
   SDLoc dl(N);
   SDValue OpL = NOR->getOperand(0);
@@ -559,8 +565,8 @@ LLVM_DEBUG(dbgs() << "\telided right mask\n");
     if (isRotDiff(LR.getNode(), MWidth, RR)) {
 LLVM_DEBUG(dbgs() << "\tgot good shift expressions\n");
 	SDValue Ops[] = { OpR.getNode()->getOperand(0),
-			  CurDAG->getTargetConstant(MWidth, dl, MVT::i32),
-			  RR };
+			  RR,
+			  CurDAG->getTargetConstant(MWidth, dl, MVT::i32) };
 	SDNode *ROT = CurDAG->getMachineNode(WhichOp, dl, MVT::i64, Ops);
 	ReplaceNode(N, ROT);
 	return true;
@@ -568,6 +574,7 @@ LLVM_DEBUG(dbgs() << "\tgot good shift expressions\n");
   }
   return false;
 }
+*/
 
 bool My66000DAGToDAGISel::tryRotateI(SDNode *N,	 /* the node to replace */
 				     SDNode *NOR,	/* the OR node */
@@ -612,8 +619,6 @@ bool My66000DAGToDAGISel::tryOR(SDNode *N) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::tryOR\n");
     if (tryRotateI(N, N, 0))
       return true;
-//    if (tryRotateR(N, N, 0))
-//      return true;
   return false;
 }
 
@@ -745,8 +750,8 @@ LLVM_DEBUG(dbgs() << "\tdynamic extract #2\n");
       else if (N->getOperand(0).getNode()->getOpcode() == ISD::OR) {
 	if (tryRotateI(N, N->getOperand(0).getNode(), Width))
 	  return true;
-	if (tryRotateR(N, N->getOperand(0).getNode(), Width))
-	  return true;
+//	if (tryRotateR(N, N->getOperand(0).getNode(), Width))
+//	  return true;
       }
       // We have AND with a mask.
       if (Width > 15 || Width == 8)

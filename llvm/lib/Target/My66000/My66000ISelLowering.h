@@ -38,8 +38,9 @@ enum NodeType : unsigned {
   FCMP,		// Floating CMP
   EXT,		// Extract zero extended
   EXTS,		// Extract sign extended
+  RORW,		// Rotate right 32 bit
+  ROLW,		// Rotate left 32 bit
   CMOV,		// Conditional move
-  MUX,		// Multiplex instruction
   BRcc,		// Branch on bit set by CMP
   BRfcc,	// Branch on bit set by FCMP
   BRbit,	// Branch on bit not set by a compare
