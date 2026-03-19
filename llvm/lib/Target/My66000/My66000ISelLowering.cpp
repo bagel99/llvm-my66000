@@ -630,6 +630,7 @@ LLVM_DEBUG(dbgs() << "\tsign extend LHS load 8\n");
 	}
       }
     }
+/*
     // Fix unhelpful optimization that converted negated operand
     if (LHS.getOpcode() == ISD::ADD && isAllOnesConstant(LHS.getOperand(1))) {
 LLVM_DEBUG(dbgs() << "\tconvert LHS is ADD of -1\n");
@@ -640,6 +641,7 @@ LLVM_DEBUG(dbgs() << "\tconvert LHS is ADD of -1\n");
 	RHS = DAG.getConstant(imm, dl, MVT::i64);
 	CC = ISD::getSetCCSwappedOperands(CC);
     }
+*/
     // Fix unhelpful optimization that preferred LT and GT and shrink constant
     if (CC == ISD::SETLT && (int64_t)imm > 0) {
 LLVM_DEBUG(dbgs() << "\tconvert LT x into LE x-1 (x > 0)\n");

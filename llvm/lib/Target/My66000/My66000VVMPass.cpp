@@ -249,6 +249,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
 	       *AddMI = nullptr,// the add to loop counter instruction
 	       *IncMI = nullptr;// an increment by 1 instruction
   unsigned NInstr = MaxVVMInstr;
+  unsigned CmpOpNo;
   for (;;) {
     MachineInstr *MI = &*E;
     if (MI->isCall()) {
@@ -278,11 +279,13 @@ LLVM_DEBUG(dbgs() << " examine " << *MI);
 	// we have seen the compare but not its operands
 	if (MI->getOperand(0).getReg() == CmpMI->getOperand(1).getReg()) {
 	  LLVM_DEBUG(dbgs() << " def of compare variable op1: " << *MI);
+	  CmpOpNo = 2;
 	  if (isSimpleAdd(*MI))
 	    AddMI = MI;
 	} else if (CmpMI->getOperand(2).isReg() &&
 		   MI->getOperand(0).getReg() == CmpMI->getOperand(2).getReg()) {
 	  LLVM_DEBUG(dbgs() << " def of compare variable op2: " << *MI);
+	  CmpOpNo = 1;
 	  if (isSimpleAdd(*MI))
 	    AddMI = MI;
         }
@@ -374,7 +377,8 @@ LLVM_DEBUG(dbgs() << " examine " << *MI);
   unsigned Opc;
   switch (Type) {
   case 1: {	// Have CmpMI and AddMI
-    if (CmpMI->getOperand(2).isReg()) {
+    MachineOperand *CmpOp = &CmpMI->getOperand(CmpOpNo);
+    if (CmpOp->isReg()) {
       if (AddMI->getOperand(2).isReg()) {
 	Opc = My66000::LOOP1rr;
 	LLVM_DEBUG(dbgs() << " type1rr\n");
@@ -395,7 +399,7 @@ LLVM_DEBUG(dbgs() << " examine " << *MI);
 	  .addImm(BCnd)
 	  .addReg(LReg)
 	  .add(AddMI->getOperand(2))
-	  .add(CmpMI->getOperand(2));
+	  .add(*CmpOp);
    break;
   }
   case 2: {	// No CmpMI but have AddMI
