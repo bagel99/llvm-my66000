@@ -71,6 +71,7 @@ namespace {
     bool RangeCheck2(MachineBasicBlock *MBB);
     bool RangeCheck1(MachineFunction &MF);
     void RangeCheck(MachineFunction &MF);
+    void ExpandBBIT0(MachineBasicBlock *MBB);
   };
 
 } // end anonymous namespace
@@ -158,7 +159,7 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
       if (invert)
         cc = TII->reverseBRFB(static_cast<MYCB::CondBits>(cc));
       break;
-    case My66000::BBIT:
+    case My66000::BBIT1:
       op = My66000::PBIT;
       break;
     default:
@@ -745,8 +746,32 @@ LLVM_DEBUG(dbgs() << "***Before RangeCheck ***\n");
   } while (Mod);
 }
 
+void My66000PredBlock::ExpandBBIT0(MachineBasicBlock *MBB) {
+  MachineBasicBlock *TBB, *FBB;
+  SmallVector<MachineOperand, 4> Cond;
+
+  Cond.clear();
+  TBB = nullptr;
+  FBB = nullptr;
+  if (!ExamineBranch(MBB, TBB, FBB, Cond))
+    return;	// not the right kind of branch
+  if (Cond[0].getImm() == My66000::BBIT0) {
+LLVM_DEBUG(dbgs() << "My66000PredBlock::ExpandBBIT0\n");
+    // reverse true and false
+    Cond[0].setImm(My66000::BBIT1);
+    MachineBasicBlock::iterator MBI = MBB->getFirstTerminator();
+    TII->removeBranch(*MBB);
+    TII->insertBranch(*MBB, FBB, TBB, Cond, MBI->getDebugLoc());
+  }
+}
+
 bool My66000PredBlock::runOnMachineFunction(MachineFunction &MF) {
   TII = MF.getSubtarget<My66000Subtarget>().getInstrInfo();
+
+  // First expand any pseudo BBIT0
+  for (auto &MBB : MF ) {
+      ExpandBBIT0(&MBB);
+  }
 
   if (!MF.getSubtarget<My66000Subtarget>().usePredication()) return false;
 LLVM_DEBUG(dbgs() << "My66000PredBlock::runOnMachineFunction\n");

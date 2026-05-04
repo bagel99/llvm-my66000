@@ -110,9 +110,16 @@ public:
     return "My66000 DAG->DAG Pattern Instruction Selection";
   }
 
+  bool SelectInlineAsmMemoryOperand(const SDValue &Op,
+                                    InlineAsm::ConstraintCode ConstraintID,
+                                    std::vector<SDValue> &OutOps) override;
   bool SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset);
   bool SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Index,
 		    SDValue &Shift, SDValue &Offset);
+  bool SelectADDRrx(SDValue Addr, SDValue &Base, SDValue &Index,
+		    SDValue &Shift, SDValue &Offset);
+  bool SelectADDRrrx(SDValue Addr, SDValue &Base, SDValue &Index,
+		    SDValue &Shift, SDValue &Offset, bool UseRI);
 
 private:
   bool getShift(SDValue Addr, SDValue &Index, SDValue &Shift);
@@ -232,6 +239,27 @@ static bool isExtractBit(const SDNode *N, uint64_t &Bit) {
   return false;
 }
 
+bool My66000DAGToDAGISel::SelectInlineAsmMemoryOperand(
+    const SDValue &Op, InlineAsm::ConstraintCode ConstraintID,
+    std::vector<SDValue> &OutOps) {
+  switch (ConstraintID) {
+  case InlineAsm::ConstraintCode::o:
+  case InlineAsm::ConstraintCode::m: {
+    SDValue Op0, Op1;
+    bool Found = SelectADDRri(Op, Op0, Op1);
+    assert(Found && "SelectAddrRegImm should always succeed");
+    (void)Found;
+    OutOps.push_back(Op0);
+    OutOps.push_back(Op1);
+    return false;
+  }
+  default:
+    report_fatal_error("Unexpected asm memory constraint " +
+                       InlineAsm::getMemConstraintName(ConstraintID));
+  }
+  return true;
+}
+
 bool My66000DAGToDAGISel::SelectADDRri(SDValue Addr,
 				       SDValue &Base, SDValue &Offset) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRri\n");
@@ -294,9 +322,14 @@ LLVM_DEBUG(dbgs() << "no valid shift\n");
   return false;
 }
 
-bool My66000DAGToDAGISel::SelectADDRrr(SDValue Addr,
+// allow 16-bit displacements
+// Make sure the ordering of patterns will catch the ri version
+#define ALLOWSHORTDISP 1
+
+bool My66000DAGToDAGISel::SelectADDRrrx(SDValue Addr,
 				       SDValue &Base, SDValue &Index,
-				       SDValue &Shift, SDValue &Offset) {
+				       SDValue &Shift, SDValue &Offset,
+				       bool UseRI) {
 LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 LLVM_DEBUG(dbgs() << "\tOpcode=" << Addr->getOperationName(CurDAG) << '\n');
   if (Addr.getOpcode() == ISD::FrameIndex) {
@@ -361,8 +394,8 @@ LLVM_DEBUG(dbgs() << "\tOpcode=" << Addr->getOperationName(CurDAG) << '\n');
       }	else {	// not add of add, just add
 	Base = Addr.getOperand(0);
         if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
-	  // base + displacement
-          if (isInt<16>(CN->getSExtValue())) {
+	  // base + 16-bit displacement
+          if (!UseRI && isInt<16>(CN->getSExtValue())) {
 	    LLVM_DEBUG(dbgs() << "\tdefer to ri\n");
 	    return false; // simple base + 16-bit displacement, handle elsewhere
           }
@@ -385,10 +418,31 @@ LLVM_DEBUG(dbgs() << "\tOpcode=" << Addr->getOperationName(CurDAG) << '\n');
       }
     }
   }
+  if (UseRI && Addr.getOpcode() == ISD::CopyFromReg) {
+    Base = Addr;
+    Index = CurDAG->getRegister(My66000::R0, MVT::i64);
+    Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
+    Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
+    LLVM_DEBUG(dbgs() << "\tmatch 8\n");
+    return true;
+  }
   LLVM_DEBUG(dbgs() << "\tfail bad opcode\n");
   LLVM_DEBUG(Addr.getNode()->dump(CurDAG); dbgs() << '\n');
   return false;
 }
+
+bool My66000DAGToDAGISel::SelectADDRrr(SDValue Addr,
+				       SDValue &Base, SDValue &Index,
+				       SDValue &Shift, SDValue &Offset) {
+    return SelectADDRrrx(Addr, Base, Index, Shift, Offset, false);
+}
+
+bool My66000DAGToDAGISel::SelectADDRrx(SDValue Addr,
+				       SDValue &Base, SDValue &Index,
+				       SDValue &Shift, SDValue &Offset) {
+    return SelectADDRrrx(Addr, Base, Index, Shift, Offset, true);
+}
+
 
 /// Replace the original chain operand of the call with
 /// load's chain operand and move load below the call's chain operand.

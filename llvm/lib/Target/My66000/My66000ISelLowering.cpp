@@ -61,7 +61,8 @@ const char *My66000TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case My66000ISD::CMOV: return "My66000ISD::CMOV";
   case My66000ISD::BRcc: return "My66000ISD::BRcc";
   case My66000ISD::BRfcc: return "My66000ISD::BRfcc";
-  case My66000ISD::BRbit: return "My66000ISD::BRbit";
+  case My66000ISD::BRbit1: return "My66000ISD::BRbit1";
+  case My66000ISD::BRbit0: return "My66000ISD::BRbit0";
   case My66000ISD::BRcond: return "My66000ISD::BRcond";
   case My66000ISD::JT8: return "My66000ISD::JT8";
   case My66000ISD::JT16: return "My66000ISD::JT16";
@@ -297,6 +298,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BITCAST, MVT::f32, Custom);
   setOperationAction(ISD::BITCAST, MVT::i32, Custom);
 
+  setMaxAtomicSizeInBitsSupported(64);
   MaxStoresPerMemcpy = 1;
   MaxStoresPerMemcpyOptSize = 1;
   MaxStoresPerMemmove = 1;
@@ -760,17 +762,10 @@ LLVM_DEBUG(dbgs() << "LowerBR_CC CC=" << getCCName(CC) << '\n');
 	uint64_t Mask = LHS.getConstantOperandVal(1);
 	SDValue Test = LHS.getOperand(0);
 	unsigned Bit = Log2_64(Mask);
-	if (CC == ISD::SETNE) {
-	  // Can change BNE(AND x,#<single bit> into BBIT
-	  return DAG.getNode(My66000ISD::BRbit, dl, MVT::Other, Chain, Dest,
-			     Test,
-			     DAG.getConstant(Bit, dl, MVT::i64));
-	}
-	// Can change BEQ(AND x,#<single bit> into BEQ after extraction
-	LHS = DAG.getNode(My66000ISD::EXT, dl, MVT::i64, Test,
-			   DAG.getConstant(1, dl, MVT::i64),
-			   DAG.getConstant(Bit, dl, MVT::i64));
-	cc = MYCC::EQ0;
+	unsigned Opcode = (CC == ISD::SETNE) ? My66000ISD::BRbit1:
+					       My66000ISD::BRbit0;
+	return DAG.getNode(Opcode, dl, MVT::Other, Chain, Dest,
+			   Test, DAG.getConstant(Bit, dl, MVT::i64));
       }
       return DAG.getNode(My66000ISD::BRcond, dl, MVT::Other, Chain, Dest,
 		         LHS, DAG.getConstant(cc, dl, MVT::i64));
@@ -1600,6 +1595,80 @@ static MachineBasicBlock *emitCPFS(MachineInstr &MI, MachineBasicBlock *BB) {
   return BB;
 }
 
+static MachineBasicBlock *emitAtomicOp(MachineInstr &MI, MachineBasicBlock *BB,
+			unsigned Size, unsigned OpCode) {
+LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
+  MachineFunction &MF = *BB->getParent();
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+
+  auto LdOp = My66000::LDDXrr;
+  auto StOp = My66000::STDXrr;
+  switch (Size) {
+  default:
+    llvm_unreachable("Unexpected size of atomic entity");
+  case 1:
+    LdOp = My66000::LDUBXrr;
+    StOp = My66000::STBXrr;
+    break;
+  case 2:
+    LdOp = My66000::LDUHXrr;
+    StOp = My66000::STHXrr;
+    break;
+  case 4:
+    LdOp = My66000::LDUWXrr;
+    StOp = My66000::STWXrr;
+    break;
+  case 8:
+    LdOp = My66000::LDDXrr;
+    StOp = My66000::STDXrr;
+    break;
+  }
+  Register dest = MI.getOperand(0).getReg();
+  Register base = MI.getOperand(1).getReg();
+  Register indx = MI.getOperand(2).getReg();
+  unsigned shft = MI.getOperand(3).getImm();
+  DebugLoc dl = MI.getDebugLoc();
+
+  // Build the load
+  BuildMI(*BB, MI, dl, TII.get(LdOp), dest)
+	.addReg(base).addReg(indx).addImm(shft)
+	.add(MI.getOperand(4));
+  // Build the operation
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  Register temp;
+  if (OpCode == 0) {				// its swap
+    temp = MI.getOperand(5).getReg();
+  } else if (OpCode == My66000::CMPrr) {	// its compare and swap
+    temp = MRI.createVirtualRegister(&My66000::GRegsRegClass);
+    BuildMI(*BB, MI, dl, TII.get(OpCode), temp)
+	    .addReg(dest) .addReg(MI.getOperand(5).getReg());
+    BuildMI(*BB, MI, dl, TII.get(My66000::PRIB))
+	    .addImm(MYCB::NEQ) .addReg(temp) .addImm(1) .addImm(0);
+    temp = MI.getOperand(6).getReg();
+  } else {					// its an operation, e.g. ADD
+    temp = MRI.createVirtualRegister(&My66000::GRegsRegClass);
+    BuildMI(*BB, MI, dl, TII.get(OpCode), temp)
+	    .addReg(dest) .add(MI.getOperand(5));
+  }
+  // Build the store
+  BuildMI(*BB, MI, dl, TII.get(StOp))
+	.addReg(temp).addReg(base).addReg(indx).addImm(shft)
+	.add(MI.getOperand(4));
+  // Do we need this
+  MI.eraseFromParent(); // The pseudo instruction is gone now.
+  return BB;
+}
+
+
+// Since My66000 does not have a SUB immediate, we negate the increment
+// and use ADD immediate.
+static MachineBasicBlock *emitAtomicSub(MachineInstr &MI, MachineBasicBlock *BB,
+			unsigned Size, unsigned OpCode) {
+  int64_t Imm = MI.getOperand(5).getImm();
+  MI.getOperand(5).setImm(-Imm);
+  return emitAtomicOp(MI, BB, Size, OpCode);
+}
+
 MachineBasicBlock *My66000TargetLowering::EmitInstrWithCustomInserter(
 			MachineInstr &MI,
 			MachineBasicBlock *BB) const {
@@ -1637,6 +1706,51 @@ LLVM_DEBUG(dbgs() << "EmitInstrWithCustomInserter\n");
 	return emitDIVREM(MI, BB, My66000::SDIVdr, My66000::SDIVREMdrc);
   case My66000::CPFMFS:		return emitCPFS(MI, BB);
   case My66000::CPTOFS:		return emitCPFS(MI, BB);
+  case My66000::AADDDr:	return emitAtomicOp(MI, BB, 8, My66000::ADDrr);
+  case My66000::AADDWr:	return emitAtomicOp(MI, BB, 4, My66000::ADDrr);
+  case My66000::AADDHr:	return emitAtomicOp(MI, BB, 2, My66000::ADDrr);
+  case My66000::AADDBr:	return emitAtomicOp(MI, BB, 1, My66000::ADDrr);
+  case My66000::AADDDi:	return emitAtomicOp(MI, BB, 8, My66000::ADDri);
+  case My66000::AADDWi:	return emitAtomicOp(MI, BB, 4, My66000::ADDri);
+  case My66000::AADDHi:	return emitAtomicOp(MI, BB, 2, My66000::ADDri);
+  case My66000::AADDBi:	return emitAtomicOp(MI, BB, 1, My66000::ADDri);
+  case My66000::ASUBDr:	return emitAtomicOp(MI, BB, 8, My66000::ADDrn);
+  case My66000::ASUBWr:	return emitAtomicOp(MI, BB, 4, My66000::ADDrn);
+  case My66000::ASUBHr:	return emitAtomicOp(MI, BB, 2, My66000::ADDrn);
+  case My66000::ASUBBr:	return emitAtomicOp(MI, BB, 1, My66000::ADDrn);
+  case My66000::ASUBDi:	return emitAtomicSub(MI, BB, 8, My66000::ADDri);
+  case My66000::ASUBWi:	return emitAtomicSub(MI, BB, 4, My66000::ADDri);
+  case My66000::ASUBHi:	return emitAtomicSub(MI, BB, 2, My66000::ADDri);
+  case My66000::ASUBBi:	return emitAtomicSub(MI, BB, 1, My66000::ADDri);
+  case My66000::AANDDr:	return emitAtomicOp(MI, BB, 8, My66000::ANDrr);
+  case My66000::AANDWr:	return emitAtomicOp(MI, BB, 4, My66000::ANDrr);
+  case My66000::AANDHr:	return emitAtomicOp(MI, BB, 2, My66000::ANDrr);
+  case My66000::AANDBr:	return emitAtomicOp(MI, BB, 1, My66000::ANDrr);
+  case My66000::AANDDi:	return emitAtomicOp(MI, BB, 8, My66000::ANDri);
+  case My66000::AANDWi:	return emitAtomicOp(MI, BB, 4, My66000::ANDri);
+  case My66000::AANDHi:	return emitAtomicOp(MI, BB, 2, My66000::ANDri);
+  case My66000::AANDBi:	return emitAtomicOp(MI, BB, 1, My66000::ANDri);
+  case My66000::AORDr:	return emitAtomicOp(MI, BB, 8, My66000::ORrr);
+  case My66000::AORWr:	return emitAtomicOp(MI, BB, 4, My66000::ORrr);
+  case My66000::AORHr:	return emitAtomicOp(MI, BB, 2, My66000::ORrr);
+  case My66000::AORBr:	return emitAtomicOp(MI, BB, 1, My66000::ORrr);
+  case My66000::AORDi:	return emitAtomicOp(MI, BB, 8, My66000::ORri);
+  case My66000::AORWi:	return emitAtomicOp(MI, BB, 4, My66000::ORri);
+  case My66000::AORHi:	return emitAtomicOp(MI, BB, 2, My66000::ORri);
+  case My66000::AORBi:	return emitAtomicOp(MI, BB, 1, My66000::ORri);
+  case My66000::AXORDr:	return emitAtomicOp(MI, BB, 8, My66000::XORrr);
+  case My66000::AXORWr:	return emitAtomicOp(MI, BB, 4, My66000::XORrr);
+  case My66000::AXORHr:	return emitAtomicOp(MI, BB, 2, My66000::XORrr);
+  case My66000::AXORBr:	return emitAtomicOp(MI, BB, 1, My66000::XORrr);
+  case My66000::AXORDi:	return emitAtomicOp(MI, BB, 8, My66000::XORri);
+  case My66000::AXORWi:	return emitAtomicOp(MI, BB, 4, My66000::XORri);
+  case My66000::AXORHi:	return emitAtomicOp(MI, BB, 2, My66000::XORri);
+  case My66000::AXORBi:	return emitAtomicOp(MI, BB, 1, My66000::XORri);
+  case My66000::ASWAPDr:return emitAtomicOp(MI, BB, 8, 0);
+  case My66000::ASWAPWr:return emitAtomicOp(MI, BB, 4, 0);
+  case My66000::ASWAPHr:return emitAtomicOp(MI, BB, 2, 0);
+  case My66000::ASWAPBr:return emitAtomicOp(MI, BB, 1, 0);
+  case My66000::ACMPSWAPDr: return emitAtomicOp(MI, BB, 8, My66000::CMPrr);
   }
 }
 

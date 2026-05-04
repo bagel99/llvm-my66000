@@ -54,6 +54,7 @@ inline static const char *CondCodeString(unsigned CC) {
   case MYCC::FLE: return "fle";
   case MYCC::FOR: return "for";
   case MYCC::FUN: return "fun";
+  case MYCC::IN:  return "in";
   default: return "???";
   }
 }

@@ -20,7 +20,6 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/InitializePasses.h"
@@ -49,12 +48,8 @@ public:
     return PASS_NAME;
   }
 
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    MachineFunctionPass::getAnalysisUsage(AU);
-    AU.addRequired<MachineLoopInfo>();
-  }
 private:
-  bool checkLoop(MachineLoop *Loop);
+  bool checkLoop(MachineBasicBlock *MBB);
   void calcLiveOuts(MachineBasicBlock *MBB, std::bitset<32> &Liveout);
   void findModified(MachineBasicBlock *MBB, std::bitset<32> &Modified);
 };
@@ -65,10 +60,7 @@ char &llvm::My66000VVMLoopID = My66000VVMLoop::ID;
 
 char My66000VVMLoop::ID = 0;
 
-INITIALIZE_PASS_BEGIN(My66000VVMLoop, DEBUG_TYPE, PASS_NAME, false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
-INITIALIZE_PASS_END(My66000VVMLoop, DEBUG_TYPE, PASS_NAME, false, false)
-
+INITIALIZE_PASS(My66000VVMLoop, DEBUG_TYPE, PASS_NAME, false, false)
 
 FunctionPass *llvm::createMy66000VVMLoopPass() {
   return new My66000VVMLoop();
@@ -172,19 +164,17 @@ static bool isSimpleAdd(MachineInstr &MI) {
   return false;
 }
 
-bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
-  LLVM_DEBUG(dbgs() << "checkLoop\n");
-//  Loop->dump();
-  MachineBasicBlock *TB = Loop->getTopBlock();	// the loop block
-  MachineBasicBlock *CB = Loop->findLoopControlBlock();
-  if (!CB || CB != TB)
+bool My66000VVMLoop::checkLoop(MachineBasicBlock *TB) {
+  LLVM_DEBUG(dbgs() << "checkLoop " << printMBBReference(*TB) << '\n');
+  if (!TB->isSuccessor(TB))
     return false;
-  MachineBasicBlock *BB = Loop->getBottomBlock();
-  if (TB != BB)
-    return false;	// For now, only single block loops
-  LLVM_DEBUG(dbgs() << " found candidate inner loop " << printMBBReference(*TB) << '\n');
+  LLVM_DEBUG(dbgs() << " found candidate inner loop\n");
   MachineBasicBlock::iterator I = TB->begin();
   MachineBasicBlock::iterator E = TB->getLastNonDebugInstr();
+  if (I == E) {
+    LLVM_DEBUG(dbgs() << " loop is infinite\n");
+    return false;
+  }
   MachineInstr *BrcMI,		// the conditional branch instruction
 	       *BruMI = nullptr;// the ending uncoditional branch (if any)
 //  MachineOperand &CmpOp = nullptr;	// the compare operand of interest
@@ -225,7 +215,7 @@ bool My66000VVMLoop::checkLoop(MachineLoop *Loop) {
     LLVM_DEBUG(dbgs() << " fail - unsupported condition code\n");
     return false;
   }
-  CB = BrcMI->getOperand(0).getMBB();
+  MachineBasicBlock *CB = BrcMI->getOperand(0).getMBB();
   if (CB != TB) {
     if (!CondIsExit) {
       LLVM_DEBUG(dbgs() << " fail - bad branch target\n");
@@ -473,7 +463,7 @@ LLVM_DEBUG(dbgs() << " examine " << *MI);
     AddMI->eraseFromParent();	// Is this safe?
   if (CmpMI != nullptr) {
     if (Liveout.test(CmpMI->getOperand(0).getReg()-2))
-      dbgs() << " CmpMI result is live out:" << *CmpMI;
+      LLVM_DEBUG(dbgs() << " CmpMI result is live out:" << *CmpMI);
     else
       CmpMI->eraseFromParent();
   }
@@ -484,20 +474,11 @@ LLVM_DEBUG(dbgs() << " examine " << *MI);
 
 bool My66000VVMLoop::runOnMachineFunction(MachineFunction &MF) {
   TII = MF.getSubtarget<My66000Subtarget>().getInstrInfo();
-  bool Changed = false;
-
   if (!MF.getSubtarget<My66000Subtarget>().useVVM()) return false;
+  bool Changed = false;
 LLVM_DEBUG(dbgs() << "VVMLoopPass: " << MF.getName() << '\n');
-  MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
-  SmallVector<MachineLoop *, 4> Loops(MLI.begin(), MLI.end());
-  for (int i = 0; i < (int)Loops.size(); ++i)
-    for (MachineLoop *Child : Loops[i]->getSubLoops())
-      Loops.push_back(Child);
-  for (MachineLoop *CurrLoop : Loops) {
-    if (!CurrLoop->getSubLoops().empty())
-      continue;
-    Changed = checkLoop(CurrLoop);
+  for (auto &MBB : MF ) {
+    Changed |= checkLoop(&MBB);
   }
-
   return Changed;
 }

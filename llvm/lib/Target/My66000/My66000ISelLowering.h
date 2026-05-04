@@ -43,7 +43,8 @@ enum NodeType : unsigned {
   CMOV,		// Conditional move
   BRcc,		// Branch on bit set by CMP
   BRfcc,	// Branch on bit set by FCMP
-  BRbit,	// Branch on bit not set by a compare
+  BRbit1,	// Branch on bit is 1
+  BRbit0,	// Branch on bit is 0
   BRcond,	// Branch compare with zero
   JT8,		// Jump through table, 8 bit
   JT16,		// Jump through table, 16 bit

@@ -78,7 +78,7 @@ public:
   void addMachineSSAOptimization() override;
   void addMachineLateOptimization() override;
   void addPreSched2() override;
-
+  void addPreEmitPass() override;
 };
 
 } // end anonymous namespace
@@ -138,6 +138,10 @@ void My66000PassConfig::addMachineLateOptimization() {
 void My66000PassConfig::addPreSched2() {
   addPass(createMy66000ExpandPseudoPass());
   addPass(createMy66000PredBlockPass());
+}
+
+void My66000PassConfig::addPreEmitPass() {
+  // Machine Block Placement might have created new VVM opportunities.
   addPass(createMy66000VVMLoopPass());
 }
 

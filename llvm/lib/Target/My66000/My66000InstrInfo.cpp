@@ -86,7 +86,8 @@ void My66000InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 
 static inline bool IsCondBranch(unsigned Opc) {
   return Opc == My66000::BRC ||
-         Opc == My66000::BRIB || Opc == My66000::BRFB || Opc == My66000::BBIT;
+         Opc == My66000::BRIB || Opc == My66000::BRFB ||
+	 Opc == My66000::BBIT1;
 }
 
 static inline bool IsUncondBranch(unsigned Opc) {

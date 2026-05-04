@@ -98,7 +98,9 @@ def myBRcond :	    SDNode<"My66000ISD::BRcond", SDT_BRcond,
 			[SDNPHasChain]>;
 def myBRcc :	    SDNode<"My66000ISD::BRcc", SDT_BRcc,
 			[SDNPHasChain]>;
-def myBRbit :	    SDNode<"My66000ISD::BRbit", SDT_BRcc,
+def myBRbit1 :	    SDNode<"My66000ISD::BRbit1", SDT_BRcc,
+			[SDNPHasChain]>;
+def myBRbit0 :	    SDNode<"My66000ISD::BRbit0", SDT_BRcc,
 			[SDNPHasChain]>;
 def myJT8 :	    SDNode<"My66000ISD::JT8", SDT_BR_JT, [SDNPHasChain]>;
 def myJT16 :	    SDNode<"My66000ISD::JT16", SDT_BR_JT, [SDNPHasChain]>;
@@ -541,8 +543,9 @@ def : Pat<(srl (bitreverse (i64 GRegs:$rs1)), shfamt:$imm),
 // Load/Store
 //
 // Addressing modes.
-def ADDRrr : ComplexPattern<iPTR, 4, "SelectADDRrr", [], []>;
 def ADDRri : ComplexPattern<iPTR, 2, "SelectADDRri", [frameindex], []>;
+def ADDRrx : ComplexPattern<iPTR, 4, "SelectADDRrx", [], []>;
+def ADDRrr : ComplexPattern<iPTR, 4, "SelectADDRrr", [], []>;
 
 def MEMri : Operand<iPTR> {
   let PrintMethod = "printMEMriOperand";
@@ -554,31 +557,38 @@ def MEMrr : Operand<iPTR> {
   let MIOperandInfo = (ops GRegs:$rb, GRegs:$rx, i64imm, i64imm);
 //  let ParserMatchClass = My66000MEMrrAsmOperand;
 }
+def MEMrx : Operand<iPTR> {
+  let PrintMethod = "printMEMrrOperand";
+  let MIOperandInfo = (ops GRegs:$rb, GRegs:$rx, i64imm, i64imm);
+//  let ParserMatchClass = My66000MEMrrAsmOperand;
+}
 
 //
 // Load (multiclass Load used by floating point also)
 //
 multiclass Load<string OpName, bits<6>OpCri, bits<7>OpCrr,
 		ValueType VT, SDPatternOperator OpNode> {
-  def ri : LDST_BD<OpCri,
-	(outs GRegs:$rd), (ins MEMri:$addr),
-	!strconcat(OpName, "\t$rd,[$addr]"),
-	[(set (VT GRegs:$rd), (OpNode ADDRri:$addr))]>;
   def rr : XOP5_RR<OpCrr, 0b00,
 	(outs GRegs:$rd), (ins MEMrr:$addr),
 	!strconcat(OpName, "\t$rd,[$addr]"),
 	[(set (VT GRegs:$rd), (OpNode ADDRrr:$addr))]>;
+  def ri : LDST_BD<OpCri,
+	(outs GRegs:$rd), (ins MEMri:$addr),
+	!strconcat(OpName, "\t$rd,[$addr]"),
+	[(set (VT GRegs:$rd), (OpNode ADDRri:$addr))]>;
 }
-let mayLoad = 1, IsSignExtendingOp = 1 in {
-  defm LDD  : Load<"ldd",  0b100011, 0b1100000, i64, load>;
-  defm LDSB : Load<"ldsb", 0b100100, 0b0000010, i64, sextloadi8>;
-  defm LDSH : Load<"ldsh", 0b100101, 0b0100010, i64, sextloadi16>;
-  defm LDSW : Load<"ldsw", 0b100110, 0b1000010, i64, sextloadi32>;
+let mayLoad = 1 in {
+  defm LDD  : Load<"ldd",  0b100011, 0b0000000, i64, load>;
+let IsZeroExtendingOp = 1 in {
+  defm LDUW : Load<"lduw", 0b100010, 0b0000001, i64, zextloadi32>;
+  defm LDUH : Load<"lduh", 0b100001, 0b0000010, i64, zextloadi16>;
+  defm LDUB : Load<"ldub", 0b100000, 0b0000011, i64, zextloadi8>;
 }
-let mayLoad = 1, IsZeroExtendingOp = 1 in {
-  defm LDUB : Load<"ldub", 0b100000, 0b0000000, i64, zextloadi8>;
-  defm LDUH : Load<"lduh", 0b100001, 0b0100000, i64, zextloadi16>;
-  defm LDUW : Load<"lduw", 0b100010, 0b1000000, i64, zextloadi32>;
+let IsSignExtendingOp = 1 in {
+  defm LDSW : Load<"ldsw", 0b100110, 0b0001001, i64, sextloadi32>;
+  defm LDSH : Load<"ldsh", 0b100101, 0b0001010, i64, sextloadi16>;
+  defm LDSB : Load<"ldsb", 0b100100, 0b0001011, i64, sextloadi8>;
+}
 }
 // Map integer extload's to sextloads.
 def : Pat<(i64 (extloadi32 ADDRrr:$src)), (LDSWrr ADDRrr:$src)>;
@@ -634,10 +644,10 @@ multiclass Store<string OpName, bits<6>OpCri, bits<7>OpCrr,
 	[(OpNode (VT GRegs:$rd), ADDRrr:$addr)]>;
 }
 let mayStore = 1 in {
-  defm STB : Store<"stb", 0b101000, 0b0000100, i64, truncstorei8>;
-  defm STH : Store<"sth", 0b101001, 0b0100100, i64, truncstorei16>;
-  defm STW : Store<"stw", 0b101010, 0b1000100, i64, truncstorei32>;
-  defm STD : Store<"std", 0b101011, 0b1100100, i64, store>;
+  defm STD : Store<"std", 0b101011, 0b0010000, i64, store>;
+  defm STW : Store<"stw", 0b101010, 0b0010001, i64, truncstorei32>;
+  defm STH : Store<"sth", 0b101001, 0b0010010, i64, truncstorei16>;
+  defm STB : Store<"stb", 0b101000, 0b0010011, i64, truncstorei8>;
 }
 
 // Because ADDRrr rejects anything ADDRri can handle, we need a pattern for both.
@@ -794,10 +804,14 @@ def BRFB : BB<0b01100,
 	(outs), (ins brtarget:$adr, GRegs:$rs1, i64imm:$cb),
 	"brb1\t$cb,$rs1,$adr",
 	[(myBRfcc bb:$adr, GRegs:$rs1, shfamt:$cb)]>;
-def BBIT : BB<0b01100,
+def BBIT1 : BB<0b01100,
 	(outs), (ins brtarget:$adr, GRegs:$rs1, i64imm:$cb),
 	"bb1\t$cb,$rs1,$adr",
-	[(myBRbit bb:$adr, GRegs:$rs1, shfamt:$cb)]>;
+	[(myBRbit1 bb:$adr, GRegs:$rs1, shfamt:$cb)]>;
+def BBIT0 : Pseudo<
+	(outs), (ins brtarget:$adr, GRegs:$rs1, i64imm:$cb),
+	"# BBIT0",
+	[(myBRbit0 bb:$adr, GRegs:$rs1, shfamt:$cb)]>;
 }
 
 let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1,
@@ -1230,6 +1244,271 @@ def LOOP3ii : LOOP_HH<0b11, 0b1100,
 	"loop3\t$cnd,$rd,#$rs1,#$rs2",
 	[]>;
 }
+
+//
+// Atomic Expansions
+//
+// Atomic ld/st (only rr form)
+// FIXME - make a multiclass (how?) with Pat<>?
+let mayLoad = 1 in {
+  def LDDXrr : XOP5_RR<0b0000100, 0b00,
+	(outs GRegs:$rd), (ins MEMrx:$addr),
+	"lddl\t$rd,[$addr]",
+	[(set (i64 GRegs:$rd),
+	      (atomic_load_64 ADDRrx:$addr))]>;
+let IsZeroExtendingOp = 1 in {
+  def LDUWXrr : XOP5_RR<0b0000101, 0b00,
+	(outs GRegs:$rd), (ins MEMrx:$addr),
+	"lduwl\t$rd,[$addr]",
+	[(set (i64 GRegs:$rd),
+	      (atomic_load_32 ADDRrx:$addr))]>;
+  def LDUHXrr : XOP5_RR<0b0000110, 0b00,
+	(outs GRegs:$rd), (ins MEMrx:$addr),
+	"lduhl\t$rd,[$addr]",
+	[(set (i64 GRegs:$rd),
+	      (atomic_load_16 ADDRrx:$addr))]>;
+  def LDUBXrr : XOP5_RR<0b0000110, 0b00,
+	(outs GRegs:$rd), (ins MEMrx:$addr),
+	"ldubl\t$rd,[$addr]",
+	[(set (i64 GRegs:$rd),
+	      (atomic_load_8 ADDRrx:$addr))]>;
+}
+let IsSignExtendingOp = 1 in {
+  def LDSWXrr : XOP5_RR<0b0001101, 0b00,
+	(outs GRegs:$rd), (ins MEMrx:$addr),
+	"ldswl\t$rd,[$addr]",
+	[(set (i64 GRegs:$rd),
+	      (sext_inreg (atomic_load_32 ADDRrx:$addr), i32))]>;
+  def LDSHXrr : XOP5_RR<0b0001110, 0b00,
+	(outs GRegs:$rd), (ins MEMrx:$addr),
+	"ldshl\t$rd,[$addr]",
+	[(set (i64 GRegs:$rd),
+	      (sext_inreg (atomic_load_16 ADDRrx:$addr), i16))]>;
+  def LDSBXrr : XOP5_RR<0b0001111, 0b00,
+	(outs GRegs:$rd), (ins MEMrx:$addr),
+	"ldsbl\t$rd,[$addr]",
+	[(set (i64 GRegs:$rd),
+	      (sext_inreg (atomic_load_8 ADDRrx:$addr), i8))]>;
+}
+}
+
+let mayStore = 1 in {
+  def STDXrr : XOP5_RR<0b0010100, 0b00,
+	(outs), (ins GRegs:$rd, MEMrx:$addr),
+	"stdl\t$rd,[$addr]",
+	[(atomic_store_64 (i64 GRegs:$rd), ADDRrx:$addr)]>;
+  def STWXrr : XOP5_RR<0b0010101, 0b00,
+	(outs), (ins GRegs:$rd, MEMrx:$addr),
+	"stwl\t$rd,[$addr]",
+	[(atomic_store_32 (i64 GRegs:$rd), ADDRrx:$addr)]>;
+  def STHXrr : XOP5_RR<0b0010101, 0b00,
+	(outs), (ins GRegs:$rd, MEMrx:$addr),
+	"sthl\t$rd,[$addr]",
+	[(atomic_store_16 (i64 GRegs:$rd), ADDRrx:$addr)]>;
+  def STBXrr : XOP5_RR<0b0010101, 0b00,
+	(outs), (ins GRegs:$rd, MEMrx:$addr),
+	"stbl\t$rd,[$addr]",
+	[(atomic_store_8 (i64 GRegs:$rd), ADDRrx:$addr)]>;
+}
+
+// Atomic operations
+let usesCustomInserter = 1 in {
+// Atomic add reg
+def AADDDr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AADD_R64",
+    [(set GRegs:$dst, (atomic_load_add_64 ADDRrx:$addr, GRegs:$incr))]>;
+def AADDWr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AADD_R32",
+    [(set GRegs:$dst, (atomic_load_add_32 ADDRrx:$addr, GRegs:$incr))]>;
+def AADDHr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AADD_R16",
+    [(set GRegs:$dst, (atomic_load_add_16 ADDRrx:$addr, GRegs:$incr))]>;
+def AADDBr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AADD_R8",
+    [(set GRegs:$dst, (atomic_load_add_8 ADDRrx:$addr, GRegs:$incr))]>;
+// Atomic add imm
+def AADDDi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AADD_I64",
+    [(set GRegs:$dst, (atomic_load_add_64 ADDRrx:$addr, simm16:$incr))]>;
+def AADDWi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AADD_I32",
+    [(set GRegs:$dst, (atomic_load_add_32 ADDRrx:$addr, simm16:$incr))]>;
+def AADDHi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AADD_I16",
+    [(set GRegs:$dst, (atomic_load_add_16 ADDRrx:$addr, simm16:$incr))]>;
+def AADDBi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AADD_I8",
+    [(set GRegs:$dst, (atomic_load_add_8 ADDRrx:$addr, simm16:$incr))]>;
+// Atomic sub reg
+def ASUBDr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASUB_R64",
+    [(set GRegs:$dst, (atomic_load_sub_64 ADDRrx:$addr, GRegs:$incr))]>;
+def ASUBWr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASUB_R32",
+    [(set GRegs:$dst, (atomic_load_sub_32 ADDRrx:$addr, GRegs:$incr))]>;
+def ASUBHr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASUB_R16",
+    [(set GRegs:$dst, (atomic_load_sub_16 ADDRrx:$addr, GRegs:$incr))]>;
+def ASUBBr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASUB_R8",
+    [(set GRegs:$dst, (atomic_load_sub_8 ADDRrx:$addr, GRegs:$incr))]>;
+// Atomic sub imm
+def ASUBDi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#ASUB_I64",
+    [(set GRegs:$dst, (atomic_load_sub_64 ADDRrx:$addr, simm16:$incr))]>;
+def ASUBWi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#ASUB_I32",
+    [(set GRegs:$dst, (atomic_load_sub_32 ADDRrx:$addr, simm16:$incr))]>;
+def ASUBHi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#ASUB_I16",
+    [(set GRegs:$dst, (atomic_load_sub_16 ADDRrx:$addr, simm16:$incr))]>;
+def ASUBBi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#ASUB_I8",
+    [(set GRegs:$dst, (atomic_load_sub_8 ADDRrx:$addr, simm16:$incr))]>;
+// Atomic or reg
+def AORDr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AOR_R64",
+    [(set GRegs:$dst, (atomic_load_or_64 ADDRrx:$addr, GRegs:$incr))]>;
+def AORWr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AOR_R32",
+    [(set GRegs:$dst, (atomic_load_or_32 ADDRrx:$addr, GRegs:$incr))]>;
+def AORHr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AOR_R16",
+    [(set GRegs:$dst, (atomic_load_or_16 ADDRrx:$addr, GRegs:$incr))]>;
+def AORBr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AOR_R8",
+    [(set GRegs:$dst, (atomic_load_or_8 ADDRrx:$addr, GRegs:$incr))]>;
+// Atomic or imm
+def AORDi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AOR_I64",
+    [(set GRegs:$dst, (atomic_load_or_64 ADDRrx:$addr, simm16:$incr))]>;
+def AORWi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AOR_I32",
+    [(set GRegs:$dst, (atomic_load_or_32 ADDRrx:$addr, simm16:$incr))]>;
+def AORHi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AOR_I16",
+    [(set GRegs:$dst, (atomic_load_or_16 ADDRrx:$addr, simm16:$incr))]>;
+def AORBi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AOR_I8",
+    [(set GRegs:$dst, (atomic_load_or_8 ADDRrx:$addr, simm16:$incr))]>;
+// Atomic xor reg
+def AXORDr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AXOR_R64",
+    [(set GRegs:$dst, (atomic_load_xor_64 ADDRrx:$addr, GRegs:$incr))]>;
+def AXORWr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AXOR_R32",
+    [(set GRegs:$dst, (atomic_load_xor_32 ADDRrx:$addr, GRegs:$incr))]>;
+def AXORHr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AXOR_R16",
+    [(set GRegs:$dst, (atomic_load_xor_16 ADDRrx:$addr, GRegs:$incr))]>;
+def AXORBr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AXOR_R8",
+    [(set GRegs:$dst, (atomic_load_xor_8 ADDRrx:$addr, GRegs:$incr))]>;
+// Atomic xor imm
+def AXORDi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AXOR_I64",
+    [(set GRegs:$dst, (atomic_load_xor_64 ADDRrx:$addr, simm16:$incr))]>;
+def AXORWi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AXOR_I32",
+    [(set GRegs:$dst, (atomic_load_xor_32 ADDRrx:$addr, simm16:$incr))]>;
+def AXORHi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AXOR_I16",
+    [(set GRegs:$dst, (atomic_load_xor_16 ADDRrx:$addr, simm16:$incr))]>;
+def AXORBi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AXOR_I8",
+    [(set GRegs:$dst, (atomic_load_xor_8 ADDRrx:$addr, simm16:$incr))]>;
+// Atomic and reg
+def AANDDr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AAND_R64",
+    [(set GRegs:$dst, (atomic_load_and_64 ADDRrx:$addr, GRegs:$incr))]>;
+def AANDWr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AAND_R32",
+    [(set GRegs:$dst, (atomic_load_and_32 ADDRrx:$addr, GRegs:$incr))]>;
+def AANDHr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AAND_R16",
+    [(set GRegs:$dst, (atomic_load_and_16 ADDRrx:$addr, GRegs:$incr))]>;
+def AANDBr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#AAND_R8",
+    [(set GRegs:$dst, (atomic_load_and_8 ADDRrx:$addr, GRegs:$incr))]>;
+// Atomic and imm
+def AANDDi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AAND_I64",
+    [(set GRegs:$dst, (atomic_load_and_64 ADDRrx:$addr, simm16:$incr))]>;
+def AANDWi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AAND_I32",
+    [(set GRegs:$dst, (atomic_load_and_32 ADDRrx:$addr, simm16:$incr))]>;
+def AANDHi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AAND_I16",
+    [(set GRegs:$dst, (atomic_load_and_16 ADDRrx:$addr, simm16:$incr))]>;
+def AANDBi : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, i64imm:$incr),
+    "#AAND_I8",
+    [(set GRegs:$dst, (atomic_load_and_8 ADDRrx:$addr, simm16:$incr))]>;
+// nand min max umin umax?
+// Atomic swap reg
+def ASWAPDr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASWAP_R64",
+    [(set GRegs:$dst, (atomic_swap_64 ADDRrx:$addr, GRegs:$incr))]>;
+def ASWAPWr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASWAP_R32",
+    [(set GRegs:$dst, (atomic_swap_32 ADDRrx:$addr, GRegs:$incr))]>;
+def ASWAPHr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASWAP_R16",
+    [(set GRegs:$dst, (atomic_swap_16 ADDRrx:$addr, GRegs:$incr))]>;
+def ASWAPBr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$incr),
+    "#ASWAP_R8",
+    [(set GRegs:$dst, (atomic_swap_8 ADDRrx:$addr, GRegs:$incr))]>;
+// Atomic compare and swap reg
+def ACMPSWAPDr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$old, GRegs:$new),
+    "#ACMPSWAP_R64",
+    [(set GRegs:$dst, (atomic_cmp_swap_64 ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
+
+
+} // end customer inserter
 
 
 //
