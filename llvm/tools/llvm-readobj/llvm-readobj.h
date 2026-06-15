@@ -38,9 +38,9 @@ extern bool SectionRelocations;
 extern bool SectionSymbols;
 extern bool SectionData;
 extern bool ExpandRelocs;
-extern bool RawRelr;
 extern bool CodeViewSubsectionBytes;
 extern bool Demangle;
+extern bool UnwindShowWODPool;
 enum OutputStyleTy { LLVM, GNU, JSON, UNKNOWN };
 extern OutputStyleTy Output;
 } // namespace opts

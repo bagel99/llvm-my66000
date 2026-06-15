@@ -1,4 +1,4 @@
-// RUN: mlir-opt %s -split-input-file -pass-pipeline='builtin.module(func.func(canonicalize{test-convergence}))' | FileCheck %s
+// RUN: mlir-opt %s -split-input-file -pass-pipeline='builtin.module(func.func(canonicalize{test-convergence region-simplify=aggressive}))' | FileCheck %s
 
 //===----------------------------------------------------------------------===//
 // spirv.AccessChain
@@ -11,8 +11,8 @@ func.func @combine_full_access_chain() -> f32 {
   // CHECK-NEXT: spirv.Load "Function" %[[PTR]]
   %c0 = spirv.Constant 0: i32
   %0 = spirv.Variable : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>
-  %1 = spirv.AccessChain %0[%c0] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32
-  %2 = spirv.AccessChain %1[%c0, %c0] : !spirv.ptr<!spirv.array<4x!spirv.array<4xf32>>, Function>, i32, i32
+  %1 = spirv.AccessChain %0[%c0] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32 -> !spirv.ptr<!spirv.array<4x!spirv.array<4xf32>>, Function>
+  %2 = spirv.AccessChain %1[%c0, %c0] : !spirv.ptr<!spirv.array<4x!spirv.array<4xf32>>, Function>, i32, i32 -> !spirv.ptr<f32, Function>
   %3 = spirv.Load "Function" %2 : f32
   spirv.ReturnValue %3 : f32
 }
@@ -28,9 +28,9 @@ func.func @combine_access_chain_multi_use() -> !spirv.array<4xf32> {
   // CHECK-NEXT: spirv.Load "Function" %[[PTR_1]]
   %c0 = spirv.Constant 0: i32
   %0 = spirv.Variable : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>
-  %1 = spirv.AccessChain %0[%c0] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32
-  %2 = spirv.AccessChain %1[%c0] : !spirv.ptr<!spirv.array<4x!spirv.array<4xf32>>, Function>, i32
-  %3 = spirv.AccessChain %2[%c0] : !spirv.ptr<!spirv.array<4xf32>, Function>, i32
+  %1 = spirv.AccessChain %0[%c0] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32 -> !spirv.ptr<!spirv.array<4x!spirv.array<4xf32>>, Function>
+  %2 = spirv.AccessChain %1[%c0] : !spirv.ptr<!spirv.array<4x!spirv.array<4xf32>>, Function>, i32 -> !spirv.ptr<!spirv.array<4xf32>, Function>
+  %3 = spirv.AccessChain %2[%c0] : !spirv.ptr<!spirv.array<4xf32>, Function>, i32 -> !spirv.ptr<f32, Function>
   %4 = spirv.Load "Function" %2 : !spirv.array<4xf32>
   %5 = spirv.Load "Function" %3 : f32
   spirv.ReturnValue %4: !spirv.array<4xf32>
@@ -49,8 +49,8 @@ func.func @dont_combine_access_chain_without_common_base() -> !spirv.array<4xi32
   %c1 = spirv.Constant 1: i32
   %0 = spirv.Variable : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>
   %1 = spirv.Variable : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>
-  %2 = spirv.AccessChain %0[%c1] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32
-  %3 = spirv.AccessChain %1[%c1] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32
+  %2 = spirv.AccessChain %0[%c1] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32 -> !spirv.ptr<!spirv.array<4xi32>, Function>
+  %3 = spirv.AccessChain %1[%c1] : !spirv.ptr<!spirv.struct<(!spirv.array<4x!spirv.array<4xf32>>, !spirv.array<4xi32>)>, Function>, i32 -> !spirv.ptr<!spirv.array<4xi32>, Function>
   %4 = spirv.Load "Function" %2 : !spirv.array<4xi32>
   %5 = spirv.Load "Function" %3 : !spirv.array<4xi32>
   spirv.ReturnValue %4 : !spirv.array<4xi32>
@@ -356,20 +356,12 @@ func.func @const_fold_scalar_iaddcarry() -> (!spirv.struct<(i32, i32)>, !spirv.s
   %cn5 = spirv.Constant -5 : i32
   %cn8 = spirv.Constant -8 : i32
 
-  // CHECK-DAG: %[[C0:.*]] = spirv.Constant 0
-  // CHECK-DAG: %[[CN3:.*]] = spirv.Constant -3
-  // CHECK-DAG: %[[UNDEF1:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER1:.*]] = spirv.CompositeInsert %[[CN3]], %[[UNDEF1]][0 : i32]
-  // CHECK-DAG: %[[CC_CN3_C0:.*]] = spirv.CompositeInsert %[[C0]], %[[INTER1]][1 : i32]
-  // CHECK-DAG: %[[C1:.*]] = spirv.Constant 1
-  // CHECK-DAG: %[[CN13:.*]] = spirv.Constant -13
-  // CHECK-DAG: %[[UNDEF2:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER2:.*]] = spirv.CompositeInsert %[[CN13]], %[[UNDEF2]][0 : i32]
-  // CHECK-DAG: %[[CC_CN13_C1:.*]] = spirv.CompositeInsert %[[C1]], %[[INTER2]][1 : i32]
+  // CHECK-DAG: %[[CST_CN3_C0:.*]] = spirv.Constant [-3 : i32, 0 : i32] : !spirv.struct<(i32, i32)>
+  // CHECK-DAG: %[[CST_CN13_C1:.*]] = spirv.Constant [-13 : i32, 1 : i32] : !spirv.struct<(i32, i32)>
   %0 = spirv.IAddCarry %c5, %cn8 : !spirv.struct<(i32, i32)>
   %1 = spirv.IAddCarry %cn5, %cn8 : !spirv.struct<(i32, i32)>
 
-  // CHECK: return %[[CC_CN3_C0]], %[[CC_CN13_C1]]
+  // CHECK: return %[[CST_CN3_C0]], %[[CST_CN13_C1]]
   return %0, %1 : !spirv.struct<(i32, i32)>, !spirv.struct<(i32, i32)>
 }
 
@@ -378,14 +370,54 @@ func.func @const_fold_vector_iaddcarry() -> !spirv.struct<(vector<3xi32>, vector
   %v0 = spirv.Constant dense<[5, -3, -1]> : vector<3xi32>
   %v1 = spirv.Constant dense<[-8, -8, 1]> : vector<3xi32>
 
-  // CHECK-DAG: %[[CV1:.*]] = spirv.Constant dense<[-3, -11, 0]>
-  // CHECK-DAG: %[[CV2:.*]] = spirv.Constant dense<[0, 1, 1]>
-  // CHECK-DAG: %[[UNDEF:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER:.*]] = spirv.CompositeInsert %[[CV1]], %[[UNDEF]][0 : i32]
-  // CHECK-DAG: %[[CC_CV1_CV2:.*]] = spirv.CompositeInsert %[[CV2]], %[[INTER]][1 : i32]
+  // CHECK: %[[CST:.*]] = spirv.Constant [dense<[-3, -11, 0]> : vector<3xi32>, dense<[0, 1, 1]> : vector<3xi32>] : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
   %0 = spirv.IAddCarry %v0, %v1 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
 
-  // CHECK: return %[[CC_CV1_CV2]]
+  // CHECK: return %[[CST]]
+  return %0 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.ISubBorrow
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @isubborrow_x_0
+// CHECK-SAME: (%[[ARG:.*]]: i32)
+func.func @isubborrow_x_0(%arg0 : i32) -> !spirv.struct<(i32, i32)> {
+  // CHECK: %[[C0:.*]] = spirv.Constant 0
+  // CHECK: %[[RET:.*]] = spirv.CompositeConstruct %[[ARG]], %[[C0]]
+  %c0 = spirv.Constant 0 : i32
+  %0 = spirv.ISubBorrow %arg0, %c0 : !spirv.struct<(i32, i32)>
+
+  // CHECK: return %[[RET]]
+  return %0 : !spirv.struct<(i32, i32)>
+}
+
+// CHECK-LABEL: @const_fold_scalar_isubborrow
+func.func @const_fold_scalar_isubborrow() -> (!spirv.struct<(i32, i32)>, !spirv.struct<(i32, i32)>) {
+  %c5 = spirv.Constant 5 : i32
+  %c8 = spirv.Constant 8 : i32
+
+  // CHECK-DAG: %[[CST_CN3_C1:.*]] = spirv.Constant [-3 : i32, 1 : i32] : !spirv.struct<(i32, i32)>
+  // CHECK-DAG: %[[CST_C3_C0:.*]] = spirv.Constant [3 : i32, 0 : i32] : !spirv.struct<(i32, i32)>
+  %0 = spirv.ISubBorrow %c5, %c8 : !spirv.struct<(i32, i32)>
+  %1 = spirv.ISubBorrow %c8, %c5 : !spirv.struct<(i32, i32)>
+
+  // CHECK: return %[[CST_CN3_C1]], %[[CST_C3_C0]]
+  return %0, %1 : !spirv.struct<(i32, i32)>, !spirv.struct<(i32, i32)>
+}
+
+// CHECK-LABEL: @const_fold_vector_isubborrow
+func.func @const_fold_vector_isubborrow() -> !spirv.struct<(vector<3xi32>, vector<3xi32>)> {
+  %v0 = spirv.Constant dense<[5, 8, -1]> : vector<3xi32>
+  %v1 = spirv.Constant dense<[8, 5, 1]> : vector<3xi32>
+
+  // CHECK: %[[CST:.*]] = spirv.Constant [dense<[-3, 3, -2]> : vector<3xi32>, dense<[1, 0, 0]> : vector<3xi32>] : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
+  %0 = spirv.ISubBorrow %v0, %v1 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
+
+  // CHECK: return %[[CST]]
   return %0 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
 }
 
@@ -476,20 +508,12 @@ func.func @const_fold_scalar_smulextended() -> (!spirv.struct<(i32, i32)>, !spir
   %cn5 = spirv.Constant -5 : i32
   %cn8 = spirv.Constant -8 : i32
 
-  // CHECK-DAG: %[[CN40:.*]] = spirv.Constant -40
-  // CHECK-DAG: %[[CN1:.*]] = spirv.Constant -1
-  // CHECK-DAG: %[[UNDEF1:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER1:.*]] = spirv.CompositeInsert %[[CN40]], %[[UNDEF1]][0 : i32]
-  // CHECK-DAG: %[[CC_CN40_CN1:.*]] = spirv.CompositeInsert %[[CN1]], %[[INTER1]]
-  // CHECK-DAG: %[[C40:.*]] = spirv.Constant 40
-  // CHECK-DAG: %[[C0:.*]] = spirv.Constant 0
-  // CHECK-DAG: %[[UNDEF2:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER2:.*]] = spirv.CompositeInsert %[[C40]], %[[UNDEF2]][0 : i32]
-  // CHECK-DAG: %[[CC_C40_C0:.*]] = spirv.CompositeInsert %[[C0]], %[[INTER2]][1 : i32]
+  // CHECK-DAG: %[[CST_CN40_CN1:.*]] = spirv.Constant [-40 : i32, -1 : i32] : !spirv.struct<(i32, i32)>
+  // CHECK-DAG: %[[CST_C40_C0:.*]] = spirv.Constant [40 : i32, 0 : i32] : !spirv.struct<(i32, i32)>
   %0 = spirv.SMulExtended %c5, %cn8 : !spirv.struct<(i32, i32)>
   %1 = spirv.SMulExtended %cn5, %cn8 : !spirv.struct<(i32, i32)>
 
-  // CHECK: return %[[CC_CN40_CN1]], %[[CC_C40_C0]]
+  // CHECK: return %[[CST_CN40_CN1]], %[[CST_C40_C0]]
   return %0, %1 : !spirv.struct<(i32, i32)>, !spirv.struct<(i32, i32)>
 }
 
@@ -498,14 +522,10 @@ func.func @const_fold_vector_smulextended() -> !spirv.struct<(vector<3xi32>, vec
   %v0 = spirv.Constant dense<[2147483647, -5, -1]> : vector<3xi32>
   %v1 = spirv.Constant dense<[5, -8, 1]> : vector<3xi32>
 
-  // CHECK-DAG: %[[CV1:.*]] = spirv.Constant dense<[2147483643, 40, -1]>
-  // CHECK-DAG: %[[CV2:.*]] = spirv.Constant dense<[2, 0, -1]>
-  // CHECK-DAG: %[[UNDEF:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER:.*]] = spirv.CompositeInsert %[[CV1]], %[[UNDEF]][0 : i32]
-  // CHECK-DAG: %[[CC_CV1_CV2:.*]] = spirv.CompositeInsert %[[CV2]], %[[INTER]][1 : i32]
+  // CHECK: %[[CST:.*]] = spirv.Constant [dense<[2147483643, 40, -1]> : vector<3xi32>, dense<[2, 0, -1]> : vector<3xi32>] : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
   %0 = spirv.SMulExtended %v0, %v1 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
 
-  // CHECK: return %[[CC_CV1_CV2]]
+  // CHECK: return %[[CST]]
   return %0 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
 
 }
@@ -545,21 +565,12 @@ func.func @const_fold_scalar_umulextended() -> (!spirv.struct<(i32, i32)>, !spir
   %cn5 = spirv.Constant -5 : i32
   %cn8 = spirv.Constant -8 : i32
 
-
-  // CHECK-DAG: %[[C40:.*]] = spirv.Constant 40
-  // CHECK-DAG: %[[CN13:.*]] = spirv.Constant -13
-  // CHECK-DAG: %[[CN40:.*]] = spirv.Constant -40
-  // CHECK-DAG: %[[C4:.*]] = spirv.Constant 4
-  // CHECK-DAG: %[[UNDEF1:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER1:.*]] = spirv.CompositeInsert %[[CN40]], %[[UNDEF1]][0 : i32]
-  // CHECK-DAG: %[[CC_CN40_C4:.*]] = spirv.CompositeInsert %[[C4]], %[[INTER1]][1 : i32]
-  // CHECK-DAG: %[[UNDEF2:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER2:.*]] = spirv.CompositeInsert %[[C40]], %[[UNDEF2]][0 : i32]
-  // CHECK-DAG: %[[CC_C40_CN13:.*]] = spirv.CompositeInsert %[[CN13]], %[[INTER2]][1 : i32]
+  // CHECK-DAG: %[[CST_CN40_C4:.*]] = spirv.Constant [-40 : i32, 4 : i32] : !spirv.struct<(i32, i32)>
+  // CHECK-DAG: %[[CST_C40_CN13:.*]] = spirv.Constant [40 : i32, -13 : i32] : !spirv.struct<(i32, i32)>
   %0 = spirv.UMulExtended %c5, %cn8 : !spirv.struct<(i32, i32)>
   %1 = spirv.UMulExtended %cn5, %cn8 : !spirv.struct<(i32, i32)>
 
-  // CHECK: return %[[CC_CN40_C4]], %[[CC_C40_CN13]]
+  // CHECK: return %[[CST_CN40_C4]], %[[CST_C40_CN13]]
   return %0, %1 : !spirv.struct<(i32, i32)>, !spirv.struct<(i32, i32)>
 }
 
@@ -568,14 +579,10 @@ func.func @const_fold_vector_umulextended() -> !spirv.struct<(vector<3xi32>, vec
   %v0 = spirv.Constant dense<[2147483647, -5, -1]> : vector<3xi32>
   %v1 = spirv.Constant dense<[5, -8, 1]> : vector<3xi32>
 
-  // CHECK-DAG: %[[CV1:.*]] = spirv.Constant dense<[2147483643, 40, -1]>
-  // CHECK-DAG: %[[CV2:.*]] = spirv.Constant dense<[2, -13, 0]>
-  // CHECK-DAG: %[[UNDEF:.*]] = spirv.Undef
-  // CHECK-DAG: %[[INTER:.*]] = spirv.CompositeInsert %[[CV1]], %[[UNDEF]]
-  // CHECK-DAG: %[[CC_CV1_CV2:.*]] = spirv.CompositeInsert %[[CV2]], %[[INTER]]
+  // CHECK: %[[CST:.*]] = spirv.Constant [dense<[2147483643, 40, -1]> : vector<3xi32>, dense<[2, -13, 0]> : vector<3xi32>] : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
   %0 = spirv.UMulExtended %v0, %v1 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
 
-  // CHECK: return %[[CC_CV1_CV2]]
+  // CHECK: return %[[CST]]
   return %0 : !spirv.struct<(vector<3xi32>, vector<3xi32>)>
 }
 
@@ -591,6 +598,13 @@ func.func @isub_x_x(%arg0: i32) -> i32 {
   // CHECK: spirv.Constant 0
   %0 = spirv.ISub %arg0, %arg0: i32
   return %0: i32
+}
+
+// CHECK-LABEL: @isub_vector_x_x
+func.func @isub_vector_x_x(%arg0: vector<3xi32>) -> vector<3xi32> {
+  // CHECK: spirv.Constant dense<0>
+  %0 = spirv.ISub %arg0, %arg0: vector<3xi32>
+  return %0: vector<3xi32>
 }
 
 // CHECK-LABEL: @const_fold_scalar_isub_normal
@@ -960,17 +974,17 @@ func.func @umod_fold(%arg0: i32) -> (i32, i32) {
   return %0, %1: i32, i32
 }
 
-// CHECK-LABEL: @umod_fail_vector_fold
+// CHECK-LABEL: @umod_vector_fold
 // CHECK-SAME: (%[[ARG:.*]]: vector<4xi32>)
-func.func @umod_fail_vector_fold(%arg0: vector<4xi32>) -> (vector<4xi32>, vector<4xi32>) {
+func.func @umod_vector_fold(%arg0: vector<4xi32>) -> (vector<4xi32>, vector<4xi32>) {
   // CHECK: %[[CONST4:.*]] = spirv.Constant dense<4> : vector<4xi32>
   // CHECK: %[[CONST32:.*]] = spirv.Constant dense<32> : vector<4xi32>
   %const1 = spirv.Constant dense<32> : vector<4xi32>
   %0 = spirv.UMod %arg0, %const1 : vector<4xi32>
-  // CHECK: %[[UMOD0:.*]] = spirv.UMod %[[ARG]], %[[CONST32]]
   %const2 = spirv.Constant dense<4> : vector<4xi32>
   %1 = spirv.UMod %0, %const2 : vector<4xi32>
-  // CHECK: %[[UMOD1:.*]] = spirv.UMod %[[UMOD0]], %[[CONST4]]
+  // CHECK: %[[UMOD0:.*]] = spirv.UMod %[[ARG]], %[[CONST32]]
+  // CHECK: %[[UMOD1:.*]] = spirv.UMod %[[ARG]], %[[CONST4]]
   // CHECK: return %[[UMOD0]], %[[UMOD1]]
   return %0, %1: vector<4xi32>, vector<4xi32>
 } 
@@ -989,9 +1003,9 @@ func.func @umod_fold_same_divisor(%arg0: i32) -> (i32, i32) {
   return %0, %1: i32, i32
 }
 
-// CHECK-LABEL: @umod_fail_fold
+// CHECK-LABEL: @umod_fail_1_fold
 // CHECK-SAME: (%[[ARG:.*]]: i32)
-func.func @umod_fail_fold(%arg0: i32) -> (i32, i32) {
+func.func @umod_fail_1_fold(%arg0: i32) -> (i32, i32) {
   // CHECK: %[[CONST5:.*]] = spirv.Constant 5
   // CHECK: %[[CONST32:.*]] = spirv.Constant 32
   %const1 = spirv.Constant 32 : i32
@@ -1002,6 +1016,51 @@ func.func @umod_fail_fold(%arg0: i32) -> (i32, i32) {
   // CHECK: %[[UMOD1:.*]] = spirv.UMod %[[UMOD0]], %[[CONST5]]
   // CHECK: return %[[UMOD0]], %[[UMOD1]]
   return %0, %1: i32, i32
+}
+
+// CHECK-LABEL: @umod_fail_2_fold
+// CHECK-SAME: (%[[ARG:.*]]: i32)
+func.func @umod_fail_2_fold(%arg0: i32) -> (i32, i32) {
+  // CHECK: %[[CONST32:.*]] = spirv.Constant 32
+  // CHECK: %[[CONST4:.*]] = spirv.Constant 4
+  %const1 = spirv.Constant 4 : i32
+  %0 = spirv.UMod %arg0, %const1 : i32
+  // CHECK: %[[UMOD0:.*]] = spirv.UMod %[[ARG]], %[[CONST4]]
+  %const2 = spirv.Constant 32 : i32
+  %1 = spirv.UMod %0, %const2 : i32
+  // CHECK: %[[UMOD1:.*]] = spirv.UMod %[[UMOD0]], %[[CONST32]]
+  // CHECK: return %[[UMOD0]], %[[UMOD1]]
+  return %0, %1: i32, i32
+}
+
+// CHECK-LABEL: @umod_vector_fail_1_fold
+// CHECK-SAME: (%[[ARG:.*]]: vector<4xi32>)
+func.func @umod_vector_fail_1_fold(%arg0: vector<4xi32>) -> (vector<4xi32>, vector<4xi32>) {
+  // CHECK: %[[CONST9:.*]] = spirv.Constant dense<9> : vector<4xi32>
+  // CHECK: %[[CONST64:.*]] = spirv.Constant dense<64> : vector<4xi32>
+  %const1 = spirv.Constant dense<64> : vector<4xi32>
+  %0 = spirv.UMod %arg0, %const1 : vector<4xi32>
+  // CHECK: %[[UMOD0:.*]] = spirv.UMod %[[ARG]], %[[CONST64]]
+  %const2 = spirv.Constant dense<9> : vector<4xi32>
+  %1 = spirv.UMod %0, %const2 : vector<4xi32>
+  // CHECK: %[[UMOD1:.*]] = spirv.UMod %[[UMOD0]], %[[CONST9]]
+  // CHECK: return %[[UMOD0]], %[[UMOD1]]
+  return %0, %1: vector<4xi32>, vector<4xi32>
+}
+
+// CHECK-LABEL: @umod_vector_fail_2_fold
+// CHECK-SAME: (%[[ARG:.*]]: vector<4xi32>)
+func.func @umod_vector_fail_2_fold(%arg0: vector<4xi32>) -> (vector<4xi32>, vector<4xi32>) {
+  // CHECK: %[[CONST32:.*]] = spirv.Constant dense<32> : vector<4xi32>
+  // CHECK: %[[CONST4:.*]] = spirv.Constant dense<4> : vector<4xi32>
+  %const1 = spirv.Constant dense<4> : vector<4xi32>
+  %0 = spirv.UMod %arg0, %const1 : vector<4xi32>
+  // CHECK: %[[UMOD0:.*]] = spirv.UMod %[[ARG]], %[[CONST4]]
+  %const2 = spirv.Constant dense<32> : vector<4xi32>
+  %1 = spirv.UMod %0, %const2 : vector<4xi32>
+  // CHECK: %[[UMOD1:.*]] = spirv.UMod %[[UMOD0]], %[[CONST32]]
+  // CHECK: return %[[UMOD0]], %[[UMOD1]]
+  return %0, %1: vector<4xi32>, vector<4xi32>
 }
 
 // -----
@@ -1347,6 +1406,52 @@ func.func @convert_logical_or_true_false_vector(%arg: vector<3xi1>) -> (vector<3
 // -----
 
 //===----------------------------------------------------------------------===//
+// spirv.Select
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @convert_select_scalar
+// CHECK-SAME: %[[ARG1:.+]]: i32, %[[ARG2:.+]]: i32
+func.func @convert_select_scalar(%arg1: i32, %arg2: i32) -> (i32, i32) {
+  %true = spirv.Constant true
+  %false = spirv.Constant false
+  %0 = spirv.Select %true, %arg1, %arg2 : i1, i32
+  %1 = spirv.Select %false, %arg1, %arg2 : i1, i32
+
+  // CHECK: return %[[ARG1]], %[[ARG2]]
+  return %0, %1 : i32, i32
+}
+
+// CHECK-LABEL: @convert_select_vector
+// CHECK-SAME: %[[ARG1:.+]]: vector<3xi32>, %[[ARG2:.+]]: vector<3xi32>
+func.func @convert_select_vector(%arg1: vector<3xi32>, %arg2: vector<3xi32>) -> (vector<3xi32>, vector<3xi32>) {
+  %true = spirv.Constant dense<true> : vector<3xi1>
+  %false = spirv.Constant dense<false> : vector<3xi1>
+  %0 = spirv.Select %true, %arg1, %arg2 : vector<3xi1>, vector<3xi32>
+  %1 = spirv.Select %false, %arg1, %arg2 : vector<3xi1>, vector<3xi32>
+
+  // CHECK: return %[[ARG1]], %[[ARG2]]
+  return %0, %1: vector<3xi32>, vector<3xi32>
+}
+
+// CHECK-LABEL: @convert_select_vector_extra
+// CHECK-SAME: %[[CONDITIONS:.+]]: vector<2xi1>, %[[ARG1:.+]]: vector<2xi32>
+func.func @convert_select_vector_extra(%conditions: vector<2xi1>, %arg1: vector<2xi32>) -> (vector<2xi32>, vector<2xi32>) {
+  %true_false = spirv.Constant dense<[true, false]> : vector<2xi1>
+  %cvec_1 = spirv.Constant dense<[42, -132]> : vector<2xi32>
+  %cvec_2 = spirv.Constant dense<[0, 42]> : vector<2xi32>
+
+  // CHECK: %[[RES:.+]] = spirv.Constant dense<42>
+  %0 = spirv.Select %true_false, %cvec_1, %cvec_2: vector<2xi1>, vector<2xi32>
+
+  %1 = spirv.Select %conditions, %arg1, %arg1 : vector<2xi1>, vector<2xi32>
+
+  // CHECK: return %[[RES]], %[[ARG1]]
+  return %0, %1: vector<2xi32>, vector<2xi32>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
 // spirv.IEqual
 //===----------------------------------------------------------------------===//
 
@@ -1425,6 +1530,358 @@ func.func @const_fold_vector_inotequal() -> vector<3xi1> {
 
   // CHECK: %[[RET:.*]] = spirv.Constant dense<[false, true, false]>
   %0 = spirv.INotEqual %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.SGreaterThan
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @sgt_same
+func.func @sgt_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  // CHECK-DAG: %[[CVFALSE:.*]] = spirv.Constant dense<false>
+  %0 = spirv.SGreaterThan %arg0, %arg0 : i32
+  %1 = spirv.SGreaterThan %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CFALSE]], %[[CVFALSE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_sgt
+func.func @const_fold_scalar_sgt() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %c6 = spirv.Constant 6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.SGreaterThan %c5, %c6 : i32
+  %1 = spirv.SGreaterThan %c5, %c4 : i32
+
+  // CHECK: return %[[CFALSE]], %[[CTRUE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_sgt
+func.func @const_fold_vector_sgt() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[false, false, true]>
+  %0 = spirv.SGreaterThan %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.SGreaterThanEqual
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @sge_same
+func.func @sge_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CVTRUE:.*]] = spirv.Constant dense<true>
+  %0 = spirv.SGreaterThanEqual %arg0, %arg0 : i32
+  %1 = spirv.SGreaterThanEqual %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CTRUE]], %[[CVTRUE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_sge
+func.func @const_fold_scalar_sge() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %c6 = spirv.Constant 6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.SGreaterThanEqual %c5, %c6 : i32
+  %1 = spirv.SGreaterThanEqual %c5, %c4 : i32
+
+  // CHECK: return %[[CFALSE]], %[[CTRUE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_sge
+func.func @const_fold_vector_sge() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[true, false, true]>
+  %0 = spirv.SGreaterThanEqual %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.UGreaterThan
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @ugt_same
+func.func @ugt_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  // CHECK-DAG: %[[CVFALSE:.*]] = spirv.Constant dense<false>
+  %0 = spirv.UGreaterThan %arg0, %arg0 : i32
+  %1 = spirv.UGreaterThan %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CFALSE]], %[[CVFALSE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_ugt
+func.func @const_fold_scalar_ugt() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %cn6 = spirv.Constant -6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.UGreaterThan %c5, %cn6 : i32
+  %1 = spirv.UGreaterThan %c5, %c4 : i32
+
+  // CHECK: return %[[CFALSE]], %[[CTRUE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_ugt
+func.func @const_fold_vector_ugt() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[false, false, true]>
+  %0 = spirv.UGreaterThan %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.UGreaterThanEqual
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @uge_same
+func.func @uge_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CVTRUE:.*]] = spirv.Constant dense<true>
+  %0 = spirv.UGreaterThanEqual %arg0, %arg0 : i32
+  %1 = spirv.UGreaterThanEqual %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CTRUE]], %[[CVTRUE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_uge
+func.func @const_fold_scalar_uge() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %cn6 = spirv.Constant -6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.UGreaterThanEqual %c5, %cn6 : i32
+  %1 = spirv.UGreaterThanEqual %c5, %c4 : i32
+
+  // CHECK: return %[[CFALSE]], %[[CTRUE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_uge
+func.func @const_fold_vector_uge() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[true, false, true]>
+  %0 = spirv.UGreaterThanEqual %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.SLessThan
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @slt_same
+func.func @slt_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  // CHECK-DAG: %[[CVFALSE:.*]] = spirv.Constant dense<false>
+  %0 = spirv.SLessThan %arg0, %arg0 : i32
+  %1 = spirv.SLessThan %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CFALSE]], %[[CVFALSE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_slt
+func.func @const_fold_scalar_slt() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %c6 = spirv.Constant 6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.SLessThan %c5, %c6 : i32
+  %1 = spirv.SLessThan %c5, %c4 : i32
+
+  // CHECK: return %[[CTRUE]], %[[CFALSE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_slt
+func.func @const_fold_vector_slt() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[false, true, false]>
+  %0 = spirv.SLessThan %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.SLessThanEqual
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @sle_same
+func.func @sle_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CVTRUE:.*]] = spirv.Constant dense<true>
+  %0 = spirv.SLessThanEqual %arg0, %arg0 : i32
+  %1 = spirv.SLessThanEqual %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CTRUE]], %[[CVTRUE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_sle
+func.func @const_fold_scalar_sle() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %c6 = spirv.Constant 6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.SLessThanEqual %c5, %c6 : i32
+  %1 = spirv.SLessThanEqual %c5, %c4 : i32
+
+  // CHECK: return %[[CTRUE]], %[[CFALSE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_sle
+func.func @const_fold_vector_sle() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[true, true, false]>
+  %0 = spirv.SLessThanEqual %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.ULessThan
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @ult_same
+func.func @ult_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  // CHECK-DAG: %[[CVFALSE:.*]] = spirv.Constant dense<false>
+  %0 = spirv.ULessThan %arg0, %arg0 : i32
+  %1 = spirv.ULessThan %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CFALSE]], %[[CVFALSE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_ult
+func.func @const_fold_scalar_ult() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %cn6 = spirv.Constant -6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.ULessThan %c5, %cn6 : i32
+  %1 = spirv.ULessThan %c5, %c4 : i32
+
+  // CHECK: return %[[CTRUE]], %[[CFALSE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_ult
+func.func @const_fold_vector_ult() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[false, true, false]>
+  %0 = spirv.ULessThan %cv0, %cv1 : vector<3xi32>
+
+  // CHECK: return %[[RET]]
+  return %0 : vector<3xi1>
+}
+
+// -----
+
+//===----------------------------------------------------------------------===//
+// spirv.ULessThanEqual
+//===----------------------------------------------------------------------===//
+
+// CHECK-LABEL: @ule_same
+func.func @ule_same(%arg0 : i32, %arg1 : vector<3xi32>) -> (i1, vector<3xi1>) {
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CVTRUE:.*]] = spirv.Constant dense<true>
+  %0 = spirv.ULessThanEqual %arg0, %arg0 : i32
+  %1 = spirv.ULessThanEqual %arg1, %arg1 : vector<3xi32>
+
+  // CHECK: return %[[CTRUE]], %[[CVTRUE]]
+  return %0, %1 : i1, vector<3xi1>
+}
+
+// CHECK-LABEL: @const_fold_scalar_ule
+func.func @const_fold_scalar_ule() -> (i1, i1) {
+  %c4 = spirv.Constant 4 : i32
+  %c5 = spirv.Constant 5 : i32
+  %cn6 = spirv.Constant -6 : i32
+
+  // CHECK-DAG: %[[CTRUE:.*]] = spirv.Constant true
+  // CHECK-DAG: %[[CFALSE:.*]] = spirv.Constant false
+  %0 = spirv.ULessThanEqual %c5, %cn6 : i32
+  %1 = spirv.ULessThanEqual %c5, %c4 : i32
+
+  // CHECK: return %[[CTRUE]], %[[CFALSE]]
+  return %0, %1 : i1, i1
+}
+
+// CHECK-LABEL: @const_fold_vector_ule
+func.func @const_fold_vector_ule() -> vector<3xi1> {
+  %cv0 = spirv.Constant dense<[-1, -4, 3]> : vector<3xi32>
+  %cv1 = spirv.Constant dense<[-1, -3, 2]> : vector<3xi32>
+
+  // CHECK: %[[RET:.*]] = spirv.Constant dense<[true, true, false]>
+  %0 = spirv.ULessThanEqual %cv0, %cv1 : vector<3xi32>
 
   // CHECK: return %[[RET]]
   return %0 : vector<3xi1>

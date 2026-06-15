@@ -68,8 +68,13 @@ public:
   StringRef getNameAsRequested() const { return ME->first(); }
 
   const FileEntry &getFileEntry() const {
-    return *getBaseMapEntry().second->V.get<FileEntry *>();
+    return *cast<FileEntry *>(getBaseMapEntry().second->V);
   }
+
+  // This function is used if the buffer size needs to be increased
+  // due to potential z/OS EBCDIC -> UTF-8 conversion
+  inline void updateFileEntryBufferSize(unsigned BufferSize);
+
   DirectoryEntryRef getDir() const { return ME->second->Dir; }
 
   inline off_t getSize() const;
@@ -77,6 +82,7 @@ public:
   inline const llvm::sys::fs::UniqueID &getUniqueID() const;
   inline time_t getModificationTime() const;
   inline bool isNamedPipe() const;
+  inline bool isDeviceFile() const;
   inline void closeFile() const;
 
   /// Check if the underlying FileEntry is the same, intentially ignoring
@@ -178,16 +184,12 @@ private:
 
   friend struct llvm::DenseMapInfo<FileEntryRef>;
   struct dense_map_empty_tag {};
-  struct dense_map_tombstone_tag {};
 
-  // Private constructors for use by DenseMapInfo.
+  // Private constructor for use by DenseMapInfo.
   FileEntryRef(dense_map_empty_tag)
       : ME(llvm::DenseMapInfo<const MapEntry *>::getEmptyKey()) {}
-  FileEntryRef(dense_map_tombstone_tag)
-      : ME(llvm::DenseMapInfo<const MapEntry *>::getTombstoneKey()) {}
   bool isSpecialDenseMapKey() const {
-    return isSameRef(FileEntryRef(dense_map_empty_tag())) ||
-           isSameRef(FileEntryRef(dense_map_tombstone_tag()));
+    return isSameRef(FileEntryRef(dense_map_empty_tag()));
   }
 
   const MapEntry *ME;
@@ -212,11 +214,7 @@ class OptionalStorage<clang::FileEntryRef>
       clang::FileMgr::MapEntryOptionalStorage<clang::FileEntryRef>;
 
 public:
-  OptionalStorage() = default;
-
-  template <class... ArgTypes>
-  explicit OptionalStorage(std::in_place_t, ArgTypes &&...Args)
-      : StorageImpl(std::in_place_t{}, std::forward<ArgTypes>(Args)...) {}
+  using StorageImpl::StorageImpl;
 
   OptionalStorage &operator=(clang::FileEntryRef Ref) {
     StorageImpl::operator=(Ref);
@@ -241,16 +239,12 @@ template <> struct DenseMapInfo<clang::FileEntryRef> {
     return clang::FileEntryRef(clang::FileEntryRef::dense_map_empty_tag());
   }
 
-  static inline clang::FileEntryRef getTombstoneKey() {
-    return clang::FileEntryRef(clang::FileEntryRef::dense_map_tombstone_tag());
-  }
-
   static unsigned getHashValue(clang::FileEntryRef Val) {
     return hash_value(Val);
   }
 
   static bool isEqual(clang::FileEntryRef LHS, clang::FileEntryRef RHS) {
-    // Catch the easy cases: both empty, both tombstone, or the same ref.
+    // Catch the easy cases: both empty or the same ref.
     if (LHS.isSameRef(RHS))
       return true;
 
@@ -311,6 +305,7 @@ class FileEntry {
   llvm::sys::fs::UniqueID UniqueID;
   unsigned UID = 0; // A unique (small) ID for the file.
   bool IsNamedPipe = false;
+  bool IsDeviceFile = false;
 
   /// The open file, if it is owned by the \p FileEntry.
   mutable std::unique_ptr<llvm::vfs::File> File;
@@ -318,21 +313,13 @@ class FileEntry {
   /// The file content, if it is owned by the \p FileEntry.
   std::unique_ptr<llvm::MemoryBuffer> Content;
 
-  // First access name for this FileEntry.
-  //
-  // This is Optional only to allow delayed construction (FileEntryRef has no
-  // default constructor). It should always have a value in practice.
-  //
-  // TODO: remove this once everyone that needs a name uses FileEntryRef.
-  OptionalFileEntryRef LastRef;
-
 public:
   ~FileEntry();
-  LLVM_DEPRECATED("Use FileEntryRef::getName() instead.", "")
-  StringRef getName() const { return LastRef->getName(); }
 
   StringRef tryGetRealPathName() const { return RealPathName; }
   off_t getSize() const { return Size; }
+  // Size may increase due to potential z/OS EBCDIC -> UTF-8 conversion.
+  void setSize(off_t NewSize) { Size = NewSize; }
   unsigned getUID() const { return UID; }
   const llvm::sys::fs::UniqueID &getUniqueID() const { return UniqueID; }
   time_t getModificationTime() const { return ModTime; }
@@ -343,6 +330,7 @@ public:
   /// Check whether the file is a named pipe (and thus can't be opened by
   /// the native FileManager methods).
   bool isNamedPipe() const { return IsNamedPipe; }
+  bool isDeviceFile() const { return IsDeviceFile; }
 
   void closeFile() const;
 };
@@ -360,8 +348,15 @@ time_t FileEntryRef::getModificationTime() const {
 }
 
 bool FileEntryRef::isNamedPipe() const { return getFileEntry().isNamedPipe(); }
+bool FileEntryRef::isDeviceFile() const {
+  return getFileEntry().isDeviceFile();
+}
 
 void FileEntryRef::closeFile() const { getFileEntry().closeFile(); }
+
+void FileEntryRef::updateFileEntryBufferSize(unsigned BufferSize) {
+  cast<FileEntry *>(getBaseMapEntry().second->V)->setSize(BufferSize);
+}
 
 } // end namespace clang
 

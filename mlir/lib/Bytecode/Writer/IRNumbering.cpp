@@ -9,9 +9,11 @@
 #include "IRNumbering.h"
 #include "mlir/Bytecode/BytecodeImplementation.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
+#include "mlir/Bytecode/BytecodeWriter.h"
 #include "mlir/Bytecode/Encoding.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Location.h"
 #include "mlir/IR/OpDefinition.h"
 
 using namespace mlir;
@@ -49,6 +51,7 @@ struct IRNumberingState::NumberingDialectWriter : public DialectBytecodeWriter {
   }
   void writeOwnedBlob(ArrayRef<char> blob) override {}
   void writeOwnedBool(bool value) override {}
+  void writeUnownedBlob(ArrayRef<char> blob) override {}
 
   int64_t getBytecodeVersion() const override {
     return state.getDesiredBytecodeVersion();
@@ -196,6 +199,13 @@ IRNumberingState::IRNumberingState(Operation *op,
   finalizeDialectResourceNumberings(op);
 }
 
+unsigned IRNumberingState::getNumber(Location loc) {
+  if (config.shouldElideLocations()) {
+    return getNumber(Attribute(UnknownLoc::get(loc.getContext())));
+  }
+  return getNumber(Attribute(loc));
+}
+
 void IRNumberingState::computeGlobalNumberingState(Operation *rootOp) {
   // A simple state struct tracking data used when walking operations.
   struct StackState {
@@ -306,8 +316,16 @@ void IRNumberingState::computeGlobalNumberingState(Operation *rootOp) {
   });
 }
 
+void IRNumberingState::number(Location loc) {
+  if (config.shouldElideLocations()) {
+    number(Attribute(UnknownLoc::get(loc.getContext())));
+  } else {
+    number(Attribute(loc));
+  }
+}
+
 void IRNumberingState::number(Attribute attr) {
-  auto it = attrs.insert({attr, nullptr});
+  auto it = attrs.try_emplace(attr);
   if (!it.second) {
     ++it.first->second->refCount;
     return;
@@ -424,22 +442,22 @@ void IRNumberingState::number(Operation &op) {
     number(result.getType());
   }
 
-  // Only number the operation's dictionary if it isn't empty.
-  DictionaryAttr dictAttr = op.getDiscardableAttrDictionary();
   // Prior to a version with native property encoding, or when properties are
   // not used, we need to number also the merged dictionary containing both the
   // inherent and discardable attribute.
-  if (config.getDesiredBytecodeVersion() <
-          bytecode::kNativePropertiesEncoding ||
-      !op.getPropertiesStorage()) {
+  DictionaryAttr dictAttr;
+  if (config.getDesiredBytecodeVersion() >= bytecode::kNativePropertiesEncoding)
+    dictAttr = op.getRawDictionaryAttrs();
+  else
     dictAttr = op.getAttrDictionary();
-  }
+  // Only number the operation's dictionary if it isn't empty.
   if (!dictAttr.empty())
     number(dictAttr);
 
   // Visit the operation properties (if any) to make sure referenced attributes
   // are numbered.
-  if (config.getDesiredBytecodeVersion() >= bytecode::kNativePropertiesEncoding &&
+  if (config.getDesiredBytecodeVersion() >=
+          bytecode::kNativePropertiesEncoding &&
       op.getPropertiesStorageSize()) {
     if (op.isRegistered()) {
       // Operation that have properties *must* implement this interface.
@@ -474,7 +492,7 @@ void IRNumberingState::number(OperationName opName) {
 }
 
 void IRNumberingState::number(Type type) {
-  auto it = types.insert({type, nullptr});
+  auto it = types.try_emplace(type);
   if (!it.second) {
     ++it.first->second->refCount;
     return;

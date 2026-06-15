@@ -41,13 +41,6 @@ class DirectoryEntry {
   DirectoryEntry &operator=(const DirectoryEntry &) = delete;
   friend class FileManager;
   friend class FileEntryTestHelper;
-
-  // FIXME: We should not be storing a directory entry name here.
-  StringRef Name; // Name of the directory.
-
-public:
-  LLVM_DEPRECATED("Use DirectoryEntryRef::getName() instead.", "")
-  StringRef getName() const { return Name; }
 };
 
 /// A reference to a \c DirectoryEntry  that includes the name of the directory
@@ -103,16 +96,12 @@ private:
 
   friend struct llvm::DenseMapInfo<DirectoryEntryRef>;
   struct dense_map_empty_tag {};
-  struct dense_map_tombstone_tag {};
 
-  // Private constructors for use by DenseMapInfo.
+  // Private constructor for use by DenseMapInfo.
   DirectoryEntryRef(dense_map_empty_tag)
       : ME(llvm::DenseMapInfo<const MapEntry *>::getEmptyKey()) {}
-  DirectoryEntryRef(dense_map_tombstone_tag)
-      : ME(llvm::DenseMapInfo<const MapEntry *>::getTombstoneKey()) {}
   bool isSpecialDenseMapKey() const {
-    return isSameRef(DirectoryEntryRef(dense_map_empty_tag())) ||
-           isSameRef(DirectoryEntryRef(dense_map_tombstone_tag()));
+    return isSameRef(DirectoryEntryRef(dense_map_empty_tag()));
   }
 
   const MapEntry *ME;
@@ -126,10 +115,10 @@ namespace FileMgr {
 /// the private optional_none_tag to keep it to the size of a single pointer.
 template <class RefTy> class MapEntryOptionalStorage {
   using optional_none_tag = typename RefTy::optional_none_tag;
-  RefTy MaybeRef;
+  RefTy MaybeRef = optional_none_tag();
 
 public:
-  MapEntryOptionalStorage() : MaybeRef(optional_none_tag()) {}
+  MapEntryOptionalStorage() = default;
 
   template <class... ArgTypes>
   explicit MapEntryOptionalStorage(std::in_place_t, ArgTypes &&...Args)
@@ -175,11 +164,7 @@ class OptionalStorage<clang::DirectoryEntryRef>
       clang::FileMgr::MapEntryOptionalStorage<clang::DirectoryEntryRef>;
 
 public:
-  OptionalStorage() = default;
-
-  template <class... ArgTypes>
-  explicit OptionalStorage(std::in_place_t, ArgTypes &&...Args)
-      : StorageImpl(std::in_place_t{}, std::forward<ArgTypes>(Args)...) {}
+  using StorageImpl::StorageImpl;
 
   OptionalStorage &operator=(clang::DirectoryEntryRef Ref) {
     StorageImpl::operator=(Ref);
@@ -219,18 +204,13 @@ template <> struct DenseMapInfo<clang::DirectoryEntryRef> {
         clang::DirectoryEntryRef::dense_map_empty_tag());
   }
 
-  static inline clang::DirectoryEntryRef getTombstoneKey() {
-    return clang::DirectoryEntryRef(
-        clang::DirectoryEntryRef::dense_map_tombstone_tag());
-  }
-
   static unsigned getHashValue(clang::DirectoryEntryRef Val) {
     return hash_value(Val);
   }
 
   static bool isEqual(clang::DirectoryEntryRef LHS,
                       clang::DirectoryEntryRef RHS) {
-    // Catch the easy cases: both empty, both tombstone, or the same ref.
+    // Catch the easy cases: both empty or the same ref.
     if (LHS.isSameRef(RHS))
       return true;
 

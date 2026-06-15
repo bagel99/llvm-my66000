@@ -1,4 +1,5 @@
-; RUN: llc -mtriple=x86_64-pc-linux-gnu -enable-new-pm -print-pipeline-passes -start-before=mergeicmps -stop-after=gc-lowering -filetype=null %s | FileCheck --match-full-lines %s
+; RUN: llc -mtriple=x86_64-pc-linux-gnu -enable-new-pm -print-pipeline-passes -start-before=gc-lowering -stop-after=gc-lowering -filetype=null %s | FileCheck --match-full-lines %s --check-prefix=NULL
+; RUN: llc -mtriple=x86_64-pc-linux-gnu -enable-new-pm -print-pipeline-passes -start-before=gc-lowering -stop-after=gc-lowering -o /dev/null %s | FileCheck --match-full-lines %s --check-prefix=OBJ
 
-; CHECK: IR pipeline: function(mergeicmps,expand-memcmp,gc-lowering)
-
+; NULL: require<MachineModuleAnalysis>,require<profile-summary>,require<collector-metadata>,require<runtime-libcall-info>,require<libcall-lowering-info>,function(verify,gc-lowering,verify)
+; OBJ: require<MachineModuleAnalysis>,require<profile-summary>,require<collector-metadata>,require<runtime-libcall-info>,require<libcall-lowering-info>,function(verify,gc-lowering,verify),PrintMIRPreparePass,function(machine-function(print),free-machine-function)

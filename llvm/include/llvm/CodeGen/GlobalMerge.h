@@ -21,11 +21,17 @@ struct GlobalMergeOptions {
   // functions), see the code that passes in the offset in the ARM backend
   // for more information.
   unsigned MaxOffset = 0;
+  // The minimum size in bytes of each global that should considered in merging.
+  unsigned MinSize = 0;
   bool GroupByUse = true;
   bool IgnoreSingleUse = true;
-  bool MergeConst = false;
   /// Whether we should merge global variables that have external linkage.
   bool MergeExternal = true;
+  /// Whether we should merge constant global variables.
+  bool MergeConstantGlobals = false;
+  /// Whether we should merge constant global variables aggressively without
+  /// looking at use.
+  bool MergeConstAggressive = false;
   /// Whether we should try to optimize for size only.
   /// Currently, this applies a dead simple heuristic: only consider globals
   /// used in minsize functions for merging.
@@ -34,7 +40,7 @@ struct GlobalMergeOptions {
 };
 
 // FIXME: This pass must run before AsmPrinterPass::doInitialization!
-class GlobalMergePass : public PassInfoMixin<GlobalMergePass> {
+class GlobalMergePass : public OptionalPassInfoMixin<GlobalMergePass> {
   const TargetMachine *TM;
   GlobalMergeOptions Options;
 
@@ -42,7 +48,7 @@ public:
   GlobalMergePass(const TargetMachine *TM, GlobalMergeOptions Options)
       : TM(TM), Options(Options) {}
 
-  PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM);
+  LLVM_ABI PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM);
 };
 
 } // namespace llvm

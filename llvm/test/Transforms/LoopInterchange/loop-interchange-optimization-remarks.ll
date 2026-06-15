@@ -7,7 +7,8 @@
 
 ; RUN: opt < %s -passes=loop-interchange -cache-line-size=64 -verify-dom-info -verify-loop-info \
 ; RUN:     -pass-remarks-output=%t -pass-remarks-missed='loop-interchange' \
-; RUN:     -pass-remarks='loop-interchange' -S -da-disable-delinearization-checks
+; RUN:     -pass-remarks='loop-interchange' -S -da-disable-delinearization-checks \
+; RUN:     -loop-interchange-profitabilities=cache
 ; RUN: cat %t |  FileCheck --check-prefix=DELIN %s
 
 @A = common global [100 x [100 x i32]] zeroinitializer
@@ -58,20 +59,36 @@ for.end19:
   ret void
 }
 
+; CHECK: --- !Analysis
+; CHECK-NEXT: Pass:            loop-interchange
+; CHECK-NEXT: Name:            Dependence
+; CHECK-NEXT: Function:        test01
+; CHECK-NEXT: Args:
+; CHECK-NEXT:   - String:          Computed dependence info, invoking the transform.
+; CHECK-NEXT: ...
+
 ; CHECK: --- !Missed
 ; CHECK-NEXT: Pass:            loop-interchange
 ; CHECK-NEXT: Name:            Dependence
 ; CHECK-NEXT: Function:        test01
 ; CHECK-NEXT: Args:
-; CHECK-NEXT:   - String:          Cannot interchange loops due to dependences.
+; CHECK-NEXT:   - String:          All loops have dependencies in all directions.
 ; CHECK-NEXT: ...
+
+; DELIN: --- !Analysis
+; DELIN-NEXT: Pass:            loop-interchange
+; DELIN-NEXT: Name:            Dependence
+; DELIN-NEXT: Function:        test01
+; DELIN-NEXT: Args:
+; DELIN-NEXT:   - String:          Computed dependence info, invoking the transform.
+; DELIN-NEXT: ...
 
 ; DELIN: --- !Missed
 ; DELIN-NEXT: Pass:            loop-interchange
 ; DELIN-NEXT: Name:            InterchangeNotProfitable
 ; DELIN-NEXT: Function:        test01
 ; DELIN-NEXT: Args:
-; DELIN-NEXT:   - String:          Interchanging loops is not considered to improve cache locality nor vectorization.
+; DELIN-NEXT:   - String:          Interchanging loops is not considered to improve cache locality nor vectorizatio
 ; DELIN-NEXT: ...
 
 ;;--------------------------------------Test case 02------------------------------------
@@ -118,13 +135,29 @@ define void @test02(i32 %k, i32 %N) {
    ret void
 }
 
+; CHECK: --- !Analysis
+; CHECK-NEXT: Pass:            loop-interchange
+; CHECK-NEXT: Name:            Dependence
+; CHECK-NEXT: Function:        test02
+; CHECK-NEXT: Args:
+; CHECK-NEXT:   - String:          Computed dependence info, invoking the transform.
+; CHECK-NEXT: ...
+
 ; CHECK: --- !Missed
 ; CHECK-NEXT: Pass:            loop-interchange
 ; CHECK-NEXT: Name:            Dependence
 ; CHECK-NEXT: Function:        test02
 ; CHECK-NEXT: Args:
-; CHECK-NEXT:   - String:          Cannot interchange loops due to dependences.
+; CHECK-NEXT:   - String:          All loops have dependencies in all directions.
 ; CHECK-NEXT: ...
+
+; DELIN: --- !Analysis
+; DELIN-NEXT: Pass:            loop-interchange
+; DELIN-NEXT: Name:            Dependence
+; DELIN-NEXT: Function:        test02
+; DELIN-NEXT: Args:
+; DELIN-NEXT:   - String:          Computed dependence info, invoking the transform.
+; DELIN-NEXT: ...
 
 ; DELIN: --- !Passed
 ; DELIN-NEXT: Pass:            loop-interchange
@@ -174,6 +207,14 @@ for.body4:                                        ; preds = %for.body4, %for.con
   br i1 %exitcond, label %for.body4, label %for.cond.loopexit
 }
 
+; CHECK: --- !Analysis
+; CHECK-NEXT: Pass:            loop-interchange
+; CHECK-NEXT: Name:            Dependence
+; CHECK-NEXT: Function:        test03
+; CHECK-NEXT: Args:
+; CHECK-NEXT:   - String:          Computed dependence info, invoking the transform.
+; CHECK-NEXT: ...
+
 ; CHECK: --- !Passed
 ; CHECK-NEXT: Pass:            loop-interchange
 ; CHECK-NEXT: Name:            Interchanged
@@ -181,6 +222,14 @@ for.body4:                                        ; preds = %for.body4, %for.con
 ; CHECK-NEXT: Args:
 ; CHECK-NEXT:   - String:          Loop interchanged with enclosing loop.
 ; CHECK-NEXT: ...
+
+; DELIN: --- !Analysis
+; DELIN-NEXT: Pass:            loop-interchange
+; DELIN-NEXT: Name:            Dependence
+; DELIN-NEXT: Function:        test03
+; DELIN-NEXT: Args:
+; DELIN-NEXT:   - String:          Computed dependence info, invoking the transform.
+; DELIN-NEXT: ...
 
 ; DELIN: --- !Passed
 ; DELIN-NEXT: Pass:            loop-interchange
@@ -242,7 +291,7 @@ for.end17:
 ; CHECK-NEXT: Name:            Dependence
 ; CHECK-NEXT: Function:        test04
 ; CHECK-NEXT: Args:
-; CHECK-NEXT:   - String:          Cannot interchange loops due to dependences.
+; CHECK-NEXT:   - String:          All loops have dependencies in all directions.
 ; CHECK-NEXT: ...
 
 ; DELIN: --- !Missed

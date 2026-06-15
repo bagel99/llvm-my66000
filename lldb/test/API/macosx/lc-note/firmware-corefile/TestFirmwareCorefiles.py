@@ -12,6 +12,8 @@ from lldbsuite.test import lldbutil
 
 
 class TestFirmwareCorefiles(TestBase):
+    SHARED_BUILD_TESTCASE = False
+
     @skipIf(
         debug_info=no_match(["dsym"]),
         bugnumber="This test is looking explicitly for a dSYM",
@@ -73,7 +75,7 @@ class TestFirmwareCorefiles(TestBase):
         if self.TraceOn():
             self.runCmd("script print('loading corefile %s')" % verstr_corefile)
         process = target.LoadCore(verstr_corefile)
-        self.assertEqual(process.IsValid(), True)
+        self.assertTrue(process.IsValid())
         if self.TraceOn():
             self.runCmd("image list")
             self.runCmd("target mod dump sections")
@@ -91,7 +93,7 @@ class TestFirmwareCorefiles(TestBase):
                 "script print('loading corefile %s')" % verstr_corefile_invalid_ident
             )
         process = target.LoadCore(verstr_corefile_invalid_ident)
-        self.assertEqual(process.IsValid(), True)
+        self.assertTrue(process.IsValid())
 
         # Third, try the "kern ver str" corefile where it loads at an address
         target = self.dbg.CreateTarget("")
@@ -99,7 +101,7 @@ class TestFirmwareCorefiles(TestBase):
         if self.TraceOn():
             self.runCmd("script print('loading corefile %s')" % verstr_corefile_addr)
         process = target.LoadCore(verstr_corefile_addr)
-        self.assertEqual(process.IsValid(), True)
+        self.assertTrue(process.IsValid())
         if self.TraceOn():
             self.runCmd("image list")
             self.runCmd("target mod dump sections")
@@ -178,7 +180,7 @@ class TestFirmwareCorefiles(TestBase):
         if self.TraceOn():
             self.runCmd("script print('loading corefile %s')" % binspec_corefile)
         process = target.LoadCore(binspec_corefile)
-        self.assertEqual(process.IsValid(), True)
+        self.assertTrue(process.IsValid())
         if self.TraceOn():
             self.runCmd("image list")
             self.runCmd("target mod dump sections")
@@ -192,7 +194,7 @@ class TestFirmwareCorefiles(TestBase):
         if self.TraceOn():
             self.runCmd("script print('loading corefile %s')" % binspec_corefile_addr)
         process = target.LoadCore(binspec_corefile_addr)
-        self.assertEqual(process.IsValid(), True)
+        self.assertTrue(process.IsValid())
         if self.TraceOn():
             self.runCmd("image list")
             self.runCmd("target mod dump sections")
@@ -212,7 +214,7 @@ class TestFirmwareCorefiles(TestBase):
                 "script print('loading corefile %s')" % binspec_corefile_slideonly
             )
         process = target.LoadCore(binspec_corefile_slideonly)
-        self.assertEqual(process.IsValid(), True)
+        self.assertTrue(process.IsValid())
         if self.TraceOn():
             self.runCmd("image list")
             self.runCmd("target mod dump sections")
@@ -285,7 +287,7 @@ class TestFirmwareCorefiles(TestBase):
             for l in python_init:
                 writer.write(l + "\n")
 
-        dwarfdump_uuid_regex = re.compile("UUID: ([-0-9a-fA-F]+) \(([^\(]+)\) .*")
+        dwarfdump_uuid_regex = re.compile(r"UUID: ([-0-9a-fA-F]+) \(([^\(]+)\) .*")
         dwarfdump_cmd_output = subprocess.check_output(
             ('/usr/bin/dwarfdump --uuid "%s"' % aout_exe), shell=True
         ).decode("utf-8")
@@ -352,7 +354,7 @@ class TestFirmwareCorefiles(TestBase):
             )
 
         process = target.LoadCore(binspec_corefile_addr)
-        self.assertEqual(process.IsValid(), True)
+        self.assertTrue(process.IsValid())
         if self.TraceOn():
             self.runCmd("image list")
             self.runCmd("target mod dump sections")

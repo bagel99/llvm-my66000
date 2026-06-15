@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "TestDialect.h"
+#include "TestOps.h"
 #include "mlir/Bytecode/BytecodeReader.h"
 #include "mlir/Bytecode/BytecodeWriter.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -24,17 +25,17 @@ using namespace llvm;
 namespace {
 class TestDialectVersionParser : public cl::parser<test::TestDialectVersion> {
 public:
-  TestDialectVersionParser(cl::Option &O)
-      : cl::parser<test::TestDialectVersion>(O) {}
+  TestDialectVersionParser(cl::Option &o)
+      : cl::parser<test::TestDialectVersion>(o) {}
 
-  bool parse(cl::Option &O, StringRef /*argName*/, StringRef arg,
+  bool parse(cl::Option &o, StringRef /*argName*/, StringRef arg,
              test::TestDialectVersion &v) {
-    long long major_, minor_;
-    if (getAsSignedInteger(arg.split(".").first, 10, major_))
-      return O.error("Invalid argument '" + arg);
-    if (getAsSignedInteger(arg.split(".").second, 10, minor_))
-      return O.error("Invalid argument '" + arg);
-    v = test::TestDialectVersion(major_, minor_);
+    long long major, minor;
+    if (getAsSignedInteger(arg.split(".").first, 10, major))
+      return o.error("Invalid argument '" + arg);
+    if (getAsSignedInteger(arg.split(".").second, 10, minor))
+      return o.error("Invalid argument '" + arg);
+    v = test::TestDialectVersion(major, minor);
     // Returns true on error.
     return false;
   }
@@ -83,6 +84,8 @@ struct TestBytecodeRoundtripPass
       // test-kind 6 is a plain roundtrip with downgrade/upgrade to/from
       // `targetVersion`.
       return runTest6(getOperation());
+    case (7):
+      return runTest7(getOperation());
     default:
       llvm_unreachable("unhandled test kind for TestBytecodeCallbacks pass");
     }
@@ -163,10 +166,12 @@ private:
     parseConfig.getBytecodeReaderConfig().attachTypeCallback(
         [&](DialectBytecodeReader &reader, StringRef dialectName,
             Type &entry) -> LogicalResult {
-          // Get test dialect version from the version map.
+          // Get test dialect version from the version map. If the test dialect
+          // is not present in the bytecode (e.g., the module contains no test
+          // dialect types), version info will be absent -- just skip.
           auto versionOr = reader.getDialectVersion<test::TestDialect>();
-          assert(succeeded(versionOr) && "expected reader to be able to access "
-                                         "the version for test dialect");
+          if (failed(versionOr))
+            return success();
           const auto *version =
               reinterpret_cast<const test::TestDialectVersion *>(*versionOr);
           if (version->major_ >= 2)
@@ -182,12 +187,12 @@ private:
           if (failed(reader.readVarInt(encoding)) || encoding != 999)
             return success();
           llvm::outs() << "Overriding parsing of IntegerType encoding...\n";
-          uint64_t _widthAndSignedness, width;
+          uint64_t widthAndSignedness, width;
           IntegerType::SignednessSemantics signedness;
-          if (succeeded(reader.readVarInt(_widthAndSignedness)) &&
-              ((width = _widthAndSignedness >> 2), true) &&
+          if (succeeded(reader.readVarInt(widthAndSignedness)) &&
+              ((width = widthAndSignedness >> 2), true) &&
               ((signedness = static_cast<IntegerType::SignednessSemantics>(
-                    _widthAndSignedness & 0x3)),
+                    widthAndSignedness & 0x3)),
                true))
             entry = IntegerType::get(reader.getContext(), width, signedness);
           // Return nullopt to fall through the rest of the parsing code path.
@@ -200,7 +205,7 @@ private:
   // the encoding of builtin IntegerType. We can natively parse this without
   // the use of a callback, relying on the existing builtin reader mechanism.
   void runTest1(Operation *op) {
-    auto builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
+    auto *builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
     BytecodeDialectInterface *iface =
         builtin->getRegisteredInterface<BytecodeDialectInterface>();
     BytecodeWriterConfig writeConfig;
@@ -231,7 +236,7 @@ private:
   // parsing, we use the encoding of IntegerType to intercept all i32. Then,
   // instead of creating i32s, we assemble TestI32Type and return it.
   void runTest2(Operation *op) {
-    auto builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
+    auto *builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
     BytecodeDialectInterface *iface =
         builtin->getRegisteredInterface<BytecodeDialectInterface>();
     BytecodeWriterConfig writeConfig;
@@ -259,7 +264,7 @@ private:
   // can natively parse this without the use of a callback, relying on the
   // existing builtin reader mechanism.
   void runTest3(Operation *op) {
-    auto builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
+    auto *builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
     BytecodeDialectInterface *iface =
         builtin->getRegisteredInterface<BytecodeDialectInterface>();
     auto i32Type = IntegerType::get(op->getContext(), 32,
@@ -295,7 +300,7 @@ private:
   // <2xi32>. Instead of assembling a DenseIntElementsAttr, we assemble
   // TestAttrParamsAttr and return it.
   void runTest4(Operation *op) {
-    auto builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
+    auto *builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
     BytecodeDialectInterface *iface =
         builtin->getRegisteredInterface<BytecodeDialectInterface>();
     auto i32Type = IntegerType::get(op->getContext(), 32,
@@ -330,7 +335,7 @@ private:
   // the builtin types and attributes and take full control of the encoding,
   // returning failure if any type or attribute is not part of builtin.
   void runTest5(Operation *op) {
-    auto builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
+    auto *builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
     BytecodeDialectInterface *iface =
         builtin->getRegisteredInterface<BytecodeDialectInterface>();
     BytecodeWriterConfig writeConfig;
@@ -408,6 +413,59 @@ private:
     writeConfig.setDialectVersion<test::TestDialect>(
         std::make_unique<test::TestDialectVersion>(targetEmissionVersion));
     ParserConfig parseConfig(op->getContext(), /*verifyAfterParse=*/true);
+    doRoundtripWithConfigs(op, writeConfig, parseConfig);
+  }
+
+  // Test7: When writing bytecode, we override the encoding of TestI32Type with
+  // the encoding of builtin IntegerType, but we also write an unowned blob.
+  // We can natively parse this without the use of a callback, relying on the
+  // existing builtin reader mechanism.
+  void runTest7(Operation *op) {
+    auto *builtin = op->getContext()->getLoadedDialect<mlir::BuiltinDialect>();
+    BytecodeDialectInterface *iface =
+        builtin->getRegisteredInterface<BytecodeDialectInterface>();
+    BytecodeWriterConfig writeConfig;
+    writeConfig.attachTypeCallback(
+        [&](Type entryValue, std::optional<StringRef> &dialectGroupName,
+            DialectBytecodeWriter &writer) -> LogicalResult {
+          // Emit TestIntegerType using the builtin dialect encoding.
+          if (llvm::isa<test::TestI32Type>(entryValue)) {
+            auto builtinI32Type =
+                IntegerType::get(op->getContext(), 32,
+                                 IntegerType::SignednessSemantics::Signless);
+            // Specify that this type will need to be written as part of the
+            // builtin group. This will override the default dialect group of
+            // the attribute (test).
+            dialectGroupName = StringLiteral("builtin");
+            if (succeeded(iface->writeType(builtinI32Type, writer))) {
+              char dummyBlob[] = "test_blob";
+              llvm::outs() << "Writing unowned blob...\n";
+              writer.writeUnownedBlob(ArrayRef<char>(dummyBlob, 9));
+              return success();
+            }
+          }
+          return failure();
+        });
+    ParserConfig parseConfig(op->getContext(), /*verifyAfterParse=*/true);
+    parseConfig.getBytecodeReaderConfig().attachTypeCallback(
+        [&](DialectBytecodeReader &reader, StringRef dialectName,
+            Type &entry) -> LogicalResult {
+          if (dialectName != StringLiteral("builtin"))
+            return failure();
+          Type builtinAttr = iface->readType(reader);
+          if (auto integerType =
+                  llvm::dyn_cast_or_null<IntegerType>(builtinAttr)) {
+            if (integerType.getWidth() == 32 && integerType.isSignless()) {
+              ArrayRef<char> blob;
+              if (succeeded(reader.readBlob(blob)) &&
+                  blob == ArrayRef<char>("test_blob", 9)) {
+                llvm::outs() << "Successfully read the unowned blob.\n";
+                entry = test::TestI32Type::get(reader.getContext());
+              }
+            }
+          }
+          return success();
+        });
     doRoundtripWithConfigs(op, writeConfig, parseConfig);
   }
 

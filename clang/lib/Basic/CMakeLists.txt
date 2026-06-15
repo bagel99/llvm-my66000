@@ -55,6 +55,7 @@ if(CLANG_VENDOR)
 endif()
 
 add_clang_library(clangBasic
+  ASTSourceDescriptor.cpp
   Attributes.cpp
   Builtins.cpp
   CLWarnings.cpp
@@ -68,13 +69,13 @@ add_clang_library(clangBasic
   ExpressionTraits.cpp
   FileEntry.cpp
   FileManager.cpp
-  FileSystemStatCache.cpp
   IdentifierTable.cpp
   LangOptions.cpp
   LangStandards.cpp
   MakeSupport.cpp
   Module.cpp
   ObjCRuntime.cpp
+  OffloadArch.cpp
   OpenCLOptions.cpp
   OpenMPKinds.cpp
   OperatorPrecedence.cpp
@@ -84,10 +85,12 @@ add_clang_library(clangBasic
   SanitizerSpecialCaseList.cpp
   Sanitizers.cpp
   Sarif.cpp
+  SimpleTypoCorrection.cpp
   SourceLocation.cpp
   SourceManager.cpp
   SourceMgrAdapter.cpp
   Stack.cpp
+  StackExhaustionHandler.cpp
   TargetID.cpp
   TargetInfo.cpp
   Targets.cpp
@@ -101,7 +104,6 @@ add_clang_library(clangBasic
   Targets/DirectX.cpp
   Targets/Hexagon.cpp
   Targets/Lanai.cpp
-  Targets/Le64.cpp
   Targets/LoongArch.cpp
   Targets/M68k.cpp
   Targets/MSP430.cpp
@@ -109,7 +111,6 @@ add_clang_library(clangBasic
   Targets/My66000.cpp
   Targets/NVPTX.cpp
   Targets/OSTargets.cpp
-  Targets/PNaCl.cpp
   Targets/PPC.cpp
   Targets/RISCV.cpp
   Targets/SPIR.cpp
@@ -120,6 +121,7 @@ add_clang_library(clangBasic
   Targets/WebAssembly.cpp
   Targets/X86.cpp
   Targets/XCore.cpp
+  Targets/Xtensa.cpp
   TokenKinds.cpp
   TypeTraits.cpp
   Version.cpp
@@ -131,6 +133,8 @@ add_clang_library(clangBasic
   DEPENDS
   omp_gen
   ClangDriverOptions
+  # These generated headers are included transitively.
+  target_parser_gen
   )
 
 target_link_libraries(clangBasic

@@ -1,8 +1,8 @@
 ! RUN: bbc -emit-hlfir -fopenmp -o - %s 2>&1 | FileCheck %s
 ! RUN: %flang_fc1 -emit-hlfir -fopenmp -o - %s 2>&1 | FileCheck %s
 
-! CHECK: omp.wsloop reduction(@max_i_32
-! CHECK: omp.reduction
+! CHECK: omp.wsloop private({{.*}}) reduction(@max_i32
+! CHECK: arith.maxsi
 
 module m1
   intrinsic max

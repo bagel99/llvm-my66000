@@ -56,9 +56,8 @@ std::optional<Loc> getErrnoLoc(ProgramStateRef State);
 
 /// Set value of 'errno' to any SVal, if possible.
 /// The errno check state is set always when the 'errno' value is set.
-ProgramStateRef setErrnoValue(ProgramStateRef State,
-                              const LocationContext *LCtx, SVal Value,
-                              ErrnoCheckState EState);
+ProgramStateRef setErrnoValue(ProgramStateRef State, const StackFrame *SF,
+                              SVal Value, ErrnoCheckState EState);
 
 /// Set value of 'errno' to a concrete (signed) integer, if possible.
 /// The errno check state is set always when the 'errno' value is set.
@@ -71,12 +70,9 @@ ProgramStateRef setErrnoState(ProgramStateRef State, ErrnoCheckState EState);
 /// Clear state of errno (make it irrelevant).
 ProgramStateRef clearErrnoState(ProgramStateRef State);
 
-/// Determine if a `Decl` node related to 'errno'.
-/// This is true if the declaration is the errno variable or a function
-/// that returns a pointer to the 'errno' value (usually the 'errno' macro is
-/// defined with this function). \p D is not required to be a canonical
-/// declaration.
-bool isErrno(const Decl *D);
+/// Determine if `Call` is a call to an internal function that returns the
+/// location of `errno` (in environments where errno is accessed this way).
+bool isErrnoLocationCall(const CallEvent &Call);
 
 /// Create a NoteTag that displays the message if the 'errno' memory region is
 /// marked as interesting, and resets the interestingness.
@@ -99,9 +95,10 @@ ProgramStateRef setErrnoForStdFailure(ProgramStateRef State, CheckerContext &C,
 /// Set errno state for the common case when a standard function indicates
 /// failure only by \c errno. Sets \c ErrnoCheckState to \c MustBeChecked, and
 /// invalidates the errno region (clear of previous value).
-/// \arg \c InvalE Expression that causes invalidation of \c errno.
+/// \arg \c Elem CFG Element that causes invalidation of \c errno.
 ProgramStateRef setErrnoStdMustBeChecked(ProgramStateRef State,
-                                         CheckerContext &C, const Expr *InvalE);
+                                         CheckerContext &C,
+                                         ConstCFGElementRef Elem);
 
 } // namespace errno_modeling
 } // namespace ento

@@ -48,7 +48,9 @@ FILE *fopen(const char *restrict path, const char *restrict mode);
 FILE *fdopen(int fd, const char *mode);
 FILE *tmpfile(void);
 FILE *freopen(const char *restrict pathname, const char *restrict mode, FILE *restrict stream);
+FILE *popen(const char *command, const char *mode);
 int fclose(FILE *fp);
+int pclose(FILE *stream);
 size_t fread(void *restrict, size_t, size_t, FILE *restrict);
 size_t fwrite(const void *restrict, size_t, size_t, FILE *restrict);
 int fgetc(FILE *stream);
@@ -71,12 +73,16 @@ int ferror(FILE *stream);
 int fileno(FILE *stream);
 int fflush(FILE *stream);
 
+
+int getc(FILE *stream);
+
 size_t strlen(const char *);
 
 char *strcpy(char *restrict, const char *restrict);
 char *strncpy(char *restrict dst, const char *restrict src, size_t n);
 char *strsep(char **restrict stringp, const char *restrict delim);
 void *memcpy(void *restrict dst, const void *restrict src, size_t n);
+void *memmove(void *dst, const void *src, size_t n);
 void *memset(void *s, int c, size_t n);
 
 typedef unsigned long __darwin_pthread_key_t;
@@ -149,3 +155,11 @@ void _Exit(int status) __attribute__ ((__noreturn__));
 #define EOF (-1)
 
 #define offsetof(t, d) __builtin_offsetof(t, d)
+
+struct sigaction {
+  void (*sa_handler)(int);
+};
+#define SIGINT 2
+#define	SIG_IGN (void (*)(int))1
+
+int sigaction(int, const struct sigaction *restrict, struct sigaction *restrict);

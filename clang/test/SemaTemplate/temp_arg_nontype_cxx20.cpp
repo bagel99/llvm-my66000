@@ -101,7 +101,7 @@ namespace ConvertedConstant {
   struct {
     int i : 2;
   } b;
-  template <const int&> struct Y {};
+  template <const int&> struct Y {}; // expected-note {{template parameter is declared here}}
   void f(Y<b.i>) {} // expected-error {{reference cannot bind to bit-field in converted constant expression}}
 }
 
@@ -238,7 +238,7 @@ namespace UnnamedBitfield {
 }
 
 namespace Temporary {
-  template<const int &> struct A {};
+  template<const int &> struct A {}; // expected-note {{template parameter is declared here}}
   A<0> a0; // expected-error {{conversion from 'int' to 'const int &' in converted constant expression would bind reference to a temporary}}
 
   A<(const int&)1> a1; // expected-error {{reference to temporary object is not allowed in a template argument}}
@@ -334,5 +334,55 @@ struct B { operator int(); };
 template<int> using Tbar = int;
 template<int ...Ns> void bar(B b) {
   (b.operator Tbar<Ns>(), ...);
+}
+}
+
+namespace ReportedRegression1 {
+  const char kt[] = "dummy";
+
+  template <class T, const char id[]>
+    class SomeTempl { };
+
+  template <const char id[]>
+    class SomeTempl<int, id> {
+      public:
+        int exit_code() const { return 0; }
+    };
+
+  int use() {
+    SomeTempl<int, kt> dummy;
+    return dummy.exit_code();
+  }
+}
+
+namespace ReportedRegression2 {
+  const char str[] = "dummy";
+
+  struct S {
+    S operator+(const char*) const;
+  };
+
+  template <const char* in>
+  void fn() {
+    auto s = S{} + in;
+  }
+
+  void use() {
+    fn<str>();
+  }
+}
+
+namespace GH151531 {
+struct w {
+    int n;
+};
+
+template <const w *X> void f() { static_assert(X->n == 42); }
+
+template <w X> void g() { f<&X>(); }
+
+void test() {
+    constexpr w X = {42};
+    g<X>();
 }
 }

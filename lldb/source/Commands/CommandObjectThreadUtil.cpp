@@ -21,8 +21,7 @@ CommandObjectIterateOverThreads::CommandObjectIterateOverThreads(
     const char *syntax, uint32_t flags)
     : CommandObjectParsed(interpreter, name, help, syntax, flags) {
   // These commands all take thread ID's as arguments.
-  CommandArgumentData thread_arg{eArgTypeThreadIndex, eArgRepeatStar};
-  m_arguments.push_back({thread_arg});
+  AddSimpleArgumentList(eArgTypeThreadIndex, eArgRepeatStar);
 }
 
 CommandObjectMultipleThreads::CommandObjectMultipleThreads(
@@ -30,8 +29,7 @@ CommandObjectMultipleThreads::CommandObjectMultipleThreads(
     const char *syntax, uint32_t flags)
     : CommandObjectParsed(interpreter, name, help, syntax, flags) {
   // These commands all take thread ID's as arguments.
-  CommandArgumentData thread_arg{eArgTypeThreadIndex, eArgRepeatStar};
-  m_arguments.push_back({thread_arg});
+  AddSimpleArgumentList(eArgTypeThreadIndex, eArgRepeatStar);
 }
 
 void CommandObjectIterateOverThreads::DoExecute(Args &command,
@@ -39,6 +37,8 @@ void CommandObjectIterateOverThreads::DoExecute(Args &command,
   result.SetStatus(m_success_return);
 
   bool all_threads = false;
+  m_unique_stacks = false;
+
   if (command.GetArgumentCount() == 0) {
     Thread *thread = m_exe_ctx.GetThreadPtr();
     if (thread)
@@ -69,7 +69,7 @@ void CommandObjectIterateOverThreads::DoExecute(Args &command,
     for (size_t i = 0; i < num_args; i++) {
       uint32_t thread_idx;
       if (!llvm::to_integer(command.GetArgumentAtIndex(i), thread_idx)) {
-        result.AppendErrorWithFormat("invalid thread specification: \"%s\"\n",
+        result.AppendErrorWithFormat("invalid thread specification: \"%s\"",
                                      command.GetArgumentAtIndex(i));
         return;
       }
@@ -78,7 +78,7 @@ void CommandObjectIterateOverThreads::DoExecute(Args &command,
           process->GetThreadList().FindThreadByIndexID(thread_idx);
 
       if (!thread) {
-        result.AppendErrorWithFormat("no thread with index: \"%s\"\n",
+        result.AppendErrorWithFormat("no thread with index: \"%s\"",
                                      command.GetArgumentAtIndex(i));
         return;
       }
@@ -188,7 +188,7 @@ void CommandObjectMultipleThreads::DoExecute(Args &command,
     for (size_t i = 0; i < num_args; i++) {
       uint32_t thread_idx;
       if (!llvm::to_integer(command.GetArgumentAtIndex(i), thread_idx)) {
-        result.AppendErrorWithFormat("invalid thread specification: \"%s\"\n",
+        result.AppendErrorWithFormat("invalid thread specification: \"%s\"",
                                      command.GetArgumentAtIndex(i));
         return;
       }
@@ -196,7 +196,7 @@ void CommandObjectMultipleThreads::DoExecute(Args &command,
       ThreadSP thread = process.GetThreadList().FindThreadByIndexID(thread_idx);
 
       if (!thread) {
-        result.AppendErrorWithFormat("no thread with index: \"%s\"\n",
+        result.AppendErrorWithFormat("no thread with index: \"%s\"",
                                      command.GetArgumentAtIndex(i));
         return;
       }

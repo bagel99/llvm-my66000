@@ -18,9 +18,9 @@
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/CodeGen/LowLevelType.h"
 #include "llvm/CodeGen/Register.h"
 #include "llvm/CodeGen/RegisterBank.h"
+#include "llvm/CodeGenTypes/LowLevelType.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cassert>
 #include <initializer_list>
@@ -37,7 +37,7 @@ class TargetRegisterClass;
 class TargetRegisterInfo;
 
 /// Holds all the information related to register banks.
-class RegisterBankInfo {
+class LLVM_ABI RegisterBankInfo {
 public:
   /// Helper struct that represents how a value is partially mapped
   /// into a register.
@@ -72,10 +72,10 @@ public:
     unsigned getHighBitIdx() const { return StartIdx + Length - 1; }
 
     /// Print this partial mapping on dbgs() stream.
-    void dump() const;
+    LLVM_ABI void dump() const;
 
     /// Print this partial mapping on \p OS;
-    void print(raw_ostream &OS) const;
+    LLVM_ABI void print(raw_ostream &OS) const;
 
     /// Check that the Mask is compatible with the RegBank.
     /// Indeed, if the RegBank cannot accomadate the "active bits" of the mask,
@@ -84,7 +84,7 @@ public:
     /// \note This method does not check anything when assertions are disabled.
     ///
     /// \return True is the check was successful.
-    bool verify(const RegisterBankInfo &RBI) const;
+    LLVM_ABI bool verify(const RegisterBankInfo &RBI) const;
   };
 
   /// Helper struct that represents how a value is mapped through
@@ -167,7 +167,7 @@ public:
 
     /// \return true if all partial mappings are the same size and register
     /// bank.
-    bool partsAllUniform() const;
+    LLVM_ABI bool partsAllUniform() const;
 
     /// Check if this ValueMapping is valid.
     bool isValid() const { return BreakDown && NumBreakDowns; }
@@ -177,13 +177,14 @@ public:
     /// \note This method does not check anything when assertions are disabled.
     ///
     /// \return True is the check was successful.
-    bool verify(const RegisterBankInfo &RBI, TypeSize MeaningfulBitWidth) const;
+    LLVM_ABI bool verify(const RegisterBankInfo &RBI,
+                         TypeSize MeaningfulBitWidth) const;
 
     /// Print this on dbgs() stream.
-    void dump() const;
+    LLVM_ABI void dump() const;
 
     /// Print this on \p OS;
-    void print(raw_ostream &OS) const;
+    LLVM_ABI void print(raw_ostream &OS) const;
   };
 
   /// Helper class that represents how the value of an instruction may be
@@ -262,13 +263,13 @@ public:
     /// \note This method does not check anything when assertions are disabled.
     ///
     /// \return True is the check was successful.
-    bool verify(const MachineInstr &MI) const;
+    LLVM_ABI bool verify(const MachineInstr &MI) const;
 
     /// Print this on dbgs() stream.
-    void dump() const;
+    LLVM_ABI void dump() const;
 
     /// Print this on \p OS;
-    void print(raw_ostream &OS) const;
+    LLVM_ABI void print(raw_ostream &OS) const;
   };
 
   /// Convenient type to represent the alternatives for mapping an
@@ -321,8 +322,9 @@ public:
     /// Create an OperandsMapper that will hold the information to apply \p
     /// InstrMapping to \p MI.
     /// \pre InstrMapping.verify(MI)
-    OperandsMapper(MachineInstr &MI, const InstructionMapping &InstrMapping,
-                   MachineRegisterInfo &MRI);
+    LLVM_ABI OperandsMapper(MachineInstr &MI,
+                            const InstructionMapping &InstrMapping,
+                            MachineRegisterInfo &MRI);
 
     /// \name Getters.
     /// @{
@@ -348,7 +350,7 @@ public:
     ///
     /// \post All the partial mapping of the \p OpIdx-th operand have been
     /// assigned a new virtual register.
-    void createVRegs(unsigned OpIdx);
+    LLVM_ABI void createVRegs(unsigned OpIdx);
 
     /// Set the virtual register of the \p PartialMapIdx-th partial mapping of
     /// the OpIdx-th operand to \p NewVReg.
@@ -360,7 +362,8 @@ public:
     ///
     /// \post the \p PartialMapIdx-th register of the value mapping of the \p
     /// OpIdx-th operand has been set.
-    void setVRegs(unsigned OpIdx, unsigned PartialMapIdx, Register NewVReg);
+    LLVM_ABI void setVRegs(unsigned OpIdx, unsigned PartialMapIdx,
+                           Register NewVReg);
 
     /// Get all the virtual registers required to map the \p OpIdx-th operand of
     /// the instruction.
@@ -374,14 +377,14 @@ public:
     ///
     /// \pre getMI().getOperand(OpIdx).isReg()
     /// \pre ForDebug || All partial mappings have been set a register
-    iterator_range<SmallVectorImpl<Register>::const_iterator>
+    LLVM_ABI iterator_range<SmallVectorImpl<Register>::const_iterator>
     getVRegs(unsigned OpIdx, bool ForDebug = false) const;
 
     /// Print this operands mapper on dbgs() stream.
-    void dump() const;
+    LLVM_ABI void dump() const;
 
     /// Print this operands mapper on \p OS stream.
-    void print(raw_ostream &OS, bool ForDebug = false) const;
+    LLVM_ABI void print(raw_ostream &OS, bool ForDebug = false) const;
   };
 
 protected:
@@ -399,27 +402,27 @@ protected:
 
   /// Keep dynamically allocated PartialMapping in a separate map.
   /// This shouldn't be needed when everything gets TableGen'ed.
-  mutable DenseMap<unsigned, std::unique_ptr<const PartialMapping>>
+  mutable DenseMap<hash_code, std::unique_ptr<const PartialMapping>>
       MapOfPartialMappings;
 
   /// Keep dynamically allocated ValueMapping in a separate map.
   /// This shouldn't be needed when everything gets TableGen'ed.
-  mutable DenseMap<unsigned, std::unique_ptr<const ValueMapping>>
+  mutable DenseMap<hash_code, std::unique_ptr<const ValueMapping>>
       MapOfValueMappings;
 
   /// Keep dynamically allocated array of ValueMapping in a separate map.
   /// This shouldn't be needed when everything gets TableGen'ed.
-  mutable DenseMap<unsigned, std::unique_ptr<ValueMapping[]>>
+  mutable DenseMap<hash_code, std::unique_ptr<ValueMapping[]>>
       MapOfOperandsMappings;
 
   /// Keep dynamically allocated InstructionMapping in a separate map.
   /// This shouldn't be needed when everything gets TableGen'ed.
-  mutable DenseMap<unsigned, std::unique_ptr<const InstructionMapping>>
+  mutable DenseMap<hash_code, std::unique_ptr<const InstructionMapping>>
       MapOfInstructionMappings;
 
   /// Getting the minimal register class of a physreg is expensive.
   /// Cache this information as we get it.
-  mutable DenseMap<unsigned, const TargetRegisterClass *> PhysRegMinimalRCs;
+  mutable DenseMap<MCRegister, const TargetRegisterClass *> PhysRegMinimalRCs;
 
   /// Create a RegisterBankInfo that can accommodate up to \p NumRegBanks
   /// RegisterBank instances.
@@ -436,6 +439,9 @@ protected:
     llvm_unreachable("This constructor should not be executed");
   }
 
+  RegisterBankInfo(const RegisterBankInfo &) = delete;
+  RegisterBankInfo &operator=(const RegisterBankInfo &) = delete;
+
   /// Get the register bank identified by \p ID.
   const RegisterBank &getRegBank(unsigned ID) {
     assert(ID < getNumRegBanks() && "Accessing an unknown register bank");
@@ -445,7 +451,7 @@ protected:
   /// Get the MinimalPhysRegClass for Reg.
   /// \pre Reg is a physical register.
   const TargetRegisterClass *
-  getMinimalPhysRegClass(Register Reg, const TargetRegisterInfo &TRI) const;
+  getMinimalPhysRegClass(MCRegister Reg, const TargetRegisterInfo &TRI) const;
 
   /// Try to get the mapping of \p MI.
   /// See getInstrMapping for more details on what a mapping represents.
@@ -789,7 +795,8 @@ operator<<(raw_ostream &OS, const RegisterBankInfo::OperandsMapper &OpdMapper) {
 
 /// Hashing function for PartialMapping.
 /// It is required for the hashing of ValueMapping.
-hash_code hash_value(const RegisterBankInfo::PartialMapping &PartMapping);
+LLVM_ABI hash_code
+hash_value(const RegisterBankInfo::PartialMapping &PartMapping);
 
 } // end namespace llvm
 

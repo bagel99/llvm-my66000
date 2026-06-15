@@ -88,25 +88,56 @@ define i8 @test4(i8 %x) nounwind readnone {
 ;
 ; NO-POPCOUNT-LABEL: test4:
 ; NO-POPCOUNT:       # %bb.0:
-; NO-POPCOUNT-NEXT:    movl %edi, %ecx
-; NO-POPCOUNT-NEXT:    andb $127, %cl
-; NO-POPCOUNT-NEXT:    shrb %dil
-; NO-POPCOUNT-NEXT:    andb $21, %dil
-; NO-POPCOUNT-NEXT:    subb %dil, %cl
-; NO-POPCOUNT-NEXT:    movl %ecx, %eax
-; NO-POPCOUNT-NEXT:    andb $51, %al
-; NO-POPCOUNT-NEXT:    shrb $2, %cl
-; NO-POPCOUNT-NEXT:    andb $51, %cl
-; NO-POPCOUNT-NEXT:    addb %al, %cl
-; NO-POPCOUNT-NEXT:    movl %ecx, %eax
-; NO-POPCOUNT-NEXT:    shrb $4, %al
-; NO-POPCOUNT-NEXT:    addb %cl, %al
-; NO-POPCOUNT-NEXT:    andb $15, %al
+; NO-POPCOUNT-NEXT:    andl $127, %edi
+; NO-POPCOUNT-NEXT:    imull $134480385, %edi, %eax # imm = 0x8040201
+; NO-POPCOUNT-NEXT:    shrl $3, %eax
+; NO-POPCOUNT-NEXT:    andl $286331153, %eax # imm = 0x11111111
+; NO-POPCOUNT-NEXT:    imull $286331153, %eax, %eax # imm = 0x11111111
+; NO-POPCOUNT-NEXT:    shrl $28, %eax
+; NO-POPCOUNT-NEXT:    # kill: def $al killed $al killed $eax
 ; NO-POPCOUNT-NEXT:    retq
   %x2 = and i8 %x, 127
   %count = tail call i8 @llvm.ctpop.i8(i8 %x2)
   %and = and i8 %count, 7
   ret i8 %and
+}
+
+; PR196434
+define i32 @ctpop_i64_i32_bounds(i64 %x) nounwind readnone {
+; POPCOUNT-LABEL: ctpop_i64_i32_bounds:
+; POPCOUNT:       # %bb.0:
+; POPCOUNT-NEXT:    popcntq %rdi, %rax
+; POPCOUNT-NEXT:    # kill: def $eax killed $eax killed $rax
+; POPCOUNT-NEXT:    retq
+;
+; NO-POPCOUNT-LABEL: ctpop_i64_i32_bounds:
+; NO-POPCOUNT:       # %bb.0:
+; NO-POPCOUNT-NEXT:    movq %rdi, %rax
+; NO-POPCOUNT-NEXT:    shrq %rax
+; NO-POPCOUNT-NEXT:    movabsq $6148914691236517205, %rcx # imm = 0x5555555555555555
+; NO-POPCOUNT-NEXT:    andq %rax, %rcx
+; NO-POPCOUNT-NEXT:    subq %rcx, %rdi
+; NO-POPCOUNT-NEXT:    movabsq $3689348814741910323, %rax # imm = 0x3333333333333333
+; NO-POPCOUNT-NEXT:    movq %rdi, %rcx
+; NO-POPCOUNT-NEXT:    andq %rax, %rcx
+; NO-POPCOUNT-NEXT:    shrq $2, %rdi
+; NO-POPCOUNT-NEXT:    andq %rdi, %rax
+; NO-POPCOUNT-NEXT:    addq %rcx, %rax
+; NO-POPCOUNT-NEXT:    movq %rax, %rcx
+; NO-POPCOUNT-NEXT:    shrq $4, %rcx
+; NO-POPCOUNT-NEXT:    addq %rax, %rcx
+; NO-POPCOUNT-NEXT:    movabsq $1085102592571150095, %rdx # imm = 0xF0F0F0F0F0F0F0F
+; NO-POPCOUNT-NEXT:    andq %rcx, %rdx
+; NO-POPCOUNT-NEXT:    movabsq $72340172838076673, %rax # imm = 0x101010101010101
+; NO-POPCOUNT-NEXT:    imulq %rdx, %rax
+; NO-POPCOUNT-NEXT:    shrq $56, %rax
+; NO-POPCOUNT-NEXT:    # kill: def $eax killed $eax killed $rax
+; NO-POPCOUNT-NEXT:    retq
+  %cmp = icmp ult i64 %x, 4294967296
+  tail call void @llvm.assume(i1 %cmp)
+  %count = tail call range(i64 0, 33) i64 @llvm.ctpop.i64(i64 %x)
+  %cast = trunc nuw nsw i64 %count to i32
+  ret i32 %cast
 }
 
 define i32 @ctpop_eq_one(i64 %x) nounwind readnone {

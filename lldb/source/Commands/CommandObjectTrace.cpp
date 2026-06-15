@@ -89,8 +89,7 @@ public:
             eCommandRequiresProcess | eCommandTryTargetAPILock |
                 eCommandProcessMustBeLaunched | eCommandProcessMustBePaused |
                 eCommandProcessMustBeTraced) {
-    CommandArgumentData bundle_dir{eArgTypeDirectoryName, eArgRepeatPlain};
-    m_arguments.push_back({bundle_dir});
+    AddSimpleArgumentList(eArgTypeDirectoryName);
   }
 
   void
@@ -176,8 +175,7 @@ public:
             interpreter, "trace load",
             "Load a post-mortem processor trace session from a trace bundle.",
             "trace load <trace_description_file>") {
-    CommandArgumentData session_file_arg{eArgTypeFilename, eArgRepeatPlain};
-    m_arguments.push_back({session_file_arg});
+    AddSimpleArgumentList(eArgTypeFilename);
   }
 
   void
@@ -207,7 +205,7 @@ protected:
 
     if (!trace_or_err) {
       result.AppendErrorWithFormat(
-          "%s\n", llvm::toString(trace_or_err.takeError()).c_str());
+          "%s", llvm::toString(trace_or_err.takeError()).c_str());
       return;
     }
 
@@ -279,7 +277,7 @@ protected:
     if (error.Success()) {
       result.SetStatus(eReturnStatusSuccessFinishResult);
     } else {
-      result.AppendErrorWithFormat("%s\n", error.AsCString());
+      result.AppendErrorWithFormat("%s", error.AsCString());
     }
   }
 
@@ -332,8 +330,7 @@ public:
                             "Show the schema of the given trace plugin.",
                             "trace schema <plug-in>. Use the plug-in name "
                             "\"all\" to see all schemas.\n") {
-    CommandArgumentData plugin_arg{eArgTypeNone, eArgRepeatPlain};
-    m_arguments.push_back({plugin_arg});
+    AddSimpleArgumentList(eArgTypeNone);
   }
 
   ~CommandObjectTraceSchema() override = default;
@@ -364,13 +361,13 @@ protected:
               Trace::FindPluginSchema(plugin_name))
         result.AppendMessage(*schemaOrErr);
       else
-        error = schemaOrErr.takeError();
+        error = Status::FromError(schemaOrErr.takeError());
     }
 
     if (error.Success()) {
       result.SetStatus(eReturnStatusSuccessFinishResult);
     } else {
-      result.AppendErrorWithFormat("%s\n", error.AsCString());
+      result.AppendErrorWithFormat("%s", error.AsCString());
     }
   }
 

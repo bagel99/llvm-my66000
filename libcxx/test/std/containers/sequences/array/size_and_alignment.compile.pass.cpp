@@ -22,7 +22,14 @@
 #include <array>
 #include <cstddef>
 #include <type_traits>
-#include <__type_traits/datasizeof.h>
+
+#ifdef _LIBCPP_VERSION
+#  ifdef _LIBCPP_USE_FROZEN_CXX03_HEADERS
+#    include <__cxx03/__type_traits/datasizeof.h>
+#  else
+#    include <__type_traits/datasizeof.h>
+#  endif
+#endif
 
 #include "test_macros.h"
 
@@ -43,7 +50,7 @@ void test_type() {
     static_assert(!std::is_empty<Array>::value, "");
 
     // Make sure empty arrays don't have padding bytes
-    LIBCPP_STATIC_ASSERT(std::__libcpp_datasizeof<Array>::value == sizeof(Array), "");
+    LIBCPP_STATIC_ASSERT(std::__datasizeof_v<Array> == sizeof(Array), "");
   }
 
   {

@@ -55,7 +55,7 @@ TEST_CONSTEXPR bool is_double_ended_contiguous_container_asan_correct(const std:
 }
 #endif
 
-#if TEST_HAS_FEATURE(address_sanitizer)
+#if TEST_HAS_FEATURE(address_sanitizer) && _LIBCPP_ENABLE_ASAN_CONTAINER_CHECKS_FOR_STRING
 template <typename S>
 bool is_string_short(S const& s) {
   // We do not have access to __is_long(), but we can check if strings
@@ -65,8 +65,8 @@ bool is_string_short(S const& s) {
   // &s    - beginning of objects memory
   // &s[0] - beginning of the buffer
   // (&s+1) - end of objects memory
-  return (void*)std::addressof(s) <= (void*)std::addressof(s[0]) &&
-         (void*)std::addressof(s[0]) < (void*)(std::addressof(s) + 1);
+  return std::less_equal<>()((void*)std::addressof(s), (void*)std::addressof(s[0])) &&
+         std::less<>()((void*)std::addressof(s[0]), (void*)(std::addressof(s) + 1));
 }
 
 template <typename ChrT, typename TraitsT, typename Alloc>
@@ -74,7 +74,7 @@ TEST_CONSTEXPR bool is_string_asan_correct(const std::basic_string<ChrT, TraitsT
   if (TEST_IS_CONSTANT_EVALUATED)
     return true;
 
-  if (!is_string_short(c) || _LIBCPP_SHORT_STRING_ANNOTATIONS_ALLOWED) {
+  if (!is_string_short(c)) {
     if (std::__asan_annotate_container_with_allocator<Alloc>::value)
       return __sanitizer_verify_contiguous_container(c.data(), c.data() + c.size() + 1, c.data() + c.capacity() + 1) !=
              0;

@@ -48,14 +48,19 @@ private:
   bool InvalidatingGetEnv = false;
 
   // GetEnv can be treated invalidating and non-invalidating as well.
-  const CallDescription GetEnvCall{{"getenv"}, 1};
+  const CallDescription GetEnvCall{CDM::CLibrary, {"getenv"}, 1};
 
   const CallDescriptionMap<HandlerFn> EnvpInvalidatingFunctions = {
-      {{{"setenv"}, 3}, &InvalidPtrChecker::EnvpInvalidatingCall},
-      {{{"unsetenv"}, 1}, &InvalidPtrChecker::EnvpInvalidatingCall},
-      {{{"putenv"}, 1}, &InvalidPtrChecker::EnvpInvalidatingCall},
-      {{{"_putenv_s"}, 2}, &InvalidPtrChecker::EnvpInvalidatingCall},
-      {{{"_wputenv_s"}, 2}, &InvalidPtrChecker::EnvpInvalidatingCall},
+      {{CDM::CLibrary, {"setenv"}, 3},
+       &InvalidPtrChecker::EnvpInvalidatingCall},
+      {{CDM::CLibrary, {"unsetenv"}, 1},
+       &InvalidPtrChecker::EnvpInvalidatingCall},
+      {{CDM::CLibrary, {"putenv"}, 1},
+       &InvalidPtrChecker::EnvpInvalidatingCall},
+      {{CDM::CLibrary, {"_putenv_s"}, 2},
+       &InvalidPtrChecker::EnvpInvalidatingCall},
+      {{CDM::CLibrary, {"_wputenv_s"}, 2},
+       &InvalidPtrChecker::EnvpInvalidatingCall},
   };
 
   void postPreviousReturnInvalidatingCall(const CallEvent &Call,
@@ -63,13 +68,13 @@ private:
 
   // SEI CERT ENV34-C
   const CallDescriptionMap<HandlerFn> PreviousCallInvalidatingFunctions = {
-      {{{"setlocale"}, 2},
+      {{CDM::CLibrary, {"setlocale"}, 2},
        &InvalidPtrChecker::postPreviousReturnInvalidatingCall},
-      {{{"strerror"}, 1},
+      {{CDM::CLibrary, {"strerror"}, 1},
        &InvalidPtrChecker::postPreviousReturnInvalidatingCall},
-      {{{"localeconv"}, 0},
+      {{CDM::CLibrary, {"localeconv"}, 0},
        &InvalidPtrChecker::postPreviousReturnInvalidatingCall},
-      {{{"asctime"}, 1},
+      {{CDM::CLibrary, {"asctime"}, 1},
        &InvalidPtrChecker::postPreviousReturnInvalidatingCall},
   };
 
@@ -197,16 +202,20 @@ void InvalidPtrChecker::postPreviousReturnInvalidatingCall(
     });
   }
 
-  const LocationContext *LCtx = C.getLocationContext();
+  const StackFrame *SF = C.getStackFrame();
   const auto *CE = cast<CallExpr>(Call.getOriginExpr());
 
   // Function call will return a pointer to the new symbolic region.
-  DefinedOrUnknownSVal RetVal = C.getSValBuilder().conjureSymbolVal(
-      CE, LCtx, CE->getType(), C.blockCount());
-  State = State->BindExpr(CE, LCtx, RetVal);
+  DefinedOrUnknownSVal RetVal =
+      C.getSValBuilder().conjureSymbolVal(Call, C.blockCount());
+  State = State->BindExpr(CE, SF, RetVal);
+
+  const auto *SymRegOfRetVal =
+      dyn_cast_or_null<SymbolicRegion>(RetVal.getAsRegion());
+  if (!SymRegOfRetVal)
+    return;
 
   // Remember to this region.
-  const auto *SymRegOfRetVal = cast<SymbolicRegion>(RetVal.getAsRegion());
   const MemRegion *MR = SymRegOfRetVal->getBaseRegion();
   State = State->set<PreviousCallResultMap>(FD, MR);
 
@@ -307,13 +316,13 @@ void InvalidPtrChecker::checkBeginFunction(CheckerContext &C) const {
   if (!C.inTopFrame())
     return;
 
-  const auto *FD = dyn_cast<FunctionDecl>(C.getLocationContext()->getDecl());
+  const auto *FD = dyn_cast<FunctionDecl>(C.getStackFrame()->getDecl());
   if (!FD || FD->param_size() != 3 || !FD->isMain())
     return;
 
   ProgramStateRef State = C.getState();
   const MemRegion *EnvpReg =
-      State->getRegion(FD->parameters()[2], C.getLocationContext());
+      State->getRegion(FD->parameters()[2], C.getStackFrame());
 
   // Save the memory region pointed by the environment pointer parameter of
   // 'main'.

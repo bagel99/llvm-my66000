@@ -14,9 +14,10 @@
 #ifndef LLVM_CLANG_LEX_MACROINFO_H
 #define LLVM_CLANG_LEX_MACROINFO_H
 
-#include "clang/Lex/Token.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/SourceLocation.h"
+#include "clang/Lex/MacroBase.h"
+#include "clang/Lex/Token.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/PointerIntPair.h"
@@ -515,7 +516,7 @@ class ModuleMacro : public llvm::FoldingSetNode {
   friend class Preprocessor;
 
   /// The name defined by the macro.
-  IdentifierInfo *II;
+  const IdentifierInfo *II;
 
   /// The body of the #define, or nullptr if this is a #undef.
   MacroInfo *Macro;
@@ -529,7 +530,7 @@ class ModuleMacro : public llvm::FoldingSetNode {
   /// The number of modules whose macros are directly overridden by this one.
   unsigned NumOverrides;
 
-  ModuleMacro(Module *OwningModule, IdentifierInfo *II, MacroInfo *Macro,
+  ModuleMacro(Module *OwningModule, const IdentifierInfo *II, MacroInfo *Macro,
               ArrayRef<ModuleMacro *> Overrides)
       : II(II), Macro(Macro), OwningModule(OwningModule),
         NumOverrides(Overrides.size()) {
@@ -539,7 +540,7 @@ class ModuleMacro : public llvm::FoldingSetNode {
 
 public:
   static ModuleMacro *create(Preprocessor &PP, Module *OwningModule,
-                             IdentifierInfo *II, MacroInfo *Macro,
+                             const IdentifierInfo *II, MacroInfo *Macro,
                              ArrayRef<ModuleMacro *> Overrides);
 
   void Profile(llvm::FoldingSetNodeID &ID) const {
@@ -553,7 +554,7 @@ public:
   }
 
   /// Get the name of the macro.
-  IdentifierInfo *getName() const { return II; }
+  const IdentifierInfo *getName() const { return II; }
 
   /// Get the ID of the module that exports this macro.
   Module *getOwningModule() const { return OwningModule; }
@@ -583,6 +584,11 @@ public:
   unsigned getNumOverridingMacros() const { return NumOverriddenBy; }
 };
 
+struct ModuleMacroInfo {
+  ArrayRef<ModuleMacro *> ActiveModuleMacros = {};
+  bool IsAmbiguous = false;
+};
+
 /// A description of the current definition of a macro.
 ///
 /// The definition of a macro comprises a set of (at least one) defining
@@ -593,9 +599,9 @@ class MacroDefinition {
 
 public:
   MacroDefinition() = default;
-  MacroDefinition(DefMacroDirective *MD, ArrayRef<ModuleMacro *> MMs,
-                  bool IsAmbiguous)
-      : LatestLocalAndAmbiguous(MD, IsAmbiguous), ModuleMacros(MMs) {}
+  MacroDefinition(DefMacroDirective *MD, ModuleMacroInfo Info)
+      : LatestLocalAndAmbiguous(MD, Info.IsAmbiguous),
+        ModuleMacros(Info.ActiveModuleMacros) {}
 
   /// Determine whether there is a definition of this macro.
   explicit operator bool() const {

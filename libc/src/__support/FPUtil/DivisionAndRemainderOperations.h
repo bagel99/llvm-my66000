@@ -15,8 +15,9 @@
 
 #include "src/__support/CPP/type_traits.h"
 #include "src/__support/common.h"
+#include "src/__support/macros/config.h"
 
-namespace LIBC_NAMESPACE {
+namespace LIBC_NAMESPACE_DECL {
 namespace fputil {
 
 static constexpr int QUOTIENT_LSB_BITS = 3;
@@ -24,14 +25,14 @@ static constexpr int QUOTIENT_LSB_BITS = 3;
 // The implementation is a bit-by-bit algorithm which uses integer division
 // to evaluate the quotient and remainder.
 template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
-LIBC_INLINE T remquo(T x, T y, int &q) {
+LIBC_INLINE constexpr T remquo(T x, T y, int &q) {
   FPBits<T> xbits(x), ybits(y);
   if (xbits.is_nan())
     return x;
   if (ybits.is_nan())
     return y;
   if (xbits.is_inf() || ybits.is_zero())
-    return FPBits<T>::build_quiet_nan().get_val();
+    return FPBits<T>::quiet_nan().get_val();
 
   if (xbits.is_zero()) {
     q = 0;
@@ -115,6 +116,6 @@ LIBC_INLINE T remquo(T x, T y, int &q) {
 }
 
 } // namespace fputil
-} // namespace LIBC_NAMESPACE
+} // namespace LIBC_NAMESPACE_DECL
 
 #endif // LLVM_LIBC_SRC___SUPPORT_FPUTIL_DIVISIONANDREMAINDEROPERATIONS_H

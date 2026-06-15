@@ -7,17 +7,17 @@ from lldbsuite.test.lldbtest import *
 from lldbsuite.test import lldbutil
 
 
+@skipIfTargetDoesNotSupportSharedLibraries()
 class TestExecutableIsFirst(TestBase):
     NO_DEBUG_INFO_TESTCASE = True
 
     # ELF does not have a hard distinction between shared libraries and
     # (position-independent) executables
-    @skipIf(oslist=no_match(lldbplatformutil.getDarwinOSTriples()+["windows"]))
+    @skipIf(oslist=no_match(lldbplatformutil.getDarwinOSTriples() + ["windows"]))
     def test_executable_is_first_before_run(self):
         self.build()
 
-        ctx = self.platformContext
-        lib_name = ctx.shlib_prefix + "bar." + ctx.shlib_extension
+        lib_name = self.platformContext.getFullLibName("bar")
 
         exe = self.getBuildArtifact("a.out")
         lib = self.getBuildArtifact(lib_name)
@@ -44,8 +44,10 @@ class TestExecutableIsFirst(TestBase):
     def test_executable_is_first_during_run(self):
         self.build()
         (target, process, thread, bkpt) = lldbutil.run_to_source_breakpoint(
-            self, "break after function call", lldb.SBFileSpec("main.cpp"),
-            extra_images=["bar"]
+            self,
+            "break after function call",
+            lldb.SBFileSpec("main.cpp"),
+            extra_images=["bar"],
         )
 
         first_module = target.GetModuleAtIndex(0)

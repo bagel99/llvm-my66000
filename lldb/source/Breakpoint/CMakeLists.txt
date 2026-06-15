@@ -16,16 +16,21 @@ add_lldb_library(lldbBreakpoint NO_PLUGIN_DEPENDENCIES
   BreakpointResolverName.cpp
   BreakpointResolverScripted.cpp
   BreakpointSite.cpp
+  ScriptedBreakpointOverrideResolver.cpp
   Stoppoint.cpp
   StoppointCallbackContext.cpp
   StoppointSite.cpp
   StopPointSiteList.cpp
   Watchpoint.cpp
+  WatchpointAlgorithms.cpp
   WatchpointList.cpp
   WatchpointOptions.cpp
   WatchpointResource.cpp
-  WatchpointResourceList.cpp
 
+  ADDITIONAL_HEADER_DIRS
+    ${LLDB_INCLUDE_DIR}/lldb/Breakpoint
+  LINK_COMPONENTS
+    Support
   LINK_LIBS
     lldbCore
     lldbExpression
@@ -33,7 +38,5 @@ add_lldb_library(lldbBreakpoint NO_PLUGIN_DEPENDENCIES
     lldbSymbol
     lldbTarget
     lldbUtility
-
-  LINK_COMPONENTS
-    Support
+    lldbValueObject
   )

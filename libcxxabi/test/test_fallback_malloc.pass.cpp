@@ -11,9 +11,9 @@
 #include <cassert>
 #include <inttypes.h>
 
-#include <__threading_support>
+#include <__thread/support.h>
 
-// UNSUPPORTED: c++03
+// UNSUPPORTED: c++03, c++11, c++14, c++17, c++20
 // UNSUPPORTED: modules-build && no-threads
 
 // Necessary because we include a private source file of libc++abi, which

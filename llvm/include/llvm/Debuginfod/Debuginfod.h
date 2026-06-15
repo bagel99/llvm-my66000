@@ -20,10 +20,9 @@
 #ifndef LLVM_DEBUGINFOD_DEBUGINFOD_H
 #define LLVM_DEBUGINFOD_DEBUGINFOD_H
 
-#include "HTTPServer.h"
-
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/HTTP/HTTPServer.h"
 #include "llvm/Object/BuildID.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -97,7 +96,7 @@ Expected<std::string> getCachedOrDownloadArtifact(
     StringRef UniqueKey, StringRef UrlPath, StringRef CacheDirectoryPath,
     ArrayRef<StringRef> DebuginfodUrls, std::chrono::milliseconds Timeout);
 
-class ThreadPool;
+class ThreadPoolInterface;
 
 struct DebuginfodLogEntry {
   std::string Message;
@@ -135,7 +134,7 @@ class DebuginfodCollection {
   // error.
   Expected<bool> updateIfStale();
   DebuginfodLog &Log;
-  ThreadPool &Pool;
+  ThreadPoolInterface &Pool;
   Timer UpdateTimer;
   sys::Mutex UpdateMutex;
 
@@ -145,7 +144,7 @@ class DebuginfodCollection {
 
 public:
   DebuginfodCollection(ArrayRef<StringRef> Paths, DebuginfodLog &Log,
-                       ThreadPool &Pool, double MinInterval);
+                       ThreadPoolInterface &Pool, double MinInterval);
   Error update();
   Error updateForever(std::chrono::milliseconds Interval);
   Expected<std::string> findDebugBinaryPath(object::BuildIDRef);

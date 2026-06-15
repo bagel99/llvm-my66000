@@ -1,5 +1,7 @@
 // RUN: %check_clang_tidy %s bugprone-unused-return-value %t -- \
 // RUN:   --config="{CheckOptions: {bugprone-unused-return-value.AllowCastToVoid: true}}" -- -fexceptions
+#include <vector>
+#include <memory>
 
 namespace std {
 
@@ -26,18 +28,7 @@ template <typename ForwardIt>
 ForwardIt unique(ForwardIt, ForwardIt);
 
 template <typename T>
-struct default_delete;
-
-template <typename T, typename Deleter = std::default_delete<T>>
-struct unique_ptr {
-  T *release() noexcept;
-};
-
-template <typename T>
 struct char_traits;
-
-template <typename T>
-struct allocator;
 
 template <typename CharT,
           typename Traits = char_traits<CharT>,
@@ -47,11 +38,6 @@ struct basic_string {
 };
 
 typedef basic_string<char> string;
-
-template <typename T, typename Allocator = std::allocator<T>>
-struct vector {
-  bool empty() const noexcept;
-};
 
 class error_code {
 };
@@ -254,3 +240,12 @@ void noWarning() {
   ({ std::async(increment, 42); });
   auto StmtExprRetval = ({ std::async(increment, 42); });
 }
+
+namespace gh84314 {
+
+extern std::unique_ptr<int> alloc();
+void f1(std::unique_ptr<int> &foo) {
+    foo = alloc();
+}
+
+} // namespace gh84314

@@ -9,14 +9,32 @@
 #ifndef LLVM_DWARFLINKER_UTILS_H
 #define LLVM_DWARFLINKER_UTILS_H
 
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/DebugInfo/DWARF/DWARFDebugLine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 
 namespace llvm {
 namespace dwarf_linker {
+
+/// Build a map from an input DW_AT_LLVM_stmt_sequence byte offset to
+/// the first-row index (in \p LT.Rows) of the corresponding line-table
+/// sequence. Seeds the map from \p LT.Sequences (the DWARF parser's
+/// discovered sequences), then augments it by walking row boundaries
+/// (DW_LNE_end_sequence markers) and matching them against the sorted
+/// input offsets in \p SortedStmtSeqOffsets, using the parser's results
+/// as ground-truth anchors. This recovers sequences the parser may not
+/// have registered and keeps the classic and parallel DWARFLinkers in
+/// lockstep. Caller passes \p SortedStmtSeqOffsets sorted ascending
+/// and deduplicated.
+void buildStmtSeqOffsetToFirstRowIndex(
+    const DWARFDebugLine::LineTable &LT,
+    ArrayRef<uint64_t> SortedStmtSeqOffsets,
+    DenseMap<uint64_t, uint64_t> &SeqOffToFirstRow);
 
 /// This function calls \p Iteration() until it returns false.
 /// If number of iterations exceeds \p MaxCounter then an Error is returned.
@@ -37,17 +55,62 @@ inline Error finiteLoop(function_ref<Expected<bool>()> Iteration,
 }
 
 /// Make a best effort to guess the
-/// Xcode.app/Contents/Developer/Toolchains/ path from an SDK path.
-inline SmallString<128> guessToolchainBaseDir(StringRef SysRoot) {
-  SmallString<128> Result;
+/// Xcode.app/Contents/Developer path from an SDK path.
+inline StringRef guessDeveloperDir(StringRef SysRoot) {
   // Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-  StringRef Base = sys::path::parent_path(SysRoot);
-  if (sys::path::filename(Base) != "SDKs")
-    return Result;
-  Base = sys::path::parent_path(Base);
-  Result = Base;
-  Result += "/Toolchains";
-  return Result;
+  auto it = sys::path::rbegin(SysRoot);
+  auto end = sys::path::rend(SysRoot);
+  if (it == end || !it->ends_with(".sdk"))
+    return {};
+  ++it;
+  // Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs
+  if (it == end || *it != "SDKs")
+    return {};
+  auto developerEnd = it;
+  ++it;
+  while (it != end) {
+    // Contents/Developer/Platforms/MacOSX.platform/Developer
+    if (*it != "Developer")
+      return {};
+    ++it;
+    if (it == end)
+      return {};
+    if (*it == "Contents")
+      return StringRef(SysRoot.data(),
+                       developerEnd - sys::path::rend(SysRoot) - 1);
+    // Contents/Developer/Platforms/MacOSX.platform
+    if (!it->ends_with(".platform"))
+      return {};
+    ++it;
+    // Contents/Developer/Platforms
+    if (it == end || *it != "Platforms")
+      return {};
+    developerEnd = it;
+    ++it;
+  }
+  return {};
+}
+
+/// Make a best effort to determine whether Path is inside a toolchain.
+inline bool isInToolchainDir(StringRef Path) {
+  // Library/Developer/Toolchains/swift-DEVELOPMENT-SNAPSHOT-2024-05-15-a.xctoolchain/usr/lib/swift/macosx/_StringProcessing.swiftmodule/arm64-apple-macos.private.swiftinterface
+  for (auto it = sys::path::rbegin(Path), end = sys::path::rend(Path);
+       it != end; ++it) {
+    if (it->ends_with(".xctoolchain")) {
+      ++it;
+      if (it == end)
+        return false;
+      if (*it != "Toolchains")
+        return false;
+      ++it;
+      if (it == end)
+        return false;
+      if (*it != "Developer")
+        return false;
+      return true;
+    }
+  }
+  return false;
 }
 
 inline bool isPathAbsoluteOnWindowsOrPosix(const Twine &Path) {
