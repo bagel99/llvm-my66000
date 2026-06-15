@@ -1600,7 +1600,6 @@ static MachineBasicBlock *emitCPFS(MachineInstr &MI, MachineBasicBlock *BB) {
   return BB;
 }
 
-/*
 static MachineBasicBlock *emitAtomicOp(MachineInstr &MI, MachineBasicBlock *BB,
 			unsigned Size, unsigned OpCode) {
 LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
@@ -1673,7 +1672,7 @@ static MachineBasicBlock *emitAtomicSub(MachineInstr &MI, MachineBasicBlock *BB,
   MI.getOperand(5).setImm(-Imm);
   return emitAtomicOp(MI, BB, Size, OpCode);
 }
-*/
+
 
 MachineBasicBlock *My66000TargetLowering::EmitInstrWithCustomInserter(
 			MachineInstr &MI,
@@ -1712,7 +1711,6 @@ LLVM_DEBUG(dbgs() << "EmitInstrWithCustomInserter\n");
 	return emitDIVREM(MI, BB, My66000::SDIVdr, My66000::SDIVREMdrc);
   case My66000::CPFMFS:		return emitCPFS(MI, BB);
   case My66000::CPTOFS:		return emitCPFS(MI, BB);
-/*
   case My66000::AADDDr:	return emitAtomicOp(MI, BB, 8, My66000::ADDrr);
   case My66000::AADDWr:	return emitAtomicOp(MI, BB, 4, My66000::ADDrr);
   case My66000::AADDHr:	return emitAtomicOp(MI, BB, 2, My66000::ADDrr);
@@ -1758,7 +1756,6 @@ LLVM_DEBUG(dbgs() << "EmitInstrWithCustomInserter\n");
   case My66000::ASWAPHr:return emitAtomicOp(MI, BB, 2, 0);
   case My66000::ASWAPBr:return emitAtomicOp(MI, BB, 1, 0);
   case My66000::ACMPSWAPDr: return emitAtomicOp(MI, BB, 8, My66000::CMPrr);
-*/
   }
 }
 
