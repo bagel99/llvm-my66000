@@ -29,7 +29,7 @@ public:
     NoAsmVariants = true;
     LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
-    resetDataLayout("e-m:e-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-i128:64:64-f64:64-a:0:64-n64");
+    resetDataLayout("e-m:e-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-i128:128-f64:64-a:0:64-n64");
   }
 
   void getTargetDefines(const LangOptions &Opts,

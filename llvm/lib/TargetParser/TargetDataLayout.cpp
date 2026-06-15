@@ -650,7 +650,7 @@ std::string Triple::computeDataLayout(StringRef ABIName) const {
   case Triple::ve:
     return computeVEDataLayout(*this);
   case Triple::my66000:
-    return "e-m:e-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-i128:64:64-f64:64-a:0:64-n64";
+    return "e-m:e-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-i128:128-f64:64-a:0:64-n64";
   case Triple::amdil:
   case Triple::amdil64:
   case Triple::hsail:
