@@ -41,26 +41,26 @@ public:
         TLI(ST->getTargetLowering()) {}
 
   InstructionCost getIntImmCost(const APInt &Imm, Type *Ty,
-                                TTI::TargetCostKind CostKind);
+                                TTI::TargetCostKind CostKind) const override;
 
   InstructionCost getIntImmCostInst(unsigned Opcode, unsigned Idx,
                                     const APInt &Imm, Type *Ty,
                                     TTI::TargetCostKind CostKind,
-                                    Instruction *Inst = nullptr);
+                                    Instruction *Inst = nullptr) const override;
 
   // FIXME - should the following be put into a My66000TargetTransformInfo.cpp.
-  bool hasDivRemOp(Type *DataType, bool IsSigned)
+  bool hasDivRemOp(Type *DataType, bool IsSigned) const override
   { return true; }	// FIXME
 
-  bool isNumRegsMajorCostOfLSR()
+  bool isNumRegsMajorCostOfLSR() const override
   { return true; }
 
   bool isLSRCostLess(const TargetTransformInfo::LSRCost &C1,
-                     const TargetTransformInfo::LSRCost &C2);
+                     const TargetTransformInfo::LSRCost &C2) const override;
 
   void getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
                                TTI::UnrollingPreferences &UP,
-                               OptimizationRemarkEmitter *ORE);
+                               OptimizationRemarkEmitter *ORE) const override;
 };
 
 } // end namespace llvm

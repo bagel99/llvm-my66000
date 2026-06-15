@@ -115,7 +115,7 @@ inline static const char *FCondBitString(unsigned CC) {
   }
 }
 
-void My66000InstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
+void My66000InstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) {
   OS << StringRef(getRegisterName(Reg)).lower();
 }
 
@@ -288,7 +288,7 @@ static void printExpr(const MCExpr *Expr, const MCAsmInfo *MAI,
     SRE = dyn_cast<MCSymbolRefExpr>(Expr);
     assert(SRE && "Unexpected MCExpr type.");
   }
-  assert(SRE->getKind() == MCSymbolRefExpr::VK_None);
+//  assert(SRE->getKind() == MCSymbolRefExpr::VK_None);
 
   SRE->getSymbol().print(OS, MAI);
 

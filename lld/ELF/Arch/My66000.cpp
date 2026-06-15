@@ -20,7 +20,7 @@ namespace {
 
 class My66000 final : public TargetInfo {
 public:
-  My66000();
+  My66000(Ctx &);
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
@@ -30,7 +30,7 @@ public:
 
 } // end anonymous namespace
 
-My66000::My66000() {
+My66000::My66000(Ctx &ctx) : TargetInfo(ctx) {
     // FIXME - what goes here?
 }
 
@@ -74,8 +74,7 @@ int64_t My66000::getImplicitAddend(const uint8_t *buf, RelType type) const {
   case R_MY66000_PCREL64:
     return read64le(buf);
   default:
-    internalLinkerError(getErrorLocation(buf),
-                        "cannot read addend for relocation " + toString(type));
+    Err(ctx) << "cannot read addend for relocation ";
     return 0;
   }
 }
@@ -83,15 +82,15 @@ int64_t My66000::getImplicitAddend(const uint8_t *buf, RelType type) const {
 void My66000::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   switch (rel.type) {
   case R_MY66000_PCREL8_S2:
-    checkInt(loc, val, 10, rel);
+    checkInt(ctx, loc, val, 10, rel);
     *loc = val >> 2;
     break;
   case R_MY66000_PCREL16_S2:
-    checkInt(loc, val, 18, rel);
+    checkInt(ctx, loc, val, 18, rel);
     writeMaskedBits16le(loc, (val & 0x0003FFFC) >> 2, 0x0003FFFC >> 2);
     break;
   case R_MY66000_PCREL26_S2:
-    checkInt(loc, val, 28, rel);
+    checkInt(ctx, loc, val, 28, rel);
     writeMaskedBits32le(loc, (val & 0x0FFFFFFC) >> 2, 0x0FFFFFFC >> 2);
     break;
   case R_MY66000_PCREL32_S2:
@@ -99,17 +98,17 @@ void My66000::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const 
   case R_MY66000_PCREL64_S2:
     break;
   case R_MY66000_8:
-    checkIntUInt(loc, val, 8, rel);
+    checkIntUInt(ctx, loc, val, 8, rel);
     *loc = val;
     break;
   case R_MY66000_16:
-    checkIntUInt(loc, val, 16, rel);
+    checkIntUInt(ctx, loc, val, 16, rel);
     write16le(loc, val);
     break;
     break;
   case R_MY66000_32:
   case R_MY66000_PCREL32:
-    checkIntUInt(loc, val, 32, rel);
+    checkIntUInt(ctx, loc, val, 32, rel);
     write32le(loc, val);
     break;
   case R_MY66000_64:
@@ -117,12 +116,8 @@ void My66000::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const 
     write64le(loc, val);
     break;
   default:
-    error(getErrorLocation(loc) + "unrecognized relocation " +
-          toString(rel.type));
+    Err(ctx) << getErrorLoc(ctx, loc) << "unrecognized relocation " << rel.type;
   }
 }
 
-TargetInfo *elf::getMy66000TargetInfo() {
-  static My66000 target;
-  return &target;
-}
+void elf::setMy66000TargetInfo(Ctx &ctx) { ctx.target.reset(new My66000(ctx)); }

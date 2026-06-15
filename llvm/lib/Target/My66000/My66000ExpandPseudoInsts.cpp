@@ -286,12 +286,14 @@ LLVM_DEBUG(dbgs() << "M66000ExpandPseudo\n");
   bool Modified = false;
   for (auto &MBB : MF)
     Modified |= ExpandMBB(MBB);
+#ifndef NDEBUG
   if (Modified) {
 LLVM_DEBUG(dbgs() << "After ExpandPseudo\n");
     for (auto &MBB : MF ) {
       LLVM_DEBUG(dbgs() << MBB);
     }
   }
+#endif
   return Modified;
 }
 

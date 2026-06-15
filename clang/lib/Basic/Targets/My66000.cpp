@@ -28,11 +28,6 @@ ArrayRef<const char *> My66000TargetInfo::getGCCRegNames() const {
   return llvm::ArrayRef(GCCRegNames);
 }
 
-ArrayRef<Builtin::Info> My66000TargetInfo::getTargetBuiltins() const {
-  // FIXME: someday we might need target specific builtins
-  return std::nullopt;
-}
-
 void My66000TargetInfo::getTargetDefines(const LangOptions &Opts,
                                       MacroBuilder &Builder) const {
   // Target identification.

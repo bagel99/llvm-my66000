@@ -31,8 +31,8 @@ void My66000Subtarget::anchor() { }
 
 My66000Subtarget::My66000Subtarget(const Triple &TT, const std::string &CPU,
                            const std::string &FS, const TargetMachine &TM)
-    : My66000GenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS), InstrInfo(),
-      FrameLowering(*this), TLInfo(TM, *this), TSInfo() {}
+    : My66000GenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS), InstrInfo(*this),
+      FrameLowering(*this), TLInfo(TM, *this) {}
 
 bool My66000Subtarget::usePredication() const
 {

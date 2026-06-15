@@ -14,15 +14,16 @@
 #define LLVM_LIB_TARGET_MY66000_MY66000TARGETMACHINE_H
 
 #include "My66000Subtarget.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
 #include "llvm/Support/CodeGen.h"
-#include "llvm/Target/TargetMachine.h"
 #include <memory>
+#include <optional>
 
 namespace llvm {
+class StringRef;
 
-class My66000TargetMachine : public LLVMTargetMachine {
+class My66000TargetMachine : public CodeGenTargetMachineImpl {
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
   My66000Subtarget Subtarget;
 

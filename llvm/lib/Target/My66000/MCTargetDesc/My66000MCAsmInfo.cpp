@@ -11,7 +11,8 @@ using namespace llvm;
 
 void My66000MCAsmInfo::anchor() { }
 
-My66000MCAsmInfo::My66000MCAsmInfo(const Triple &TT) {
+My66000MCAsmInfo::My66000MCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
+    : MCAsmInfoELF(Options) {
   SupportsDebugInformation = true;
   Data16bitsDirective = "\t.short\t";
   Data32bitsDirective = "\t.long\t";

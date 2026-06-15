@@ -91,7 +91,7 @@ MVT My66000TargetLowering::getRegisterTypeForCallingConv(LLVMContext &Context,
 
 My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
                                      const My66000Subtarget &Subtarget)
-    : TargetLowering(TM), Subtarget(Subtarget) {
+    : TargetLowering(TM, Subtarget), TM(TM), Subtarget(Subtarget) {
 
   setMinStackArgumentAlignment(Align(8));
   // Set up the register classes.
@@ -260,8 +260,6 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FLDEXP, {MVT::f32, MVT::f64}, Legal);
   setOperationAction(ISD::STRICT_FLDEXP, {MVT::f32, MVT::f64}, Legal);
   setOperationAction(ISD::FFREXP, {MVT::f32, MVT::f64}, Legal);
-  setLibcallName(RTLIB::LDEXP_F64, nullptr);
-  setLibcallName(RTLIB::LDEXP_F32, nullptr);
 
   // 32-bit floating point
   setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Expand);
@@ -396,6 +394,7 @@ bool My66000TargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
 //===----------------------------------------------------------------------===//
 
 // For debug statements
+#ifndef NDEBUG
 static const char *getCCName(ISD:: CondCode CC) {
     switch (CC) {
     default: return "???";
@@ -428,6 +427,7 @@ static const char *getCCName(ISD:: CondCode CC) {
     case ISD::SETFALSE2:                return "false2";
     }
 }
+#endif
 
 // Map to my condition bits, integer
 static MYCB::CondBits ISDCCtoMy66000CBI(ISD:: CondCode CC) {
@@ -449,9 +449,16 @@ static MYCB::CondBits ISDCCtoMy66000CBI(ISD:: CondCode CC) {
 // Map to my condition bits, float
 static MYCB::CondBits ISDCCtoMy66000CBF(ISD:: CondCode CC) {
   switch (CC) {
-  default: llvm_unreachable("Unknown condition code!");
+  default: {
+LLVM_DEBUG(dbgs() << "ISDCCtoMy66000CBF CC=" << getCCName(CC) << '\n');
+      llvm_unreachable("Unknown floating condition code!");
+  }
   case ISD::SETEQ:  return MYCB::EQ;
   case ISD::SETNE:  return MYCB::NE;
+  case ISD::SETLT:  return MYCB::LT;	// is this valid for floats?
+  case ISD::SETGT:  return MYCB::GT;	// ""
+  case ISD::SETLE:  return MYCB::LE;	// ""
+  case ISD::SETGE:  return MYCB::GE;	// ""
   // float ordered
   case ISD::SETOEQ: return MYCB::EQ;
   case ISD::SETONE: return MYCB::NE;
@@ -1061,8 +1068,6 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
                  *DAG.getContext());
   CCInfo.AnalyzeFormalArguments(Ins, CC_My66000);
 
-  unsigned StackSlotSize = 8;
-
   if (!IsVarArg)
     FI->setReturnStackOffset(CCInfo.getStackSize());
 
@@ -1107,6 +1112,7 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
       assert(VA.isMemLoc());      // sanity check
       // Load the argument to a virtual register
       unsigned ObjSize = VA.getLocVT().getStoreSize();
+      unsigned StackSlotSize = 8;
       assert((ObjSize <= StackSlotSize) && "Unhandled argument");
 
       // Create the frame index object for this incoming parameter...
@@ -1125,11 +1131,11 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
   // CopyFromReg vararg registers.
   if (IsVarArg) {
     // Argument registers
-    ArrayRef<MCPhysReg> ArgRegs = ArrayRef(ArgGPRs);
+//    ArrayRef<MCPhysReg> ArgRegs = ArrayRef(ArgGPRs);
     auto *XFI = MF.getInfo<My66000MachineFunctionInfo>();
     unsigned FirstVAReg = CCInfo.getFirstUnallocated(ArgGPRs);
     LLVM_DEBUG(dbgs() << "\tFirstVAReg=" << FirstVAReg << '\n');
-    LLVM_DEBUG(dbgs() << "\tNVarregs=" << ArgRegs.size() << '\n');
+    LLVM_DEBUG(dbgs() << "\tNVarregs=" << std::size(ArgGPRs) << '\n');
     int Offset = -(8 * 8);
     int VaFI = MFI.CreateFixedObject(8, Offset, true);
     // All registers R1-R8 pushed by ENTER
@@ -1162,8 +1168,9 @@ LLVM_DEBUG(dbgs() << "LowerFormalArguments: " << MF.getName() << '\n');
       SDValue FIN = DAG.getFrameIndex(FI, MVT::i64);
       InVals.push_back(FIN);
       MemOps.push_back(DAG.getMemcpy(
-          Chain, dl, FIN, ArgDI.SDV, DAG.getConstant(Size, dl, MVT::i64), Alignment,
-          false, false, false, MachinePointerInfo(), MachinePointerInfo()));
+          Chain, dl, FIN, ArgDI.SDV, DAG.getConstant(Size, dl, MVT::i64),
+	  Alignment, false, false, /*CI=*/nullptr, std::nullopt,
+	  MachinePointerInfo(), MachinePointerInfo()));
     } else {
       InVals.push_back(ArgDI.SDV);
     }
@@ -1211,7 +1218,8 @@ LLVM_DEBUG(FI.getNode()->dump(););
 
 bool My66000TargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool IsVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
+    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context,
+    const Type *RetTy) const {
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, Context);
   if (!CCInfo.CheckReturn(Outs, RetCC_My66000))
@@ -1452,9 +1460,6 @@ SDValue My66000TargetLowering::lowerRETURNADDR(SDValue Op,
   MFI.setReturnAddressIsTaken(true);
   int XLenInBytes = 8;
 
-  if (verifyReturnAddressArgumentIsConstant(Op, DAG))
-    return SDValue();
-
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
   unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
@@ -1595,6 +1600,7 @@ static MachineBasicBlock *emitCPFS(MachineInstr &MI, MachineBasicBlock *BB) {
   return BB;
 }
 
+/*
 static MachineBasicBlock *emitAtomicOp(MachineInstr &MI, MachineBasicBlock *BB,
 			unsigned Size, unsigned OpCode) {
 LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
@@ -1659,7 +1665,6 @@ LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
   return BB;
 }
 
-
 // Since My66000 does not have a SUB immediate, we negate the increment
 // and use ADD immediate.
 static MachineBasicBlock *emitAtomicSub(MachineInstr &MI, MachineBasicBlock *BB,
@@ -1668,6 +1673,7 @@ static MachineBasicBlock *emitAtomicSub(MachineInstr &MI, MachineBasicBlock *BB,
   MI.getOperand(5).setImm(-Imm);
   return emitAtomicOp(MI, BB, Size, OpCode);
 }
+*/
 
 MachineBasicBlock *My66000TargetLowering::EmitInstrWithCustomInserter(
 			MachineInstr &MI,
@@ -1706,6 +1712,7 @@ LLVM_DEBUG(dbgs() << "EmitInstrWithCustomInserter\n");
 	return emitDIVREM(MI, BB, My66000::SDIVdr, My66000::SDIVREMdrc);
   case My66000::CPFMFS:		return emitCPFS(MI, BB);
   case My66000::CPTOFS:		return emitCPFS(MI, BB);
+/*
   case My66000::AADDDr:	return emitAtomicOp(MI, BB, 8, My66000::ADDrr);
   case My66000::AADDWr:	return emitAtomicOp(MI, BB, 4, My66000::ADDrr);
   case My66000::AADDHr:	return emitAtomicOp(MI, BB, 2, My66000::ADDrr);
@@ -1751,6 +1758,7 @@ LLVM_DEBUG(dbgs() << "EmitInstrWithCustomInserter\n");
   case My66000::ASWAPHr:return emitAtomicOp(MI, BB, 2, 0);
   case My66000::ASWAPBr:return emitAtomicOp(MI, BB, 1, 0);
   case My66000::ACMPSWAPDr: return emitAtomicOp(MI, BB, 8, My66000::CMPrr);
+*/
   }
 }
 

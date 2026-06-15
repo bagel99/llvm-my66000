@@ -20,7 +20,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/Support/CodeGen.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -57,7 +57,7 @@ createMy66000MCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
 static MCAsmInfo *createMy66000MCAsmInfo(const MCRegisterInfo &MRI,
                                        const Triple &TT,
 				       const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new My66000MCAsmInfo(TT);
+  MCAsmInfo *MAI = new My66000MCAsmInfo(TT, Options);
 
   // Initial state of the frame pointer is SP.
   MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, My66000::SP, 0);
@@ -116,13 +116,12 @@ void My66000TargetAsmStreamer::emitCCBottomFunction(StringRef Name) {
 
 static MCTargetStreamer *createTargetAsmStreamer(MCStreamer &S,
                                                  formatted_raw_ostream &OS,
-                                                 MCInstPrinter *InstPrint,
-                                                 bool isVerboseAsm) {
+                                                 MCInstPrinter *InstPrint) {
   return new My66000TargetAsmStreamer(S, OS);
 }
 
 // Force static initialization.
-extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMy66000TargetMC() {
+extern "C" LLVM_ABI void LLVMInitializeMy66000TargetMC() {
   // Register the MC asm info.
   RegisterMCAsmInfoFn X(getTheMy66000Target(), createMy66000MCAsmInfo);
 

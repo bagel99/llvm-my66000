@@ -7,15 +7,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "My66000.h"
-#include "CommonArgs.h"
+#include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
-#include "clang/Driver/Driver.h"
-#include "clang/Driver/Options.h"
+#include "clang/Options/Options.h"
 #include "llvm/Option/ArgList.h"
 #include <cstdlib> // ::getenv
 
 using namespace clang::driver;
 using namespace clang::driver::toolchains;
+using namespace clang::driver::tools;
 using namespace clang;
 using namespace llvm::opt;
 
@@ -108,7 +108,7 @@ bool My66000ToolChain::hasBlocksRuntime() const { return false; }
 
 void My66000ToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
                                                ArgStringList &CC1Args) const {
-  if (DriverArgs.hasArg(clang::driver::options::OPT_nostdinc) ||
+  if (DriverArgs.hasArg(options::OPT_nostdinc) ||
       DriverArgs.hasArg(options::OPT_nostdlibinc))
     return;
   addSystemInclude(DriverArgs, CC1Args, "/usr/local/my66000-unknown-elf/include");
@@ -122,7 +122,7 @@ void My66000ToolChain::addClangTargetOptions(const ArgList &DriverArgs,
 
 void My66000ToolChain::AddClangCXXStdlibIncludeArgs(
     const ArgList &DriverArgs, ArgStringList &CC1Args) const {
-  if (DriverArgs.hasArg(clang::driver::options::OPT_nostdinc) ||
+  if (DriverArgs.hasArg(options::OPT_nostdinc) ||
       DriverArgs.hasArg(options::OPT_nostdlibinc) ||
       DriverArgs.hasArg(options::OPT_nostdincxx))
     return;

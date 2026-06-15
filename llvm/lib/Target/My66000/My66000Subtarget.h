@@ -30,10 +30,10 @@ class StringRef;
 
 class My66000Subtarget : public My66000GenSubtargetInfo {
   virtual void anchor();
-  My66000FrameLowering FrameLowering;
   My66000InstrInfo InstrInfo;
-  My66000RegisterInfo RegInfo;
+  My66000FrameLowering FrameLowering;
   My66000TargetLowering TLInfo;
+  My66000RegisterInfo RegInfo;
   My66000SelectionDAGInfo TSInfo;
 
 public:

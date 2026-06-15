@@ -10,19 +10,19 @@
 //===----------------------------------------------------------------------===//
 
 #include "My66000TargetMachine.h"
-#include "MCTargetDesc/My66000MCTargetDesc.h"
 #include "TargetInfo/My66000TargetInfo.h"
 #include "My66000.h"
 #include "My66000MachineFunctionInfo.h"
 #include "My66000TargetObjectFile.h"
 #include "My66000TargetTransformInfo.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
-#include "llvm/Support/CodeGen.h"
-#include "llvm/Transforms/Scalar.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/CodeGen.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Transforms/Scalar.h"
+#include <optional>
 
 using namespace llvm;
 
@@ -50,9 +50,8 @@ My66000TargetMachine::My66000TargetMachine(const Target &T, const Triple &TT,
 				       std::optional<Reloc::Model> RM,
 				       std::optional<CodeModel::Model> CM,
 				       CodeGenOptLevel OL, bool JIT)
-    : LLVMTargetMachine(
-	  T,"e-m:e-p:64:64-i1:8-i8:8-i16:16-i32:32-i64:64-f64:64-a:0:64-n64",
-	  TT, CPU, FS, Options, getEffectiveRelocModel(RM),
+    : CodeGenTargetMachineImpl(T, TT.computeDataLayout(), TT, CPU, FS, Options,
+	  getEffectiveRelocModel(RM),
           getEffectiveMy66000CodeModel(CM), OL),
       TLOF(std::make_unique<My66000TargetObjectFile>()),
       Subtarget(TT, std::string(CPU), std::string(FS), *this) {
@@ -94,7 +93,7 @@ MachineFunctionInfo *My66000TargetMachine::createMachineFunctionInfo(
 }
 
 void My66000PassConfig::addIRPasses() {
-  addPass(createAtomicExpandPass());
+  addPass(createAtomicExpandLegacyPass());
   addPass(createCFGSimplificationPass(SimplifyCFGOptions()
 					.speculateBlocks(false)));
 
@@ -127,7 +126,7 @@ void My66000PassConfig::addMachineLateOptimization() {
   // performance for targets that require Structured Control Flow.
   // In addition it can also make CFG irreducible. Thus we disable it.
 //  if (!TM->requiresStructuredCFG())
-    addPass(&TailDuplicateID);
+//    addPass(&TailDuplicateID);
 
   // Copy propagation.
   // FIXME - this breaks things, deletes returned value
@@ -146,11 +145,15 @@ void My66000PassConfig::addPreEmitPass() {
 }
 
 // Force static initialization.
-extern "C" void LLVMInitializeMy66000Target() {
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY
+void LLVMInitializeMy66000Target() {
   RegisterTargetMachine<My66000TargetMachine> X(getTheMy66000Target());
+  PassRegistry &PR = *PassRegistry::getPassRegistry();
+  initializeMy66000AsmPrinterPass(PR);
+  initializeMy66000DAGToDAGISelLegacyPass(PR);
 }
 
 TargetTransformInfo
 My66000TargetMachine::getTargetTransformInfo(const Function &F) const {
-  return TargetTransformInfo(My66000TTIImpl(this, F));
+  return TargetTransformInfo(std::make_unique<My66000TTIImpl>(this, F));
 }

@@ -117,7 +117,9 @@ class My66000TargetLowering : public TargetLowering {
   }
 
  private:
+  const TargetMachine &TM;
   const My66000Subtarget &Subtarget;
+
   SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
@@ -149,7 +151,7 @@ class My66000TargetLowering : public TargetLowering {
   bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
 			bool isVarArg,
 			const SmallVectorImpl<ISD::OutputArg> &ArgsFlags,
-			LLVMContext &Context) const override;
+			LLVMContext &Context, const Type *RetT) const override;
 
   // Tuning knobs
   bool isTruncateFree(EVT SrcVT, EVT DstVT) const override;

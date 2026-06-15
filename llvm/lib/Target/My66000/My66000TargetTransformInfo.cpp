@@ -25,7 +25,7 @@ using namespace llvm;
 #define DEBUG_TYPE "my66000tti"
 
 InstructionCost My66000TTIImpl::getIntImmCost(const APInt &Imm, Type *Ty,
-                                              TTI::TargetCostKind CostKind) {
+                                              TTI::TargetCostKind CostKind) const {
   assert(Ty->isIntegerTy());
   return TTI::TCC_Free;
 }
@@ -33,13 +33,13 @@ InstructionCost My66000TTIImpl::getIntImmCost(const APInt &Imm, Type *Ty,
 InstructionCost My66000TTIImpl::getIntImmCostInst(unsigned Opcode, unsigned Idx,
                                                   const APInt &Imm, Type *Ty,
                                                   TTI::TargetCostKind CostKind,
-                                                  Instruction *Inst) {
+                                                  Instruction *Inst) const {
   assert(Ty->isIntegerTy());
   return TTI::TCC_Free;
 }
 
 bool My66000TTIImpl::isLSRCostLess(const TargetTransformInfo::LSRCost &C1,
-                                   const TargetTransformInfo::LSRCost &C2) {
+                                   const TargetTransformInfo::LSRCost &C2) const {
     // My66000 specific here are "instruction number 1st priority".
 LLVM_DEBUG(dbgs() << "isLSRCostLess\n");
 LLVM_DEBUG(dbgs() << "Insts       " << C1.Insns << " : " << C2.Insns << '\n');
@@ -60,7 +60,7 @@ LLVM_DEBUG(dbgs() << "SetupCost   " << C1.SetupCost << " : " << C2.SetupCost << 
 
 void My66000TTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
                                TTI::UnrollingPreferences &UP,
-                               OptimizationRemarkEmitter *ORE) {
+                               OptimizationRemarkEmitter *ORE) const {
   UP.OptSizeThreshold = 0;
   UP.PartialOptSizeThreshold = 0;
   UP.Threshold = 0;	// FIXME - does this really turnoff unrolling?

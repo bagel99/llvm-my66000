@@ -958,9 +958,6 @@ def addcarry :	SDNode<"ISD::UADDO_CARRY", SDT_ADDCIO, []>;
 def subcarry :	SDNode<"ISD::USUBO_CARRY", SDT_ADDCIO, []>;
 def umul_lohi : SDNode<"ISD::UMUL_LOHI", SDTIntBinHiLoOp, []>;
 def smul_lohi : SDNode<"ISD::SMUL_LOHI", SDTIntBinHiLoOp, []>;
-def srl_parts : SDNode<"ISD::SRL_PARTS", SDT_ISHFW, []>;
-def shl_parts : SDNode<"ISD::SHL_PARTS", SDT_ISHFW, []>;
-def sra_parts : SDNode<"ISD::SRA_PARTS", SDT_ISHFW, []>;
 
 // The following are expanded by the ExpandPseudoInsts pass
 def UADDOrrc : Pseudo<
@@ -1311,6 +1308,8 @@ let mayStore = 1 in {
 	[(atomic_store_8 (i64 GRegs:$rd), ADDRrx:$addr)]>;
 }
 
+/*
+ * FIXME
 // Atomic operations
 let usesCustomInserter = 1 in {
 // Atomic add reg
@@ -1506,10 +1505,9 @@ def ACMPSWAPDr : Pseudo<
     (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$old, GRegs:$new),
     "#ACMPSWAP_R64",
     [(set GRegs:$dst, (atomic_cmp_swap_64 ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
-
-
 } // end customer inserter
-
+*
+*/
 
 //
 // Pseudo Instructions

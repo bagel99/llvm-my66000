@@ -41,4 +41,4 @@ def CC_My66000 : CallingConv<[
   CCIfType<[i64,f64,f32], CCAssignToStack<8, 8>>
 ]>;
 
-def CSR_ABI : CalleeSavedRegs<(add R0, (sequence "R%u", 16, 30))>;
+def CSR_ABI : CalleeSavedRegs<(add R0, (sequence "R%u", 17, 30))>;

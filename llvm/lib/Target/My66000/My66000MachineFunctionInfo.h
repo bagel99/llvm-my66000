@@ -13,7 +13,6 @@
 #ifndef LLVM_LIB_TARGET_MY66000MACHINEFUNCTIONINFO_H
 #define LLVM_LIB_TARGET_MY66000MACHINEFUNCTIONINFO_H
 
-#include "My66000FrameLowering.h"
 #include "My66000ISelLowering.h"
 #include "My66000InstrInfo.h"
 #include "My66000SelectionDAGInfo.h"

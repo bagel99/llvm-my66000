@@ -50,7 +50,7 @@ My66000RegisterInfo::My66000RegisterInfo()
 
 
 bool My66000RegisterInfo::needsFrameMoves(const MachineFunction &MF) {
-  return MF.getMMI().hasDebugInfo() || MF.getFunction().needsUnwindTableEntry();
+  return MF.needsFrameMoves();
 }
 
 const MCPhysReg *
@@ -66,15 +66,10 @@ BitVector My66000RegisterInfo::getReservedRegs(const MachineFunction &MF) const 
   Reserved.set(SPReg);
   Reserved.set(My66000::R0);
   if (TFI->hasFP(MF)) {
-    Reserved.set(FPReg);
+    Reserved.set(FPReg);	// Frame pointer, if used
   }
+  Reserved.set(My66000::R16);	// Thread pointer
   return Reserved;
-}
-
-const TargetRegisterClass*
-My66000RegisterInfo::getPointerRegClass(const MachineFunction &MF,
-                                        unsigned Kind) const {
-  return &My66000::GRegsRegClass;
 }
 
 bool
@@ -101,7 +96,6 @@ LLVM_DEBUG(dbgs() << "My66000RegisterInfo::eliminateFrameIndex\n");
 
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
-  DebugLoc DL = MI.getDebugLoc();
 
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   Register FrameReg;

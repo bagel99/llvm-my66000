@@ -23,6 +23,8 @@ include "My66000RegisterInfo.td"
 include "My66000CallingConv.td"
 include "My66000InstrInfo.td"
 
+defm : RemapAllTargetPseudoPointerOperands<GRegs>;
+
 def My66000InstrInfo : InstrInfo;
 
 //===----------------------------------------------------------------------===//

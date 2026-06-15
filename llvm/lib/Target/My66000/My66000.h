@@ -26,11 +26,14 @@ namespace llvm {
   class formatted_raw_ostream;
 
   void initializeMy66000LowerThreadLocalPass(PassRegistry &);
+  void initializeMy66000AsmPrinterPass(PassRegistry &);
+  void initializeMy66000DAGToDAGISelLegacyPass(PassRegistry &);
 
   FunctionPass *createMy66000FrameToArgsOffsetEliminationPass();
   FunctionPass *createMy66000ISelDag(My66000TargetMachine &TM,
                                    CodeGenOptLevel OptLevel);
   ModulePass *createMy66000LowerThreadLocalPass();
+
   FunctionPass *createMy66000PredBlockPass();
   void initializeMy66000PredBlockPass(PassRegistry &);
   FunctionPass *createMy66000FixJumpTablePass();

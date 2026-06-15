@@ -33,10 +33,15 @@ using namespace llvm;
 
 #define DEBUG_TYPE "my66000-framelower"
 
+My66000FrameLowering::My66000FrameLowering(const My66000Subtarget &STI)
+    : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, Align(8), 0) {
+  // Do nothing
+}
+
 static const Register FPReg = My66000::R30;
 static const Register SPReg = My66000::SP;
 
-bool My66000FrameLowering::hasFP(const MachineFunction &MF) const {
+bool My66000FrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const TargetRegisterInfo *RegInfo = MF.getSubtarget().getRegisterInfo();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 /*
@@ -55,7 +60,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::hasFP: "
 // Determines the size of the frame and maximum call frame size.
 void My66000FrameLowering::determineFrameLayout(MachineFunction &MF) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const My66000RegisterInfo *RI = STI.getRegisterInfo();
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
 LLVM_DEBUG(dbgs() << "determineFrameLayout\n");
 
   // Get the number of bytes to allocate from the FrameInfo.
@@ -64,7 +69,7 @@ LLVM_DEBUG(dbgs() << "\tinitialStackSize=" << FrameSize << '\n');
 
   // Get the alignment.
   Align StackAlign = getStackAlign();
-  if (RI->hasStackRealignment(MF)) {
+  if (TRI->hasStackRealignment(MF)) {
     Align MaxStackAlign = std::max(StackAlign, MFI.getMaxAlign());
     FrameSize += (MaxStackAlign.value() - StackAlign.value());
     StackAlign = MaxStackAlign;
@@ -87,7 +92,8 @@ void My66000FrameLowering::adjustReg(MachineBasicBlock &MBB,
                                    const DebugLoc &DL, Register DstReg,
                                    Register SrcReg, int64_t Val,
                                    MachineInstr::MIFlag Flag) const {
-  const My66000InstrInfo *TII = STI.getInstrInfo();
+  MachineFunction &MF = *MBB.getParent();
+  const My66000InstrInfo &TII = *MF.getSubtarget<My66000Subtarget>().getInstrInfo();
 LLVM_DEBUG(dbgs() << "My66000FrameLowering::adjustReg: " << Val << "\n");
 
   if (DstReg == SrcReg && Val == 0)
@@ -99,7 +105,7 @@ LLVM_DEBUG(dbgs() << "My66000FrameLowering::adjustReg: " << Val << "\n");
     inst = My66000::ADDrw;
   else
     inst = My66000::ADDrd;
-  BuildMI(MBB, MBBI, DL, TII->get(inst), DstReg)
+  BuildMI(MBB, MBBI, DL, TII.get(inst), DstReg)
         .addReg(SrcReg)
         .addImm(Val)
         .setMIFlag(Flag);
@@ -111,15 +117,10 @@ LLVM_DEBUG(dbgs() << "emitPrologue: " << MF.getName() << '\n');
   assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const My66000RegisterInfo *RI = STI.getRegisterInfo();
-  const My66000InstrInfo *TII = STI.getInstrInfo();
+  const MCRegisterInfo *MRI = MF.getContext().getRegisterInfo();
+  const My66000InstrInfo &TII = *MF.getSubtarget<My66000Subtarget>().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
 
-  if (RI->hasStackRealignment(MF) && MFI.hasVarSizedObjects()) {
-    report_fatal_error(
-        "My66000 backend can't currently handle functions that need stack "
-        "realignment and have variable sized objects");
-  }
   DebugLoc DL;
   // Determine the correct frame layout
   determineFrameLayout(MF);
@@ -134,27 +135,29 @@ LLVM_DEBUG(dbgs() << "\tStackSize=" << StackSize << '\n');
   // Emit ".cfi_def_cfa_offset StackSize"
   unsigned CFIIndex = MF.addFrameInst(
       MCCFIInstruction::cfiDefCfaOffset(nullptr, -StackSize));
-  BuildMI(MBB, MBBI, DL, TII->get(TargetOpcode::CFI_INSTRUCTION))
+  BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
       .addCFIIndex(CFIIndex);
   // Iterate over list of callee-saved registers and emit .cfi_offset
   // directives.
-  const std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
   unsigned NSave = 0;
   Register HiReg = My66000::R0;
   Register LoReg = 100;
+  const std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
   int64_t Offset;
   for (const auto &Entry : CSI) {
     Offset = MFI.getObjectOffset(Entry.getFrameIdx());
     unsigned Reg = Entry.getReg();
     unsigned CFIIndex = MF.addFrameInst(MCCFIInstruction::createOffset(
-        nullptr, RI->getDwarfRegNum(Reg, true), Offset));
-    BuildMI(MBB, MBBI, DL, TII->get(TargetOpcode::CFI_INSTRUCTION))
+        nullptr, MRI->getDwarfRegNum(Reg, true), Offset));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
         .addCFIIndex(CFIIndex);
+LLVM_DEBUG(dbgs() << "\tSaved Reg=" << Reg-2 << '\n');
     if (Reg > My66000::R0 && Reg < LoReg) { LoReg = Reg; }
     NSave += 1;
   }
-  if (NSave == 1) LoReg = HiReg;
-LLVM_DEBUG(dbgs() << "\tNSave=" << NSave << '\n');
+LLVM_DEBUG(dbgs() << "\tNSave=" << NSave << " hasFP=" << hasFP(MF) << '\n');
+LLVM_DEBUG(dbgs() << "\tHiReg=" << HiReg-2 << " LoReg=" << LoReg-2 << '\n');
+  if (NSave == 1 && LoReg == 100) LoReg = HiReg;
   My66000MachineFunctionInfo *XFI = MF.getInfo<My66000MachineFunctionInfo>();
   XFI->setHiSavedReg(HiReg);	// save for epilogue without vararg regs
   XFI->setLoSavedReg(LoReg);	// save for epilogue
@@ -171,7 +174,7 @@ LLVM_DEBUG(dbgs() << "\tNSave=" << NSave << '\n');
     if (MFI.hasTailCall()) {
 	flags |= 1;	// tail call saving multiple registers, save SP also
     }
-    BuildMI(MBB, MBBI, DL, TII->get(My66000::ENTER))
+    BuildMI(MBB, MBBI, DL, TII.get(My66000::ENTER))
 	      .addReg(LoReg, getKillRegState(!isLive))
 	      .addReg(HiReg, getKillRegState(!isLive))
 	      .addImm(Offset)
@@ -193,17 +196,18 @@ void My66000FrameLowering::emitEpilogue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
 LLVM_DEBUG(dbgs() << "My66000FrameLowering::emitEpilogue "<< MF.getName() << '\n');
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
-  const My66000RegisterInfo *RI = STI.getRegisterInfo();
+  const MCRegisterInfo *MRI = MF.getContext().getRegisterInfo();
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   DebugLoc DL = MBBI->getDebugLoc();
-  const My66000InstrInfo *TII = STI.getInstrInfo();
+  const My66000InstrInfo &TII = *MF.getSubtarget<My66000Subtarget>().getInstrInfo();
 
   uint64_t StackSize = MFI.getStackSize();
 
   // Restore the stack pointer using the value of the frame pointer. Only
   // necessary if the stack pointer was modified, meaning the stack size is
   // unknown.
-  if (RI->hasStackRealignment(MF) || MFI.hasVarSizedObjects()) {
+  if (TRI->hasStackRealignment(MF) || MFI.hasVarSizedObjects()) {
     assert(hasFP(MF) && "frame pointer should not have been eliminated");
     auto *XFI = MF.getInfo<My66000MachineFunctionInfo>();
     uint64_t FPOffset = StackSize - XFI->getVarArgsSaveSize();
@@ -240,8 +244,8 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
   for (const auto &Entry : CSI) {
     unsigned Reg = Entry.getReg();
     unsigned CFIIndex = MF.addFrameInst(MCCFIInstruction::createRestore(
-        nullptr, RI->getDwarfRegNum(Reg, true)));
-    BuildMI(MBB, MBBI, DL, TII->get(TargetOpcode::CFI_INSTRUCTION))
+        nullptr, MRI->getDwarfRegNum(Reg, true)));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
         .addCFIIndex(CFIIndex);
     NSave += 1;
   }
@@ -256,7 +260,7 @@ LLVM_DEBUG(dbgs() << "Epilogue needs FP to recover SP: " << FPOffset << "\n");
     unsigned flags = 0;
     if (MFI.hasTailCall()) flags |= 5;	// restore to LR not IP, SP saved
     if (VarArgsSaveSize != 0) flags |= 4;      // restore to LR
-    BuildMI(MBB, MBBI, DL, TII->get(My66000::EXIT))
+    BuildMI(MBB, MBBI, DL, TII.get(My66000::EXIT))
 	      .addReg(LoReg, RegState::Define)
 	      .addReg(HiReg, RegState::Define)
 	      .addImm(Offset)

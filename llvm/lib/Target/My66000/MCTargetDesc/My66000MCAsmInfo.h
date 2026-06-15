@@ -22,7 +22,7 @@ class My66000MCAsmInfo : public MCAsmInfoELF {
   void anchor() override;
 
 public:
-  explicit My66000MCAsmInfo(const Triple &TT);
+  explicit My66000MCAsmInfo(const Triple &TT, const MCTargetOptions &Options);
 };
 
 } // namespace llvm

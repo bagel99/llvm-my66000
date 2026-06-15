@@ -235,20 +235,20 @@ defm FMAD : FMArrr<fmad>;
 
 // Matched in DAGToDAG
 def EADDrr : XOP3_RR<0b1001000, 0b0000,
-	(outs GRegs:$rd), (ins GRegs:$rs1, GRegs:$rs2),
+	(outs GRegs:$rd), (ins GRegs:$rs2, GRegs:$rs1),
 	"eadd\t$rd,$rs1,$rs2",
-	[(set GRegs:$rd, (fldexp (f64 GRegs:$rs1), (i64 GRegs:$rs2)))]>;
+	[(set GRegs:$rd, (fldexp (f64 GRegs:$rs2), (i64 GRegs:$rs1)))]>;
 def EADDrj : XOP3_RR<0b1001000, 0b0001,
-	(outs GRegs:$rd), (ins GRegs:$rs1, simmp5:$rs2),
-	"eadd\t$rd,$rs1,#$rs2",
+	(outs GRegs:$rd), (ins GRegs:$rs2, simmp5:$rs1),
+	"eadd\t$rd,#$rs1,$rs2",
 	[]>;
 def EADDrk : XOP3_RR<0b1001000, 0b1001,
-	(outs GRegs:$rd), (ins GRegs:$rs1, simmn5:$rs2),
-	"eadd\t$rd,$rs1,#$rs2",
+	(outs GRegs:$rd), (ins GRegs:$rs2, simmn5:$rs1),
+	"eadd\t$rd,#$rs1,$rs2",
 	[]>;
 def EADDrd : XOP3_RD<0b1001000, 0b0011,
-	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$imm),
-	"eadd\t$rd,$rs1,#$imm",
+	(outs GRegs:$rd), (ins GRegs:$rs2, i64imm:$imm),
+	"eadd\t$rd,#$imm,$rs2",
 	[]>;
 
 def FREXPr : Pseudo<
@@ -308,23 +308,23 @@ def CVTds : CVT_R<0b0111000, 0b0000,
 	[(set (i64 GRegs:$rd), (fp_to_sint (f64 GRegs:$rs1)))]>;
 def CVTdsni : CVT_R<0b0111000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtds\t$rd,$rs1,#7",
+	"cvtds\t$rd,#7,$rs1",
 	[(set (i64 GRegs:$rd), (fp_to_sint (ffloor (f64 GRegs:$rs1))))]>;
 def CVTdspi : CVT_R<0b0111000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtds\t$rd,$rs1,#6",
+	"cvtds\t$rd,#6,$rs1",
 	[(set (i64 GRegs:$rd), (fp_to_sint (fceil (f64 GRegs:$rs1))))]>;
 def CVTdstz : CVT_R<0b0111000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtds\t$rd,$rs1,#5",
+	"cvtds\t$rd,#5,$rs1",
 	[(set (i64 GRegs:$rd), (fp_to_sint (ftrunc (f64 GRegs:$rs1))))]>;
 def CVTdsaz : CVT_R<0b0111000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtds\t$rd,$rs1,#4",
+	"cvtds\t$rd,#4,$rs1",
 	[(set (i64 GRegs:$rd), (fp_to_sint (fround (f64 GRegs:$rs1))))]>;
 def CVTdsrm : CVT_R<0b0111000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"cvtds\t$rd,$rs1,#2",
+	"cvtds\t$rd,#2,$rs1",
 	[(set (i64 GRegs:$rd), (fp_to_sint (fnearbyint (f64 GRegs:$rs1))))]>;
 }
 
@@ -332,7 +332,7 @@ def CVTdsrm : CVT_R<0b0111000, 0b0000,
 multiclass RNDrr<string mode, SDPatternOperator OpNode> {
     def rr : CVT_R<0b1100000, 0b0000,
 	(outs GRegs:$rd), (ins GRegs:$rs1),
-	!strconcat("rnd\t$rd,$rs1,#", mode),
+	!strconcat("rnd\t$rd,#", mode ,",$rs1"),
 	[(set (f64 GRegs:$rd), (OpNode (f64 GRegs:$rs1)))]>;
 }
 defm RNDRM : RNDrr<"2", fnearbyint>;

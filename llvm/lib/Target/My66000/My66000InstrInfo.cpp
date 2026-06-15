@@ -10,13 +10,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "My66000.h"
 #include "My66000InstrInfo.h"
-#include "My66000MachineFunctionInfo.h"
+#include "My66000Subtarget.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/MC/TargetRegistry.h"
 
 using namespace llvm;
 
@@ -40,25 +40,24 @@ namespace My66000 {
 // Pin the vtable to this file.
 void My66000InstrInfo::anchor() {}
 
-My66000InstrInfo::My66000InstrInfo()
-  : My66000GenInstrInfo(My66000::ADJCALLSTACKDOWN, My66000::ADJCALLSTACKUP),
-    RI() {
-}
+My66000InstrInfo::My66000InstrInfo(const My66000Subtarget &ST)
+  : My66000GenInstrInfo(ST, RI, My66000::ADJCALLSTACKDOWN, My66000::ADJCALLSTACKUP),
+    RI() {}
 
-void My66000InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
-                               MachineBasicBlock::iterator I,
-                               const DebugLoc &dl, MCRegister DstReg,
-                               MCRegister SrcReg, bool KillSrc) const {
+void My66000InstrInfo::copyPhysReg(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator I, const DebugLoc &dl,
+    Register DstReg, Register SrcReg, bool KillSrc,
+    bool RenamableDest, bool RenamableSrc) const {
+
   BuildMI(MBB, I, dl, get(My66000::MOVrr), DstReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
 }
 
-void My66000InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
-                                         MachineBasicBlock::iterator I,
-                                         Register SrcReg, bool IsKill, int FI,
-                                         const TargetRegisterClass *RC,
-                                         const TargetRegisterInfo *TRI,
-					 Register VReg) const {
+void My66000InstrInfo::storeRegToStackSlot(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator I, Register SrcReg,
+    bool IsKill, int FI, const TargetRegisterClass *RC,
+    Register VReg, MachineInstr::MIFlag Flags) const {
+
   DebugLoc DL;
   if (I != MBB.end())
     DL = I->getDebugLoc();
@@ -69,12 +68,11 @@ void My66000InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
       .addImm(0);
 }
 
-void My66000InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
-                                          MachineBasicBlock::iterator I,
-                                          Register DstReg, int FI,
-                                          const TargetRegisterClass *RC,
-                                          const TargetRegisterInfo *TRI,
-					  Register VReg) const {
+void My66000InstrInfo::loadRegFromStackSlot(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator I, Register DstReg,
+    int FI, const TargetRegisterClass *RC, Register VReg,
+    unsigned SubReg, MachineInstr::MIFlag Flags) const {
+
   DebugLoc DL;
   if (I != MBB.end())
     DL = I->getDebugLoc();
@@ -384,7 +382,7 @@ unsigned My66000InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   if (MI.isInlineAsm()) {
     const MachineFunction *MF = MI.getParent()->getParent();
     const char *AsmStr = MI.getOperand(0).getSymbolName();
-    return getInlineAsmLength(AsmStr, *MF->getTarget().getMCAsmInfo());
+    return getInlineAsmLength(AsmStr, MF->getTarget().getMCAsmInfo());
   }
   return MI.getDesc().getSize();
 }

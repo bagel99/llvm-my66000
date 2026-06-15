@@ -32,7 +32,6 @@ void My66000MCInstLower::Initialize(MCContext *C) { Ctx = C; }
 MCOperand My66000MCInstLower::LowerSymbolOperand(const MachineOperand &MO,
                                                MachineOperandType MOTy,
                                                unsigned Offset) const {
-  MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None;
   const MCSymbol *Symbol;
 
   switch (MOTy) {
@@ -62,7 +61,7 @@ MCOperand My66000MCInstLower::LowerSymbolOperand(const MachineOperand &MO,
       llvm_unreachable("<unknown operand type>");
   }
 
-  const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol, Kind, *Ctx);
+  const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol, *Ctx);
 
   if (!Offset)
     return MCOperand::createExpr(MCSym);

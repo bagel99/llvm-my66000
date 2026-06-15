@@ -1,4 +1,4 @@
-//===-- My66000AsmPrinter.cpp - My66000 LLVM assembly writer ------------------===//
+//===-- My66000AsmPrinter.cpp - My66000 LLVM assembly writer --------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -54,9 +54,11 @@ namespace {
     My66000TargetStreamer &getTargetStreamer();
 
   public:
+    static char ID;
+
     explicit My66000AsmPrinter(TargetMachine &TM,
                              std::unique_ptr<MCStreamer> Streamer)
-        : AsmPrinter(TM, std::move(Streamer)), MCInstLowering(*this) {}
+        : AsmPrinter(TM, std::move(Streamer), ID), MCInstLowering(*this) {}
 
     StringRef getPassName() const override { return "My66000 Assembly Printer"; }
 
@@ -121,7 +123,7 @@ void My66000AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   emitAlignment(std::max(Alignment, Align(4)), GV);
 
   unsigned Size = DL.getTypeAllocSize(C->getType());
-  if (MAI->hasDotTypeDotSizeDirective()) {
+  if (MAI.hasDotTypeDotSizeDirective()) {
     OutStreamer->emitSymbolAttribute(GVSym, MCSA_ELF_TypeObject);
     OutStreamer->emitELFSize(GVSym, MCConstantExpr::create(Size, OutContext));
   }
@@ -172,7 +174,7 @@ void My66000AsmPrinter::printOperand(const MachineInstr *MI, int opNum,
     PrintSymbolOperand(MO, O);
     break;
   case MachineOperand::MO_ConstantPoolIndex:
-    O << DL.getPrivateGlobalPrefix() << "CPI" << getFunctionNumber() << '_'
+    O << DL.getLinkerPrivateGlobalPrefix() << "CPI" << getFunctionNumber() << '_'
       << MO.getIndex();
     break;
   case MachineOperand::MO_BlockAddress:
@@ -267,7 +269,13 @@ void My66000AsmPrinter::emitInstruction(const MachineInstr *MI) {
   } while ((++I != E) && I->isInsideBundle());
 }
 
+char My66000AsmPrinter::ID = 0;
+
+INITIALIZE_PASS(My66000AsmPrinter, "my66000-asm-printer", "My66000 Assembly Printer",
+                false, false)
+
 // Force static initialization.
-extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMy66000AsmPrinter() {
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY
+void LLVMInitializeMy66000AsmPrinter() {
   RegisterAsmPrinter<My66000AsmPrinter> X(getTheMy66000Target());
 }

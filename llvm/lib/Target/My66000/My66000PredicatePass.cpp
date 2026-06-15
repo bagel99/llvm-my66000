@@ -120,16 +120,22 @@ LLVM_DEBUG(dbgs() << "\tcond/uncond branch pair, uncond branch to fallthru\n");
 // Any branch should be at the end.
 int My66000PredBlock::checkBlock(MachineBasicBlock *MBB) {
   unsigned NumInstrs = 0;
-
-  for (const MachineInstr &MI : instrs(*MBB)) {
-    if (MI.isTerminator()) return NumInstrs;
+LLVM_DEBUG(dbgs() << "My66000PredBlock::checkBlock\n");
+  MachineBasicBlock::instr_iterator MII = MBB->instr_begin();
+  MachineBasicBlock::instr_iterator MIE = MBB->instr_end();
+  if (MII == MIE)
+    return 0;
+  for (; MII != MIE; ++MII) {
+    MachineInstr *MI = &*MII;
+    if (MI->isTerminator()) return NumInstrs;
     // VVM doesn't allow calls
-    if (MI.isCall()) return -1;
+    if (MI->isCall()) return -1;
     // Bad things happen if IMPLICIT_DEF is inside a bundle
-    if (MI.getOpcode() == TargetOpcode::IMPLICIT_DEF) return -1;
+    if (MI->getOpcode() == TargetOpcode::IMPLICIT_DEF) return -1;
     // FIXME - why are CFI_INSTRUCTIONs in the code?
     // answer: because of tail merged RETs
-    if (!MI.isCFIInstruction()) {
+//LLVM_DEBUG(dbgs() << "check " << *MI);
+    if (!MI->isCFIInstruction() && !MI->isBundle()) {
       NumInstrs += 1;
     }
   }
@@ -167,15 +173,52 @@ void My66000PredBlock::getConditionInfo(SmallVector<MachineOperand, 4> &Cond,
   }
 }
 
+// This code was copied from the inner loop of
+// MachineInstrBundle::unpackBundles. That code does an entire basic block,
+// but we just need to unpack a single bundle.
+// Return iterator to next instruction after the bundle.
+static MachineBasicBlock::instr_iterator unBundle(
+		     MachineBasicBlock::instr_iterator MII,
+		     MachineBasicBlock::instr_iterator MIE) {
+  MachineInstr *MI = &*MII;
+LLVM_DEBUG(dbgs() << "unBundle " << *MI);
+  // Remove BUNDLE instruction and the InsideBundle flags from bundled
+  // instructions.
+  if (MI->isBundle()) {
+    while (++MII != MIE && MII->isBundledWithPred()) {
+LLVM_DEBUG(dbgs() << "\tunbundleFromPred " << *MII);
+      MII->unbundleFromPred();
+      for (MachineOperand &MO  : MII->operands()) {
+        if (MO.isReg() && MO.isInternalRead())
+          MO.setIsInternalRead(false);
+      }
+    }
+LLVM_DEBUG(dbgs() << "\terasing " << *MI);
+    MI->eraseFromParent();
+  }
+  return MII;
+}
+
 void My66000PredBlock::MakeBundle(MachineBasicBlock *MBB, MachineInstr *MI,
 				  unsigned N) {
 //  MI->setFlag(MachineInstr::NoMerge);
+  // FIXME - it is not clear if IE is the last instruction in the bundle
+  // or the next instruction folling the bundle.
   MachineBasicBlock::instr_iterator IB = MI->getIterator();
-  MachineBasicBlock::instr_iterator IE = std::next(IB, N+1);
+  MachineBasicBlock::instr_iterator IE = std::next(IB, N);
 LLVM_DEBUG(dbgs() << "make bundle BB=" << printMBBReference(*MBB) <<
 		     " N=" << N << '\n');
 LLVM_DEBUG(dbgs() << "\tIB= " << *IB);
 LLVM_DEBUG(dbgs() << "\tIE= " << *IE);
+  MachineBasicBlock::instr_iterator I = IB;
+  while (I != IE) {
+    MachineInstr *MI = &*I;
+    if (MI->isBundle())		// remove interior bundles
+      I = unBundle(I, IE);
+    else
+      ++I;
+  }
+LLVM_DEBUG(dbgs() << "\tBefore finalizeBundle\n" << *MBB);
   finalizeBundle(*MBB, IB, IE);
 }
 
@@ -184,9 +227,9 @@ void My66000PredBlock::MakeBundles(MachineBasicBlock *MBB) {
   MachineBasicBlock::iterator E = MBB->end();
 LLVM_DEBUG(dbgs() << "My66000PredBlock::MakeBundles\n");
   while (I != E) {
-LLVM_DEBUG(dbgs() << "\tI = " << *I);
     if (I->isPredicable()) {
-      unsigned N = I->getOperand(2).getImm() + I->getOperand(3).getImm();
+      // number of predicated instructions plus 1 for the predicate instruction
+      unsigned N = I->getOperand(2).getImm() + I->getOperand(3).getImm() + 1;
       MakeBundle(MBB, &*I, N);
     }
     ++I;	// This will increment over an entire (just made) bundle
@@ -739,9 +782,11 @@ LLVM_DEBUG(dbgs() << "My66000PredBlock::RangeCheck\n");
   bool Mod;
   do {
 LLVM_DEBUG(dbgs() << "***Before RangeCheck ***\n");
+#ifndef NDEBUG
     for (auto &MBB : MF ) {
       LLVM_DEBUG(dbgs() << MBB);
     }
+#endif
     Mod = RangeCheck1(MF);
   } while (Mod);
 }
@@ -778,9 +823,11 @@ LLVM_DEBUG(dbgs() << "My66000PredBlock::runOnMachineFunction\n");
   RangeCheck(MF);
 // begin debug
 LLVM_DEBUG(dbgs() << "*** Original basic blocks ***\n");
+#ifndef NDEBUG
     for (auto &MBB : MF ) {
       LLVM_DEBUG(dbgs() << MBB);
     }
+#endif
 // end debug
   bool Modified = false;
   bool Mod;
@@ -796,9 +843,11 @@ LLVM_DEBUG(dbgs() << "*** Original basic blocks ***\n");
     }
 // begin debug
 LLVM_DEBUG(dbgs() << "*** Modified basic blocks ***\n");
+#ifndef NDEBUG
     for (auto &MBB : MF ) {
       LLVM_DEBUG(dbgs() << MBB);
     }
+#endif
 // end debug
   }
   return Modified;

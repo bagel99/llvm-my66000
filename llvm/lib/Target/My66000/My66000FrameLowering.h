@@ -15,26 +15,21 @@
 #define LLVM_LIB_TARGET_MY66000_MY66000FRAMELOWERING_H
 
 #include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
   class My66000Subtarget;
 
   class My66000FrameLowering: public TargetFrameLowering {
   public:
-    explicit My66000FrameLowering(const My66000Subtarget &STI)
-      : TargetFrameLowering(StackGrowsDown,
-			    /*StackAlignment=*/Align(8),
-			    /*LocalAreaOffset=*/0),
-        STI(STI) {}
-
+    My66000FrameLowering(const My66000Subtarget &STI);
 
     /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
     /// the function.
-    void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
-    void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
-
-    StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
-                             Register &FrameReg) const override;
+    void emitPrologue(MachineFunction &MF,
+		      MachineBasicBlock &MBB) const override;
+    void emitEpilogue(MachineFunction &MF,
+		      MachineBasicBlock &MBB) const override;
 
     bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MI,
@@ -49,7 +44,6 @@ namespace llvm {
     MachineBasicBlock::iterator
     eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I) const override;
-    bool hasFP(const MachineFunction &MF) const override;
 
     void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
                               RegScavenger *RS = nullptr) const override;
@@ -57,12 +51,15 @@ namespace llvm {
     void processFunctionBeforeFrameFinalized(MachineFunction &MF,
                                      RegScavenger *RS = nullptr) const override;
 
+    StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
+                             Register &FrameReg) const override;
+
     static int stackSlotSize() {
       return 8;
     }
 
   protected:
-    const My66000Subtarget &STI;
+    bool hasFPImpl(const MachineFunction &MF) const override;
 
   private:
     void determineFrameLayout(MachineFunction &MF) const;

@@ -23,14 +23,15 @@ public:
   My66000ABIInfo(CodeGenTypes &CGT) : ABIInfo(CGT) {}
 
   bool isPromotableTypeForABI(QualType Ty) const;
-  ABIArgInfo classifyReturnType(QualType RetTy) const;
-  ABIArgInfo classifyArgumentType(QualType RetTy) const;
+  ABIArgInfo classifyArgumentType(QualType Ty, bool IsFixed, int &ArgGPRsLeft,
+                                  int &ArgFPRsLeft, unsigned ABIVLen) const;
+  ABIArgInfo classifyReturnType(QualType RetTy, unsigned ABIVLen) const;
   bool isHomogeneousAggregateBaseType(QualType Ty) const override;
   bool isHomogeneousAggregateSmallEnough(const Type *Ty,
                                          uint64_t Members) const override;
   void computeInfo(CGFunctionInfo &FI) const override;
-  Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
-                    QualType Ty) const override;
+  RValue EmitVAArg(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
+		   AggValueSlot Slot) const override;
 };
 } // end anonymous namespace
 
@@ -64,7 +65,10 @@ My66000ABIInfo::isPromotableTypeForABI(QualType Ty) const {
   return false;
 }
 
-ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty) const {
+ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
+                                              int &ArgGPRsLeft,
+                                              int &ArgFPRsLeft,
+                                              unsigned ABIVLen) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
 
   if (Ty->isAnyComplexType())
@@ -72,7 +76,9 @@ ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty) const {
 
   if (const auto *EIT = Ty->getAs<BitIntType>())
     if (EIT->getNumBits() > 128)
-      return getNaturalAlignIndirect(Ty, /*ByVal=*/true);
+      return getNaturalAlignIndirect(Ty,
+		/*AddrSpace=*/getDataLayout().getAllocaAddrSpace(),
+		/*ByVal=*/true);
 
   if (isAggregateTypeForABI(Ty)) {
     uint64_t ABIAlign = 8;	// FIXME - is this correct?
@@ -109,49 +115,19 @@ ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty) const {
                                      : ABIArgInfo::getDirect());
 }
 
-ABIArgInfo My66000ABIInfo::classifyReturnType(QualType RetTy) const {
+ABIArgInfo My66000ABIInfo::classifyReturnType(QualType RetTy,
+                                              unsigned ABIVLen) const {
 
   if (RetTy->isVoidType())
     return ABIArgInfo::getIgnore();
 
-  if (RetTy->isAnyComplexType())
-    return ABIArgInfo::getDirect();
+  int ArgGPRsLeft = 8;
+  int ArgFPRsLeft = 0;
 
-  if (const auto *EIT = RetTy->getAs<BitIntType>())
-    if (EIT->getNumBits() > 128)
-      return getNaturalAlignIndirect(RetTy);
-
-  if (isAggregateTypeForABI(RetTy)) {
-    // homogeneous aggregates are returned as array types.
-    const Type *Base = nullptr;
-    uint64_t Members = 0;
-    if (isHomogeneousAggregate(RetTy, Base, Members)) {
-      llvm::Type *BaseTy = CGT.ConvertType(QualType(Base, 0));
-      llvm::Type *CoerceTy = llvm::ArrayType::get(BaseTy, Members);
-      return ABIArgInfo::getDirect(CoerceTy);
-    }
-
-    // small aggregates are returned in up to two registers.
-    uint64_t Bits = getContext().getTypeSize(RetTy);
-    if (Bits <= 2 * 64) {
-      if (Bits == 0)
-        return ABIArgInfo::getIgnore();
-
-      llvm::Type *CoerceTy;
-      if (Bits > 64) {
-        CoerceTy = llvm::IntegerType::get(getVMContext(), 64);
-        CoerceTy = llvm::StructType::get(CoerceTy, CoerceTy);
-      } else
-        CoerceTy =
-            llvm::IntegerType::get(getVMContext(), llvm::alignTo(Bits, 8));
-      return ABIArgInfo::getDirect(CoerceTy);
-    }
-
-    // All other aggregates are returned indirectly.
-    return getNaturalAlignIndirect(RetTy);
-  }
-  return (isPromotableTypeForABI(RetTy) ? ABIArgInfo::getExtend(RetTy)
-                                        : ABIArgInfo::getDirect());
+  // The rules for return and argument types are the same, so defer to
+  // classifyArgumentType.
+  return classifyArgumentType(RetTy, /*IsFixed=*/true,
+			      ArgGPRsLeft, ArgFPRsLeft, 0);
 }
 
 bool My66000ABIInfo::isHomogeneousAggregateBaseType(QualType Ty) const {
@@ -168,20 +144,25 @@ bool My66000ABIInfo::isHomogeneousAggregateSmallEnough(const Type *Base,
 }
 
 void My66000ABIInfo::computeInfo(CGFunctionInfo &FI) const {
-  FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
+
+  FI.getReturnInfo() = classifyReturnType(FI.getReturnType(), 0);
+
+  bool IsRetIndirect = FI.getReturnInfo().getKind() == ABIArgInfo::Indirect;
+  int ArgGPRsLeft = IsRetIndirect ? 7 : 8;
+  int ArgFPRsLeft = 0;
+
   for (auto &Arg : FI.arguments())
-    Arg.info = classifyArgumentType(Arg.type);
+    Arg.info = classifyArgumentType(Arg.type, /*IsFixed=*/true,
+			            ArgGPRsLeft, ArgFPRsLeft, 0);
 }
 
-Address My66000ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
-                                QualType Ty) const {
+RValue My66000ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
+                                QualType Ty, AggValueSlot Slot) const {
   CharUnits SlotSize = CharUnits::fromQuantity(8);
 
   // Empty records are ignored for parameter passing purposes.
-  if (isEmptyRecord(getContext(), Ty, true)) {
-    return Address(CGF.Builder.CreateLoad(VAListAddr),
-                   CGF.ConvertTypeForMem(Ty), SlotSize);
- }
+  if (isEmptyRecord(getContext(), Ty, true))
+    return Slot.asRValue();
 
   auto TInfo = getContext().getTypeInfoInChars(Ty);
 
@@ -189,7 +170,7 @@ Address My66000ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   bool IsIndirect = TInfo.Width > 2 * SlotSize;
 
   return emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect, TInfo,
-                          SlotSize, /*AllowHigherAlign=*/true);
+                          SlotSize, /*AllowHigherAlign=*/true, Slot);
 }
 
 

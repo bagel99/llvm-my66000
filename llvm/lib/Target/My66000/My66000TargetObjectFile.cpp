@@ -101,10 +101,9 @@ MCSection *My66000TargetObjectFile::SelectSectionForGlobal(
   return TargetLoweringObjectFileELF::SelectSectionForGlobal(GO, Kind, TM);
 }
 
-MCSection *My66000TargetObjectFile::getSectionForConstant(const DataLayout &DL,
-                                                        SectionKind Kind,
-                                                        const Constant *C,
-                                                        Align &Alignment) const {
+MCSection *My66000TargetObjectFile::getSectionForConstant(
+    const DataLayout &DL, SectionKind Kind, const Constant *C,
+    Align &Alignment, const Function *F) const {
   if (Kind.isMergeableConst4())           return MergeableConst4Section;
   if (Kind.isMergeableConst8())           return MergeableConst8Section;
   if (Kind.isMergeableConst16())          return MergeableConst16Section;

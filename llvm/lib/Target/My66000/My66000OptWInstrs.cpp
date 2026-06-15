@@ -60,10 +60,12 @@ static bool hasSingleUse(const MachineInstr *MI, const My66000Subtarget &ST,
 
 
   Register DstReg = MI->getOperand(0).getReg();
+#ifndef NDEBUG
   for (auto &UserOp : MRI.use_nodbg_operands(DstReg)) {
     const MachineInstr *UserMI = UserOp.getParent();
 LLVM_DEBUG(dbgs() << "User: " << *UserMI);
   }
+#endif
   return MRI.hasOneUse(DstReg);
 }
 
