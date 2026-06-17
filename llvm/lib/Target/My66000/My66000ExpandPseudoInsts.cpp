@@ -65,6 +65,7 @@ bool My66000ExpandPseudo::ShfIO(MachineBasicBlock &MBB,
 				  MachineBasicBlock::iterator MBBI,
 				  unsigned inst) {
   MachineInstr &MI = *MBBI;
+LLVM_DEBUG(dbgs() << "\rexpand " << MI);
   MachineInstr *Carry, *Inst;
   Carry = BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(My66000::CARRYio))
 	  .add(MI.getOperand(1))
@@ -84,6 +85,7 @@ bool My66000ExpandPseudo::CarryIO(MachineBasicBlock &MBB,
 				  MachineBasicBlock::iterator MBBI,
 				  unsigned inst) {
   MachineInstr &MI = *MBBI;
+LLVM_DEBUG(dbgs() << "\rexpand " << MI);
   MachineInstr *Carry, *Inst;
   unsigned CarryFlag = MI.getOperand(1).isDead() ? 1: 3;
   Carry = BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(My66000::CARRYio))
@@ -103,6 +105,7 @@ bool My66000ExpandPseudo::CarryO(MachineBasicBlock &MBB,
 				 MachineBasicBlock::iterator MBBI,
 				 unsigned inst) {
   MachineInstr &MI = *MBBI;
+LLVM_DEBUG(dbgs() << "\rexpand " << MI);
   MachineInstr *Carry, *Inst;
   Carry = BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(My66000::CARRYo))
 	  .add(MI.getOperand(1))
@@ -133,6 +136,7 @@ bool My66000ExpandPseudo::AddCarry(MachineBasicBlock &MBB,
 				 unsigned inst) {
 
   MachineInstr &MI1 = *MBBI;
+LLVM_DEBUG(dbgs() << "\rexpand " << MI1);
   MachineInstr *Carry, *Last;
   SmallVector<MachineInstr *, 8> ToErase;
   Register CarryReg = MI1.getOperand(1).getReg();
@@ -181,13 +185,22 @@ bool My66000ExpandPseudo::Frexp(MachineBasicBlock &MBB,
 				MachineBasicBlock::iterator MBBI,
 				unsigned inste, unsigned instf) {
   MachineInstr &MI = *MBBI;
-  if (!MI.getOperand(1).isDead())
+LLVM_DEBUG(dbgs() << "\rexpand frexp" << MI);
+  bool builde = !MI.getOperand(1).isDead();
+  bool buildf = !MI.getOperand(0).isDead();
+  Register dst2 = MI.getOperand(1).getReg();
+  Register src  = MI.getOperand(2).getReg();
+  if (builde && dst2 != src)	// not clobbering src
     BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(inste))
 		.add(MI.getOperand(1))
 		.add(MI.getOperand(2));
-  if (!MI.getOperand(0).isDead())
+  if (buildf)
     BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(instf))
 		.add(MI.getOperand(0))
+		.add(MI.getOperand(2));
+  if (builde && dst2 == src)
+    BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(inste))
+		.add(MI.getOperand(1))
 		.add(MI.getOperand(2));
   MI.eraseFromParent();
   return true;
@@ -198,7 +211,6 @@ bool My66000ExpandPseudo::ExpandMI(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator &NextMBBI) {
   MachineInstr &MI = *MBBI;
   unsigned Opcode = MI.getOpcode();
-LLVM_DEBUG(dbgs() << "  expand " << MI);
   switch (Opcode) {
     default:
       return false;
