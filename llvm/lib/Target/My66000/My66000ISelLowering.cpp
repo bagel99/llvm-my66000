@@ -238,6 +238,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FMAXIMUM, MVT::f64, Legal);
   setOperationAction(ISD::FSIN, MVT::f64, Legal);
   setOperationAction(ISD::FCOS, MVT::f64, Legal);
+  setOperationAction(ISD::FTAN, MVT::f64, Legal);
   setOperationAction(ISD::FLOG, MVT::f64, Legal);
   setOperationAction(ISD::FLOG2, MVT::f64, Legal);
   setOperationAction(ISD::FLOG10, MVT::f64, Legal);
@@ -247,8 +248,13 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FCEIL, MVT::f64, Legal);
   setOperationAction(ISD::FTRUNC, MVT::f64, Legal);
   setOperationAction(ISD::FROUND, MVT::f64, Legal);
+  setOperationAction(ISD::FROUNDEVEN, MVT::f64, Legal);
   setOperationAction(ISD::FNEARBYINT, MVT::f64, Legal);
   setOperationAction(ISD::FCOPYSIGN, MVT::f64, Legal);
+  setOperationAction(ISD::FASIN, MVT::f64, Legal);
+  setOperationAction(ISD::FACOS, MVT::f64, Legal);
+  setOperationAction(ISD::FATAN, MVT::f64, Legal);
+  setOperationAction(ISD::FATAN2, MVT::f64, Legal);
   setOperationAction(ISD::SELECT_CC, MVT::f64, Custom);
   setOperationAction(ISD::SETCC, MVT::f64, Custom);
   setOperationAction(ISD::BR_CC, MVT::f64, Custom);
@@ -278,6 +284,7 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FMAXIMUM, MVT::f32, Legal);
   setOperationAction(ISD::FSIN, MVT::f32, Legal);
   setOperationAction(ISD::FCOS, MVT::f32, Legal);
+  setOperationAction(ISD::FTAN, MVT::f32, Legal);
   setOperationAction(ISD::FLOG, MVT::f32, Legal);
   setOperationAction(ISD::FLOG2, MVT::f32, Legal);
   setOperationAction(ISD::FLOG10, MVT::f32, Legal);
@@ -287,8 +294,13 @@ My66000TargetLowering::My66000TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FCEIL, MVT::f32, Legal);
   setOperationAction(ISD::FTRUNC, MVT::f32, Legal);
   setOperationAction(ISD::FROUND, MVT::f32, Legal);
+  setOperationAction(ISD::FROUNDEVEN, MVT::f32, Legal);
   setOperationAction(ISD::FNEARBYINT, MVT::f32, Legal);
   setOperationAction(ISD::FCOPYSIGN, MVT::f32, Legal);
+  setOperationAction(ISD::FASIN, MVT::f32, Legal);
+  setOperationAction(ISD::FACOS, MVT::f32, Legal);
+  setOperationAction(ISD::FATAN, MVT::f32, Legal);
+  setOperationAction(ISD::FATAN2, MVT::f32, Legal);
   setOperationAction(ISD::SELECT_CC, MVT::f32, Custom);
   setOperationAction(ISD::SETCC, MVT::f32, Custom);
   setOperationAction(ISD::BR_CC, MVT::f32, Custom);
@@ -1648,7 +1660,7 @@ LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
     BuildMI(*BB, MI, dl, TII.get(OpCode), temp)
 	    .addReg(dest) .addReg(MI.getOperand(5).getReg());
     BuildMI(*BB, MI, dl, TII.get(My66000::PRIB))
-	    .addImm(MYCB::NEQ) .addReg(temp) .addImm(1) .addImm(0);
+	    .addImm(MYCB::NE) .addReg(temp) .addImm(1) .addImm(0);
     temp = MI.getOperand(6).getReg();
   } else {					// its an operation, e.g. ADD
     temp = MRI.createVirtualRegister(&My66000::GRegsRegClass);

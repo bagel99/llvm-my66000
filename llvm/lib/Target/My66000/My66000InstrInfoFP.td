@@ -102,16 +102,20 @@ multiclass FPrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	[(set GRegs:$rd,  (OpNode fpimm64:$imm, (f64 GRegs:$rs2)))]>;
 }
 
-defm FADD :  FPrr<"fadd",  0b1000010, fadd>;
-defm FMUL :  FPrr<"fmul",  0b1000100, fmul>;
-defm FDIV :  FPrr<"fdiv",  0b1000110, fdiv>;
+defm FADD   :  FPrr<"fadd",  0b1000010, fadd>;
+defm FMUL   :  FPrr<"fmul",  0b1000100, fmul>;
+defm FDIV   :  FPrr<"fdiv",  0b1000110, fdiv>;
 // Caution: the following semantics change with changes to IEEE-754
-defm FMAXN:  FPrr<"fmax",  0b1001100, fmaxnum>;
-defm FMINN:  FPrr<"fmin",  0b1001110, fminnum>;
-defm FMAX :  FPrr<"fmax",  0b1001100, fmaximum>;
-defm FMIN :  FPrr<"fmin",  0b1001110, fminimum>;
-defm CSGN :  FPrr<"csgn",  0b1010010, fcopysign>;
-defm FPOW :  FPrr<"fpow",  0b1011010, fpow>;
+defm FMAXN  :  FPrr<"fmax",  0b1001100, fmaxnum>;
+defm FMINN  :  FPrr<"fmin",  0b1001110, fminnum>;
+defm FMAX   :  FPrr<"fmax",  0b1001100, fmaximum>;
+defm FMIN   :  FPrr<"fmin",  0b1001110, fminimum>;
+defm CSGN   :  FPrr<"csgn",  0b1010010, fcopysign>;
+defm FPOW   :  FPrr<"fpow",  0b1011010, fpow>;
+defm FATAN2 :  FPrr<"fatan2",0b1011011, fatan2>;
+
+// FIXME - need a new macro for FPOWI because second operand is integer
+// Could modify FPrr to take type of second operand
 
 // Can't use the standard pattern because the output type doesn't match inputs.
 let isCompare = 1 in {
@@ -335,15 +339,12 @@ multiclass RNDrr<string mode, SDPatternOperator OpNode> {
 	!strconcat("rnd\t$rd,#", mode ,",$rs1"),
 	[(set (f64 GRegs:$rd), (OpNode (f64 GRegs:$rs1)))]>;
 }
+defm RNDNE : RNDrr<"0", froundeven>;
 defm RNDRM : RNDrr<"2", fnearbyint>;
 defm RNDAZ : RNDrr<"4", fround>;
 defm RNDTZ : RNDrr<"5", ftrunc>;
 defm RNDPI : RNDrr<"6", fceil>;
 defm RNDNI : RNDrr<"7", ffloor>;
-def  RNDNE : CVT_R<0b0110000, 0b0000,
-	(outs GRegs:$rd), (ins GRegs:$rs1),
-	"rnd\t$rd,$rs1,#0",
-	[]>;
 
 // Patterns for rounding and conversion
 def : Pat<(sint_to_fp (i64 (fp_to_sint (f64 GRegs:$Rn)))),
@@ -408,12 +409,12 @@ defm FEXP2 :  FTRAN<"fexp2",  0b00100, fexp2>;
 defm FEXP :   FTRAN<"fexp",   0b00101, fexp>;
 defm FSIN :   FTRAN<"fsin",   0b11000, fsin>;
 defm FCOS :   FTRAN<"fcos",   0b11001, fcos>;
-defm FTAN :   UTRAN<"ftan",   0b11010>;
+defm FTAN :   FTRAN<"ftan",   0b11010, ftan>;
+defm FASIN :  FTRAN<"fasin",  0b11100, fasin>;
+defm FACOS :  FTRAN<"facos",  0b11101, facos>;
+defm FATAN :  FTRAN<"fatan",  0b11110, fatan>;
 defm RSQRT :  UTRAN<"frsqrt", 0b01100>;
 defm FEXP10:  UTRAN<"fexp10", 0b00110>;
-defm FASIN :  UTRAN<"fasin",  0b11100>;
-defm FACOS :  UTRAN<"facos",  0b11101>;
-defm FATAN :  UTRAN<"fatan",  0b11110>;
 
 // Patterns to use reciprocal square root
 def : Pat<(fdiv fpimm1, (fsqrt (f64 GRegs:$bot))),

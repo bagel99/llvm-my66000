@@ -527,17 +527,22 @@ def IABS : XOP6_R<0b0111000, 0b00000, 0b0000,
 
 // FIXME - move up to shifts
 def BITR : SHF_RI<0b1100,
-	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$w, i64imm:$o),
-	"bitr\t$rd,$rs1,#$o,#$w",
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$o),
+	"bitr\t$rd,$rs1,#$o",
+	[]>;
+def : Pat<(bitreverse (i64 GRegs:$rs1)),
+	  (BITR GRegs:$rs1, 0)>;
+def : Pat<(srl (bitreverse (i64 GRegs:$rs1)), shfamt:$imm),
+	  (BITR GRegs:$rs1, shfamt:$imm)>;
+
+def BITRB : SHF_RI<0b1100,
+	(outs GRegs:$rd), (ins GRegs:$rs1, i64imm:$o),
+	"bitrb\t$rd,$rs1,#$o",
 	[]>;
 def : Pat<(bswap (i64 GRegs:$rs1)),
-	  (BITR GRegs:$rs1, 8, 0)>;
+	  (BITRB GRegs:$rs1, 0)>;
 def : Pat<(srl (bswap (i64 GRegs:$rs1)), shfamt:$imm),
-	  (BITR GRegs:$rs1, 8, shfamt:$imm)>;
-def : Pat<(bitreverse (i64 GRegs:$rs1)),
-	  (BITR GRegs:$rs1, 1, 0)>;
-def : Pat<(srl (bitreverse (i64 GRegs:$rs1)), shfamt:$imm),
-	  (BITR GRegs:$rs1, 1, shfamt:$imm)>;
+	  (BITRB GRegs:$rs1, shfamt:$imm)>;
 
 //
 // Load/Store
@@ -1502,7 +1507,7 @@ def ASWAPBr : Pseudo<
 def ACMPSWAPDr : Pseudo<
     (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$old, GRegs:$new),
     "#ACMPSWAP_R64",
-    [(set GRegs:$dst, (atomic_cmp_swap_i64 ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
+    [(set GRegs:$dst, (atomic_cmp_swap ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
 } // end customer inserter
 
 //

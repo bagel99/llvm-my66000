@@ -242,8 +242,8 @@ bool My66000VVMLoop::checkLoop(MachineBasicBlock *TB) {
   unsigned CmpOpNo;
   for (;;) {
     MachineInstr *MI = &*E;
-    if (MI->isCall()) {
-      LLVM_DEBUG(dbgs() << " fail - loop contains call\n");
+    if (MI->isCall() || MI->getOpcode() == TargetOpcode::INLINEASM) {
+      LLVM_DEBUG(dbgs() << " fail - loop contains call or asm\n");
       return false;	// calls not allowed in VVM
     }
     if (NInstr == 0) {
@@ -330,6 +330,14 @@ LLVM_DEBUG(dbgs() << " examine " << *MI);
 	Type = 5;
       } else {
 	LReg = CmpMI->getOperand(1).getReg();
+	if (CmpMI->getOperand(2).isImm()) {
+	    int64_t imm = CmpMI->getOperand(2).getImm();
+	    if (imm != (int32_t)imm) {
+		// FIXME - force smaller IMM into a register
+		LLVM_DEBUG(dbgs() << " fail - IMM64 with another IMM\n");
+		return false;
+	    }
+	}
 	Type = 4;
       }
     }

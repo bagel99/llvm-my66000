@@ -59,15 +59,16 @@ multiclass FSrr<string OpName, bits<7>OpC, SDPatternOperator OpNode> {
 	!strconcat(OpName, "\t$rd,#$imm,$rs2"),
 	[(set FSRegs:$rd, (OpNode fpimm32:$imm, (f32 FSRegs:$rs2)))]>;
 }
-defm FADDF : FSrr<"faddf", 0b1100010, fadd>;
-defm FMULF : FSrr<"fmulf", 0b1100100, fmul>;
-defm FDIVF : FSrr<"fdivf", 0b1100110, fdiv>;
-defm FMAXNF: FSrr<"fmaxf", 0b1101100, fmaxnum>;
-defm FMINNF: FSrr<"fminf", 0b1101110, fminnum>;
-defm FMAXF : FSrr<"fmaxf", 0b1101100, fmaximum>;
-defm FMINF : FSrr<"fminf", 0b1101110, fminimum>;
-defm CSGNF : FSrr<"csgnf", 0b1110010, fcopysign>;
-defm FPOWF : FSrr<"fpowf", 0b1111010, fpow>;
+defm FADDF   : FSrr<"faddf",  0b1100010, fadd>;
+defm FMULF   : FSrr<"fmulf",  0b1100100, fmul>;
+defm FDIVF   : FSrr<"fdivf",  0b1100110, fdiv>;
+defm FMAXNF  : FSrr<"fmaxf",  0b1101100, fmaxnum>;
+defm FMINNF  : FSrr<"fminf",  0b1101110, fminnum>;
+defm FMAXF   : FSrr<"fmaxf",  0b1101100, fmaximum>;
+defm FMINF   : FSrr<"fminf",  0b1101110, fminimum>;
+defm CSGNF   : FSrr<"csgnf",  0b1110010, fcopysign>;
+defm FPOWF   : FSrr<"fpowf",  0b1111010, fpow>;
+defm FATAN2F : FPrr<"fatan2f",0b1011011, fatan2>;
 
 let isCompare = 1 in {
 def FCMPFrr : XOP3_RR<0b1101000, 0b0000,
@@ -288,15 +289,12 @@ multiclass RNDFrr<string mode, SDPatternOperator OpNode> {
 	!strconcat("rndf\t$rd,#", mode ,",$rs1"),
 	[(set (f32 FSRegs:$rd), (OpNode (f32 FSRegs:$rs1)))]>;
 }
+defm RNDNEF: RNDFrr<"0", froundeven>;
 defm RNDRMF: RNDFrr<"2", fnearbyint>;
 defm RNDAZF: RNDFrr<"4", fround>;
 defm RNDTZF: RNDFrr<"5", ftrunc>;
 defm RNDPIF: RNDFrr<"6", fceil>;
 defm RNDNIF: RNDFrr<"7", ffloor>;
-def RNDNEF: CVT_R<0b1101001, 0b0000,
-	(outs FSRegs:$rd), (ins FSRegs:$rs1),
-	"rndf\t$rd,$rs1,#0",
-	[]>;
 
 //
 // FP32 remainder - requires CARRY instruction
@@ -349,12 +347,12 @@ defm FEXP2F : FSTRAN<"fexp2f", 0b00100, fexp2>;
 defm FEXPF :  FSTRAN<"fexpf",  0b00101, fexp>;
 defm FSINF :  FSTRAN<"fsinf",  0b11000, fsin>;
 defm FCOSF :  FSTRAN<"fcosf",  0b11001, fcos>;
-defm FTANF :  USTRAN<"ftanf",  0b11010>;
+defm FTANF :  FSTRAN<"ftanf",  0b11010, ftan>;
+defm FASINF : FSTRAN<"fasinf", 0b11100, fasin>;
+defm FACOSF : FSTRAN<"facosf", 0b11101, facos>;
+defm FATANF : FSTRAN<"fatan",  0b11110, fatan>;
 defm RSQRTF : USTRAN<"frsqrtf",0b01100>;
 defm FEXP10F: USTRAN<"fexp10f",0b00110>;
-defm FASINF : USTRAN<"fasinf", 0b11100>;
-defm FACOSF : USTRAN<"facosf", 0b11101>;
-defm FATANF : USTRAN<"fatan",  0b11110>;
 
 // Patterns to use reciprocal square root
 def : Pat<(fdiv fpimm1, (fsqrt (f32 FSRegs:$bot))),

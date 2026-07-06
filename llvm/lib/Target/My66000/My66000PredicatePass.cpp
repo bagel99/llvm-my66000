@@ -132,6 +132,8 @@ LLVM_DEBUG(dbgs() << "My66000PredBlock::checkBlock\n");
     if (MI->isCall()) return -1;
     // Bad things happen if IMPLICIT_DEF is inside a bundle
     if (MI->getOpcode() == TargetOpcode::IMPLICIT_DEF) return -1;
+    // Don't know the internals of INLINEASM, e.g. size
+    if (MI->getOpcode() == TargetOpcode::INLINEASM) return -1;
     // FIXME - why are CFI_INSTRUCTIONs in the code?
     // answer: because of tail merged RETs
 //LLVM_DEBUG(dbgs() << "check " << *MI);
