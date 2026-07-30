@@ -655,25 +655,17 @@ let mayStore = 1 in {
   defm STB : Store<"stb", 0b101000, 0b0010011, i64, truncstorei8>;
 }
 
-// Because ADDRrr rejects anything ADDRri can handle, we need a pattern for both.
-// But they both map to LDST_RX
-multiclass StImm5<string OpName, bits<7>Op, DAGOperand match, SDPatternOperator OpNode> {
-  def ki : XOP5_RR<Op, 0b00,
-	(outs), (ins i64imm:$imm, MEMri:$addr),
-	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode simmp5:$imm, ADDRri:$addr)]>;
+// Store IMM5 uses LDST_RX
+multiclass StImm5<string OpName, bits<7>Op, DAGOperand match,
+		  SDPatternOperator OpNode> {
   def kr : XOP5_RR<Op, 0b00,
-	(outs), (ins i64imm:$imm, MEMrr:$addr),
+	(outs), (ins i64imm:$imm, MEMrx:$addr),
 	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode simmp5:$imm, ADDRrr:$addr)]>;
-  def ji : XOP5_RR<Op, 0b00,
-	(outs), (ins s5imm64:$imm, MEMri:$addr),
-	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode match:$imm, ADDRri:$addr)]>;
+	[(OpNode simmp5:$imm, ADDRrx:$addr)]>;
   def jr : XOP5_RR<Op, 0b00,
-	(outs), (ins s5imm64:$imm, MEMrr:$addr),
+	(outs), (ins s5imm64:$imm, MEMrx:$addr),
 	!strconcat(OpName, "\t#$imm,[$addr]"),
-	[(OpNode match:$imm, ADDRrr:$addr)]>;
+	[(OpNode match:$imm, ADDRrx:$addr)]>;
 }
 let mayStore = 1 in {
   defm STB : StImm5<"stb", 0b1111011, simmn5b, truncstorei8>;
@@ -1507,7 +1499,19 @@ def ASWAPBr : Pseudo<
 def ACMPSWAPDr : Pseudo<
     (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$old, GRegs:$new),
     "#ACMPSWAP_R64",
-    [(set GRegs:$dst, (atomic_cmp_swap ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
+    [(set GRegs:$dst, (atomic_cmp_swap_i64 ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
+def ACMPSWAPWr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$old, GRegs:$new),
+    "#ACMPSWAP_R32",
+    [(set GRegs:$dst, (atomic_cmp_swap_i32 ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
+def ACMPSWAPHr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$old, GRegs:$new),
+    "#ACMPSWAP_R16",
+    [(set GRegs:$dst, (atomic_cmp_swap_i16 ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
+def ACMPSWAPBr : Pseudo<
+    (outs GRegs:$dst), (ins MEMrx:$addr, GRegs:$old, GRegs:$new),
+    "#ACMPSWAP_R8",
+    [(set GRegs:$dst, (atomic_cmp_swap_i8 ADDRrx:$addr, GRegs:$old, GRegs:$new))]>;
 } // end customer inserter
 
 //

@@ -301,11 +301,20 @@ bool My66000DAGToDAGISel::SelectADDRrrx(SDValue Addr,
 				       SDValue &Base, SDValue &Index,
 				       SDValue &Shift, SDValue &Offset,
 				       bool UseRI) {
-LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
 LLVM_DEBUG(dbgs() << "\tOpcode=" << Addr->getOperationName(CurDAG) << '\n');
-  if (Addr.getOpcode() == ISD::FrameIndex) {
-  LLVM_DEBUG(dbgs() << "\tfail frame index\n");
-    return false;
+  if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
+    if (UseRI) {
+      Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
+		TLI->getPointerTy(CurDAG->getDataLayout()));
+      Index = CurDAG->getRegister(My66000::R0, MVT::i64);
+      Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
+      Shift = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
+      LLVM_DEBUG(dbgs() << "\tmatch 0\n");
+      return true;
+    } else {
+      LLVM_DEBUG(dbgs() << "\tfail frame index\n");
+      return false;
+    }
   }
   if (Addr.getOpcode() == My66000ISD::WRAPPER) {
     Base  = CurDAG->getRegister(My66000::R0, MVT::i64);
@@ -405,12 +414,14 @@ LLVM_DEBUG(dbgs() << "\tOpcode=" << Addr->getOperationName(CurDAG) << '\n');
 bool My66000DAGToDAGISel::SelectADDRrr(SDValue Addr,
 				       SDValue &Base, SDValue &Index,
 				       SDValue &Shift, SDValue &Offset) {
+LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrr\n");
     return SelectADDRrrx(Addr, Base, Index, Shift, Offset, false);
 }
 
 bool My66000DAGToDAGISel::SelectADDRrx(SDValue Addr,
 				       SDValue &Base, SDValue &Index,
 				       SDValue &Shift, SDValue &Offset) {
+LLVM_DEBUG(dbgs() << "My66000DAGToDAGISel::SelectADDRrx\n");
     return SelectADDRrrx(Addr, Base, Index, Shift, Offset, true);
 }
 

@@ -95,13 +95,18 @@ LLVM_DEBUG(dbgs() << "My66000RegisterInfo::eliminateFrameIndex\n");
   assert(SPAdj == 0 && "Unexpected non-zero SPAdj value");
 
   MachineInstr &MI = *II;
+LLVM_DEBUG(dbgs() << "\tMI: " << MI);
   MachineFunction &MF = *MI.getParent()->getParent();
-
+  // Where is the offset operand
+  unsigned OffOp = ((MI.getDesc().TSFlags & 0x8) != 0) ? 2 : 1;
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
+LLVM_DEBUG(dbgs() << "\tFIOperandNum=" << FIOperandNum <<
+		     " OffOp=" << OffOp <<
+		     "\tFrameIndex=" << FrameIndex << '\n');
   Register FrameReg;
   int Offset = getFrameLowering(MF)
 	->getFrameIndexReference(MF, FrameIndex, FrameReg).getFixed() +
-	MI.getOperand(FIOperandNum + 1).getImm();
+	MI.getOperand(FIOperandNum + OffOp).getImm();
 
   if (!isInt<32>(Offset)) {
     report_fatal_error(
@@ -112,7 +117,7 @@ LLVM_DEBUG(dbgs() << "My66000RegisterInfo::eliminateFrameIndex\n");
 
   MI.getOperand(FIOperandNum)
       .ChangeToRegister(FrameReg, false, false, FrameRegIsKill);
-  MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
+  MI.getOperand(FIOperandNum + OffOp).ChangeToImmediate(Offset);
 
   return false;		// FIXME - what is this?
 }

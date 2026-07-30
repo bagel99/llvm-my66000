@@ -441,13 +441,13 @@ let mayLoad = 1 in {
 let mayStore = 1 in {
   defm STG : Store<"std", 0b101011, 0b1100100, f64, store>;
 }
-// Because ADDRrr rejects anything ADDRri can handle, we need a pattern for both.
-// But they both map to LDST_RX
-def STGZri : XOP5_RR<0b1111000, 0b00,
-	(outs), (ins fpimm64:$imm, MEMri:$addr),
+
+def STGkr : XOP5_RR<0b1111000, 0b00,
+	(outs), (ins fpimmi5:$imm, MEMrx:$addr),
+	"std\t#$imm,[$addr]",
+	[(store (f64 fpimmi5:$imm), ADDRrx:$addr)]>;
+
+def STGzr : XOP5_RR<0b1111000, 0b00,
+	(outs), (ins fpimm64:$imm, MEMrx:$addr),
 	"std\t#0,[$addr]",
-	[(store (f64 fpimm0:$imm), ADDRri:$addr)]>;
-def STGZrr : XOP5_RR<0b1111000, 0b00,
-	(outs), (ins fpimm64:$imm, MEMrr:$addr),
-	"std\t#0,[$addr]",
-	[(store (f64 fpimm0:$imm), ADDRrr:$addr)]>;
+	[(store (f64 fpimm0:$imm), ADDRrx:$addr)]>;

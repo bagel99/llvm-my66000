@@ -28,6 +28,8 @@ class My66000Inst<dag outs, dag ins, string asmstr, list<dag> pattern>
   // Indicates that the result can be considered zero extended from bit 31.
   bit IsZeroExtendingOp = 0;
   let TSFlags{2} = IsZeroExtendingOp;
+  bit HasIndexReg = 0;
+  let TSFlags{3} = HasIndexReg;
 }
 
 class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
@@ -427,6 +429,7 @@ class XOP5<bits<7> minor, bits<2> flags, dag outs, dag ins, string asmstr,
   let Inst{8-7}   = sc;		// scale (aka shift amount)
   let Inst{6-5}   = flags;	// ID
   let Inst{4-0}   = rx;
+  let HasIndexReg = 1;
 }
 // XOP5 MM/MS
 class XOP5_RR<bits<7> minor, bits<2> flags, dag outs, dag ins, string asmstr,

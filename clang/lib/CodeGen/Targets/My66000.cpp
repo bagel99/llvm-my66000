@@ -23,9 +23,8 @@ public:
   My66000ABIInfo(CodeGenTypes &CGT) : ABIInfo(CGT) {}
 
   bool isPromotableTypeForABI(QualType Ty) const;
-  ABIArgInfo classifyArgumentType(QualType Ty, bool IsFixed, int &ArgGPRsLeft,
-                                  int &ArgFPRsLeft, unsigned ABIVLen) const;
-  ABIArgInfo classifyReturnType(QualType RetTy, unsigned ABIVLen) const;
+  ABIArgInfo classifyReturnType(QualType RetTy) const;
+  ABIArgInfo classifyArgumentType(QualType Ty) const;
   bool isHomogeneousAggregateBaseType(QualType Ty) const override;
   bool isHomogeneousAggregateSmallEnough(const Type *Ty,
                                          uint64_t Members) const override;
@@ -40,8 +39,8 @@ public:
 bool
 My66000ABIInfo::isPromotableTypeForABI(QualType Ty) const {
   // Treat an enum type as its underlying type.
-  if (const EnumType *EnumTy = Ty->getAs<EnumType>())
-    Ty = EnumTy->getDecl()->getIntegerType();
+  if (const auto *ED = Ty->getAsEnumDecl())
+    Ty = ED->getIntegerType();
 
   // Promotable integer types are required to be promoted by the ABI.
   if (isPromotableIntegerTypeForABI(Ty))
@@ -65,10 +64,21 @@ My66000ABIInfo::isPromotableTypeForABI(QualType Ty) const {
   return false;
 }
 
-ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
-                                              int &ArgGPRsLeft,
-                                              int &ArgFPRsLeft,
-                                              unsigned ABIVLen) const {
+bool My66000ABIInfo::isHomogeneousAggregateBaseType(QualType Ty) const {
+  if (const BuiltinType *BT = Ty->getAs<BuiltinType>()) {
+    if (BT->isFloatingPoint())
+      return true;
+  }
+  return false;
+}
+
+bool My66000ABIInfo::isHomogeneousAggregateSmallEnough(const Type *Base,
+                                                       uint64_t Members) const {
+  return Members <= 4;
+}
+
+
+ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
 
   if (Ty->isAnyComplexType())
@@ -76,17 +86,22 @@ ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
 
   if (const auto *EIT = Ty->getAs<BitIntType>())
     if (EIT->getNumBits() > 128)
-      return getNaturalAlignIndirect(Ty,
-		/*AddrSpace=*/getDataLayout().getAllocaAddrSpace(),
-		/*ByVal=*/true);
+      return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace(),
+				     /*ByVal=*/true);
 
   if (isAggregateTypeForABI(Ty)) {
+    // FIXME CXXABI
     uint64_t ABIAlign = 8;	// FIXME - is this correct?
     uint64_t TyAlign = getContext().getTypeAlignInChars(Ty).getQuantity();
-    // If an aggregate may end up fully in registers, we do not
-    // use the ByVal method, but pass the aggregate as array.
-    // This is usually beneficial since we avoid forcing the
-    // back-end to store the argument to memory.
+
+    const Type *Base = nullptr;
+    uint64_t Members = 0;
+    if (isHomogeneousAggregate(Ty, Base, Members)) {
+      llvm::Type *BaseTy = CGT.ConvertType(QualType(Base, 0));
+      llvm::Type *CoerceTy = llvm::ArrayType::get(BaseTy, Members);
+      return ABIArgInfo::getDirect(CoerceTy);
+    }
+
     uint64_t Bits = getContext().getTypeSize(Ty);
     if (Bits > 0 && Bits <= 8 * 64) {
       llvm::Type *CoerceTy;
@@ -106,54 +121,36 @@ ABIArgInfo My66000ABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
       }
       return ABIArgInfo::getDirect(CoerceTy);
     }
+
     // All other aggregates are passed ByVal.
-    return ABIArgInfo::getIndirect(CharUnits::fromQuantity(ABIAlign),
-                                   /*ByVal=*/true,
-                                   /*Realign=*/TyAlign > ABIAlign);
-  }
-  return (isPromotableTypeForABI(Ty) ? ABIArgInfo::getExtend(Ty)
-                                     : ABIArgInfo::getDirect());
+    return ABIArgInfo::getIndirect(
+        CharUnits::fromQuantity(ABIAlign),
+        /*AddrSpace=*/getDataLayout().getAllocaAddrSpace(),
+        /*ByVal=*/true, /*Realign=*/TyAlign > ABIAlign);
+   }
+  return (isPromotableTypeForABI(Ty)
+              ? ABIArgInfo::getExtend(Ty, CGT.ConvertType(Ty))
+              : ABIArgInfo::getDirect());
 }
 
-ABIArgInfo My66000ABIInfo::classifyReturnType(QualType RetTy,
-                                              unsigned ABIVLen) const {
+ABIArgInfo My66000ABIInfo::classifyReturnType(QualType RetTy) const {
 
   if (RetTy->isVoidType())
     return ABIArgInfo::getIgnore();
 
-  int ArgGPRsLeft = 8;
-  int ArgFPRsLeft = 0;
-
   // The rules for return and argument types are the same, so defer to
   // classifyArgumentType.
-  return classifyArgumentType(RetTy, /*IsFixed=*/true,
-			      ArgGPRsLeft, ArgFPRsLeft, 0);
-}
-
-bool My66000ABIInfo::isHomogeneousAggregateBaseType(QualType Ty) const {
-  if (const BuiltinType *BT = Ty->getAs<BuiltinType>()) {
-    if (BT->isFloatingPoint())
-      return true;
-  }
-  return false;
-}
-
-bool My66000ABIInfo::isHomogeneousAggregateSmallEnough(const Type *Base,
-                                                       uint64_t Members) const {
-  return Members <= 4;
+  return classifyArgumentType(RetTy);
 }
 
 void My66000ABIInfo::computeInfo(CGFunctionInfo &FI) const {
 
-  FI.getReturnInfo() = classifyReturnType(FI.getReturnType(), 0);
+  FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
 
   bool IsRetIndirect = FI.getReturnInfo().getKind() == ABIArgInfo::Indirect;
-  int ArgGPRsLeft = IsRetIndirect ? 7 : 8;
-  int ArgFPRsLeft = 0;
 
   for (auto &Arg : FI.arguments())
-    Arg.info = classifyArgumentType(Arg.type, /*IsFixed=*/true,
-			            ArgGPRsLeft, ArgFPRsLeft, 0);
+    Arg.info = classifyArgumentType(Arg.type);
 }
 
 RValue My66000ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,

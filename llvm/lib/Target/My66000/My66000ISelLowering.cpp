@@ -1628,11 +1628,11 @@ LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
     StOp = My66000::STBXrr;
     break;
   case 2:
-    LdOp = My66000::LDUHXrr;
+    LdOp = My66000::LDSHXrr;
     StOp = My66000::STHXrr;
     break;
   case 4:
-    LdOp = My66000::LDUWXrr;
+    LdOp = My66000::LDSWXrr;
     StOp = My66000::STWXrr;
     break;
   case 8:
@@ -1641,14 +1641,14 @@ LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
     break;
   }
   Register dest = MI.getOperand(0).getReg();
-  Register base = MI.getOperand(1).getReg();
+  MachineOperand &base = MI.getOperand(1);
   Register indx = MI.getOperand(2).getReg();
   unsigned shft = MI.getOperand(3).getImm();
   DebugLoc dl = MI.getDebugLoc();
 
   // Build the load
   BuildMI(*BB, MI, dl, TII.get(LdOp), dest)
-	.addReg(base).addReg(indx).addImm(shft)
+	.add(base).addReg(indx).addImm(shft)
 	.add(MI.getOperand(4));
   // Build the operation
   MachineRegisterInfo &MRI = MF.getRegInfo();
@@ -1669,7 +1669,7 @@ LLVM_DEBUG(dbgs() << "emitAtomicOp\n" << MI << '\n');
   }
   // Build the store
   BuildMI(*BB, MI, dl, TII.get(StOp))
-	.addReg(temp).addReg(base).addReg(indx).addImm(shft)
+	.addReg(temp).add(base).addReg(indx).addImm(shft)
 	.add(MI.getOperand(4));
   // Do we need this
   MI.eraseFromParent(); // The pseudo instruction is gone now.
@@ -1768,6 +1768,9 @@ LLVM_DEBUG(dbgs() << "EmitInstrWithCustomInserter\n");
   case My66000::ASWAPHr:return emitAtomicOp(MI, BB, 2, 0);
   case My66000::ASWAPBr:return emitAtomicOp(MI, BB, 1, 0);
   case My66000::ACMPSWAPDr: return emitAtomicOp(MI, BB, 8, My66000::CMPrr);
+  case My66000::ACMPSWAPWr: return emitAtomicOp(MI, BB, 4, My66000::CMPrr);
+  case My66000::ACMPSWAPHr: return emitAtomicOp(MI, BB, 2, My66000::CMPrr);
+  case My66000::ACMPSWAPBr: return emitAtomicOp(MI, BB, 1, My66000::CMPrr);
   }
 }
 

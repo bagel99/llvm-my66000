@@ -412,13 +412,13 @@ multiclass StoreFS<string OpName, bits<6>OpCri, bits<7>OpCrr,
 let mayStore = 1 in {
   defm STF : StoreFS<"stw", 0b101010, 0b0000010, store>;
 }
-// Because ADDRrr rejects anything ADDRri can handle, we need a pattern for both.
-// But they both map to LDST_RX
-def STFZri : XOP5_RR<0b1111000, 0b01,
-	(outs), (ins fpimm32:$imm, MEMri:$addr),
+
+def STFkr : XOP5_RR<0b1111000, 0b01,
+	(outs), (ins fsimmi5:$imm, MEMrx:$addr),
+	"stw\t#$imm,[$addr]",
+	[(store (f32 fsimmi5:$imm), ADDRrx:$addr)]>;
+
+def STFzr : XOP5_RR<0b1111000, 0b01,
+	(outs), (ins fpimm32:$imm, MEMrx:$addr),
 	"stw\t#0,[$addr]",
-	[(store (f32 fpimm0:$imm), ADDRri:$addr)]>;
-def STFZrr : XOP5_RR<0b1111000, 0b01,
-	(outs), (ins fpimm32:$imm, MEMrr:$addr),
-	"stw\t#0,[$addr]",
-	[(store (f32 fpimm0:$imm), ADDRrr:$addr)]>;
+	[(store (f32 fpimm0:$imm), ADDRrx:$addr)]>;

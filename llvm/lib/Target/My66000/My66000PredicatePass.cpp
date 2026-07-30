@@ -187,13 +187,16 @@ LLVM_DEBUG(dbgs() << "unBundle " << *MI);
   // Remove BUNDLE instruction and the InsideBundle flags from bundled
   // instructions.
   if (MI->isBundle()) {
-    while (++MII != MIE && MII->isBundledWithPred()) {
+    ++MII;
+    while (MII->isBundledWithPred()) {
 LLVM_DEBUG(dbgs() << "\tunbundleFromPred " << *MII);
       MII->unbundleFromPred();
       for (MachineOperand &MO  : MII->operands()) {
         if (MO.isReg() && MO.isInternalRead())
           MO.setIsInternalRead(false);
       }
+      if (MII == MIE) break;
+      ++MII;
     }
 LLVM_DEBUG(dbgs() << "\terasing " << *MI);
     MI->eraseFromParent();
